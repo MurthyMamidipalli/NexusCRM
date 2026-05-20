@@ -1,3 +1,22 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "user-avatar-1",
+      "description": "Professional team member avatar",
+      "imageUrl": "https://picsum.photos/seed/crm1/100/100",
+      "imageHint": "professional avatar"
+    },
+    {
+      "id": "user-avatar-2",
+      "description": "Sales representative avatar",
+      "imageUrl": "https://picsum.photos/seed/crm2/100/100",
+      "imageHint": "sales representative"
+    },
+    {
+      "id": "company-logo-placeholder",
+      "description": "Generic company logo",
+      "imageUrl": "https://picsum.photos/seed/corp1/200/200",
+      "imageHint": "company logo"
+    }
+  ]
 }

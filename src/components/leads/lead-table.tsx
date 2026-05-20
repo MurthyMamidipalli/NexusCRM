@@ -1,0 +1,124 @@
+"use client"
+
+import React, { useState } from 'react'
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table'
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { MoreHorizontal, Mail, Phone, MoreVertical } from 'lucide-react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+
+const initialLeads = [
+  { id: '1', name: 'Robert Fox', email: 'robert@fox.com', company: 'Fox Designs', status: 'New', priority: 'High', owner: 'John Doe' },
+  { id: '2', name: 'Jane Cooper', email: 'jane@cooper.com', company: 'Cooper Co', status: 'Contacted', priority: 'Medium', owner: 'Sarah Smith' },
+  { id: '3', name: 'Wade Warren', email: 'wade@warren.com', company: 'Warren Inc', status: 'Qualified', priority: 'Low', owner: 'John Doe' },
+  { id: '4', name: 'Guy Hawkins', email: 'guy@hawkins.com', company: 'Hawkins Ltd', status: 'Proposal Sent', priority: 'High', owner: 'Alex Wong' },
+  { id: '5', name: 'Eleanor Pena', email: 'eleanor@pena.com', company: 'Pena Corp', status: 'Negotiation', priority: 'Medium', owner: 'Sarah Smith' },
+]
+
+export function LeadTable() {
+  const [leads, setLeads] = useState(initialLeads)
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'New': return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+      case 'Contacted': return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+      case 'Qualified': return 'bg-purple-500/10 text-purple-500 border-purple-500/20'
+      case 'Proposal Sent': return 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+      case 'Negotiation': return 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20'
+      case 'Won': return 'bg-green-500/10 text-green-500 border-green-500/20'
+      default: return 'bg-slate-500/10 text-slate-500 border-slate-500/20'
+    }
+  }
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'High': return 'text-red-500'
+      case 'Medium': return 'text-yellow-500'
+      case 'Low': return 'text-green-500'
+      default: return 'text-slate-500'
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-card/50 shadow-xl overflow-hidden backdrop-blur-md">
+      <Table>
+        <TableHeader className="bg-muted/50">
+          <TableRow>
+            <TableHead className="w-[300px]">Lead Name</TableHead>
+            <TableHead>Company</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Priority</TableHead>
+            <TableHead>Owner</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {leads.map((lead) => (
+            <TableRow key={lead.id} className="hover:bg-muted/30 transition-colors">
+              <TableCell className="font-medium">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-8 w-8 border border-primary/10">
+                    <AvatarImage src={`https://picsum.photos/seed/${lead.name}/32/32`} />
+                    <AvatarFallback>{lead.name[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col">
+                    <span className="text-foreground">{lead.name}</span>
+                    <span className="text-xs text-muted-foreground">{lead.email}</span>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="text-muted-foreground">{lead.company}</TableCell>
+              <TableCell>
+                <Badge variant="outline" className={getStatusColor(lead.status)}>
+                  {lead.status}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-1.5">
+                  <div className={cn("h-1.5 w-1.5 rounded-full", getPriorityColor(lead.priority).replace('text', 'bg'))} />
+                  <span className={cn("text-xs font-medium uppercase tracking-wider", getPriorityColor(lead.priority))}>
+                    {lead.priority}
+                  </span>
+                </div>
+              </TableCell>
+              <TableCell className="text-muted-foreground">{lead.owner}</TableCell>
+              <TableCell className="text-right">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem className="gap-2">
+                      <Mail className="h-4 w-4" /> Send Email
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="gap-2">
+                      <Phone className="h-4 w-4" /> Call Lead
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="text-destructive gap-2">
+                      Delete Lead
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
