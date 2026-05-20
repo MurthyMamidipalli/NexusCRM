@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useFirestore, useUser } from '@/firebase'
 import { createRecord, collections } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Briefcase, GraduationCap, Link as LinkIcon } from 'lucide-react'
 
 interface AddLeadDialogProps {
   open: boolean
@@ -34,6 +34,10 @@ export function AddLeadDialog({ open, onOpenChange }: AddLeadDialogProps) {
       email: formData.get('email'),
       phone: formData.get('phone'),
       company: formData.get('company'),
+      jobTitle: formData.get('jobTitle'),
+      education: formData.get('education'),
+      experience: formData.get('experience'),
+      links: formData.get('links'),
       status: formData.get('status') || 'New',
       priority: formData.get('priority') || 'Medium',
       value: parseFloat(formData.get('value') as string) || 0,
@@ -57,35 +61,93 @@ export function AddLeadDialog({ open, onOpenChange }: AddLeadDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add New Lead</DialogTitle>
+          <DialogTitle className="font-headline text-2xl">Add New Intelligence Lead</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
-              <Input id="name" name="name" placeholder="Contact person" required />
+              <Input id="name" name="name" placeholder="John Smith" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" placeholder="email@company.com" required />
+              <Input id="email" name="email" type="email" placeholder="john@company.com" required />
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" name="phone" placeholder="+1..." />
+              <Label htmlFor="company">Company</Label>
+              <Input id="company" name="company" placeholder="e.g. Acme Corp" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="company">Company</Label>
-              <Input id="company" name="company" placeholder="Organization name" />
+              <Label htmlFor="jobTitle">Job Title</Label>
+              <div className="relative">
+                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input id="jobTitle" name="jobTitle" className="pl-10" placeholder="e.g. Senior Director" />
+              </div>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="education">Education</Label>
+              <div className="relative">
+                <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input id="education" name="education" className="pl-10" placeholder="University, Degree, Graduation Year" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="experience">Professional Experience</Label>
+              <Textarea id="experience" name="experience" placeholder="Key previous roles and achievements..." className="min-h-[80px]" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="links">Professional Links (comma separated)</Label>
+            <div className="relative">
+              <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input id="links" name="links" className="pl-10" placeholder="LinkedIn, Twitter, Portfolio URLs" />
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="value">Deal Value ($)</Label>
-              <Input id="value" name="value" type="number" step="0.01" placeholder="Estimated value" />
+              <Input id="value" name="value" type="number" step="0.01" placeholder="Estimated contract value" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="status">Pipeline Stage</Label>
+              <Select name="status" defaultValue="New">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="New">Qualification</SelectItem>
+                  <SelectItem value="Contacted">Meeting Scheduled</SelectItem>
+                  <SelectItem value="Qualified">Proposal Sent</SelectItem>
+                  <SelectItem value="Negotiation">Negotiation</SelectItem>
+                  <SelectItem value="Won">Won</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="priority">Priority</Label>
+              <Select name="priority" defaultValue="Medium">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="High">High</SelectItem>
+                  <SelectItem value="Medium">Medium</SelectItem>
+                  <SelectItem value="Low">Low</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="source">Lead Source</Label>
@@ -103,49 +165,22 @@ export function AddLeadDialog({ open, onOpenChange }: AddLeadDialogProps) {
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="status">Pipeline Stage</Label>
-              <Select name="status" defaultValue="New">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="New">Qualification</SelectItem>
-                  <SelectItem value="Contacted">Meeting Scheduled</SelectItem>
-                  <SelectItem value="Qualified">Proposal Sent</SelectItem>
-                  <SelectItem value="Negotiation">Negotiation</SelectItem>
-                  <SelectItem value="Won">Won</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="priority">Priority</Label>
-              <Select name="priority" defaultValue="Medium">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="High">High</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="Low">Low</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+
           <div className="space-y-2">
             <Label htmlFor="tags">Tags (comma separated)</Label>
             <Input id="tags" name="tags" placeholder="urgent, enterprise, software" />
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="notes">Internal Notes</Label>
-            <Textarea id="notes" name="notes" className="min-h-[80px]" />
+            <Textarea id="notes" name="notes" className="min-h-[80px]" placeholder="Key takeaways from initial research..." />
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={loading} className="shadow-lg shadow-primary/20">
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Lead
+              Create Intelligence Lead
             </Button>
           </DialogFooter>
         </form>

@@ -3,13 +3,17 @@
   "entities": {
     "Lead": {
       "title": "Lead",
-      "description": "A potential sales opportunity or prospect.",
+      "description": "A potential sales opportunity or prospect enriched with professional background.",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "phone": { "type": "string" },
         "company": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "education": { "type": "string" },
+        "experience": { "type": "string" },
+        "links": { "type": "string", "description": "Comma separated URLs (LinkedIn, Portfolio, etc.)" },
         "status": { "type": "string", "enum": ["New", "Contacted", "Qualified", "Proposal Sent", "Negotiation", "Won", "Lost"] },
         "priority": { "type": "string", "enum": ["High", "Medium", "Low"] },
         "ownerId": { "type": "string" },
