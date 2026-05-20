@@ -19,6 +19,7 @@ export const collections = {
   CUSTOMERS: 'customers',
   DEALS: 'deals',
   TASKS: 'tasks',
+  MEETINGS: 'meetings',
   ACTIVITIES: 'activities',
   DOCUMENTS: 'documents'
 };
