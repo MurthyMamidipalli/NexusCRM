@@ -5,35 +5,57 @@ import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { 
-  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
   signInWithPopup, 
-  GoogleAuthProvider 
+  GoogleAuthProvider,
+  updateProfile
 } from 'firebase/auth'
 import { useAuth } from '@/firebase'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Target, Github, Chrome, Loader2 } from 'lucide-react'
+import { Target, Chrome, Loader2, Github } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
-export default function LoginPage() {
+export default function SignupPage() {
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const auth = useAuth()
   const router = useRouter()
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (password !== confirmPassword) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Passwords do not match.'
+      })
+      return
+    }
+
     setLoading(true)
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, {
+          displayName: name
+        })
+      }
+      toast({
+        title: 'Account Created',
+        description: 'Welcome to Nexus CRM!'
+      })
       router.push('/dashboard')
     } catch (error: any) {
       toast({
         variant: 'destructive',
-        title: 'Login Failed',
+        title: 'Signup Failed',
         description: error.message
       })
     } finally {
@@ -66,16 +88,28 @@ export default function LoginPage() {
             <Target className="h-7 w-7 text-primary-foreground" />
           </div>
           <h1 className="font-headline text-3xl font-bold tracking-tight">Nexus CRM</h1>
-          <p className="text-muted-foreground">Sign in to orchestrate your sales empire.</p>
+          <p className="text-muted-foreground">Join the elite sales orchestrators.</p>
         </div>
 
         <Card className="border-none bg-card/50 backdrop-blur-md shadow-2xl">
           <CardHeader>
-            <CardTitle className="text-xl">Welcome Back</CardTitle>
-            <CardDescription>Enter your credentials to access your account.</CardDescription>
+            <CardTitle className="text-xl">Create Account</CardTitle>
+            <CardDescription>Enter your details to start your journey.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <form onSubmit={handleEmailLogin} className="space-y-4">
+            <form onSubmit={handleSignup} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name</Label>
+                <Input 
+                  id="name" 
+                  type="text" 
+                  placeholder="John Doe" 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required 
+                  className="bg-background/50"
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input 
@@ -89,10 +123,7 @@ export default function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                  <Button variant="link" className="px-0 text-xs text-primary font-bold">Forgot password?</Button>
-                </div>
+                <Label htmlFor="password">Password</Label>
                 <Input 
                   id="password" 
                   type="password" 
@@ -102,8 +133,19 @@ export default function LoginPage() {
                   className="bg-background/50"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input 
+                  id="confirmPassword" 
+                  type="password" 
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required 
+                  className="bg-background/50"
+                />
+              </div>
               <Button type="submit" disabled={loading} className="w-full shadow-lg shadow-primary/20">
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign In'}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign Up'}
               </Button>
             </form>
 
@@ -129,7 +171,7 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter className="flex justify-center border-t border-border/50 pt-4 mt-4">
             <p className="text-xs text-muted-foreground">
-              Don't have an account? <Link href="/signup" className="text-primary font-bold hover:underline">Sign Up</Link>
+              Already have an account? <Link href="/login" className="text-primary font-bold hover:underline">Sign In</Link>
             </p>
           </CardFooter>
         </Card>
