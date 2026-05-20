@@ -1,3 +1,4 @@
+
 import { 
   collection, 
   addDoc, 
@@ -5,14 +6,14 @@ import {
   deleteDoc, 
   doc, 
   query, 
-  where, 
   onSnapshot, 
-  orderBy,
   Timestamp,
-  type DocumentData,
   type QueryConstraint
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { initializeFirebase } from '@/firebase';
+
+// Helper to get db instance in non-hook files
+const getDb = () => initializeFirebase().db;
 
 export const collections = {
   LEADS: 'leads',
@@ -24,6 +25,7 @@ export const collections = {
 };
 
 export async function createRecord(collectionName: string, data: any) {
+  const db = getDb();
   try {
     const docRef = await addDoc(collection(db, collectionName), {
       ...data,
@@ -38,6 +40,7 @@ export async function createRecord(collectionName: string, data: any) {
 }
 
 export async function updateRecord(collectionName: string, id: string, data: any) {
+  const db = getDb();
   try {
     const docRef = doc(db, collectionName, id);
     await updateDoc(docRef, {
@@ -51,6 +54,7 @@ export async function updateRecord(collectionName: string, id: string, data: any
 }
 
 export async function deleteRecord(collectionName: string, id: string) {
+  const db = getDb();
   try {
     const docRef = doc(db, collectionName, id);
     await deleteDoc(docRef);
@@ -65,6 +69,7 @@ export function subscribeToCollection(
   callback: (data: any[]) => void,
   constraints: QueryConstraint[] = []
 ) {
+  const db = getDb();
   const q = query(collection(db, collectionName), ...constraints);
   return onSnapshot(q, (snapshot) => {
     const items = snapshot.docs.map(doc => ({

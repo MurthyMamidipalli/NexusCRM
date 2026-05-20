@@ -1,8 +1,8 @@
+
 "use client"
 
 import React from 'react'
 import { CRMSidebar } from './crm-sidebar'
-import { Toaster } from '@/components/ui/toaster'
 
 interface CRMLayoutProps {
   children: React.ReactNode
@@ -17,7 +17,6 @@ export function CRMLayout({ children }: CRMLayoutProps) {
           {children}
         </div>
       </main>
-      <Toaster />
     </div>
   )
 }
