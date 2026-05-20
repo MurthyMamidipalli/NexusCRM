@@ -1,0 +1,49 @@
+
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "A potential sales opportunity or prospect.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "company": { "type": "string" },
+        "status": { "type": "string", "enum": ["New", "Contacted", "Qualified", "Proposal Sent", "Negotiation", "Won", "Lost"] },
+        "priority": { "type": "string", "enum": ["High", "Medium", "Low"] },
+        "ownerId": { "type": "string" },
+        "value": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "status"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "A converted lead or existing client.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "company": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "industry": { "type": "string" },
+        "revenue": { "type": "number" },
+        "since": { "type": "string" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["password", "google"]
+  },
+  "firestore": {
+    "/leads/{leadId}": {
+      "schema": "#/entities/Lead",
+      "description": "Collection of sales leads."
+    },
+    "/customers/{customerId}": {
+      "schema": "#/entities/Customer",
+      "description": "Collection of active customers."
+    }
+  }
+}

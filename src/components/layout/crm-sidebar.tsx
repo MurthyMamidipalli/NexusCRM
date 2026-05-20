@@ -1,8 +1,9 @@
+
 "use client"
 
 import React from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { 
   LayoutDashboard, 
   UserPlus, 
@@ -17,6 +18,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { signOut } from 'firebase/auth'
+import { useAuth } from '@/firebase'
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
@@ -30,6 +33,17 @@ const navItems = [
 
 export function CRMSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const auth = useAuth()
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth)
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout failed:', error)
+    }
+  }
 
   return (
     <div className="flex h-screen w-64 flex-col border-r bg-sidebar p-4 transition-all duration-300">
@@ -72,7 +86,11 @@ export function CRMSidebar() {
             Settings
           </div>
         </Link>
-        <Button variant="ghost" className="w-full justify-start gap-3 px-3 py-2.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+        <Button 
+          variant="ghost" 
+          onClick={handleLogout}
+          className="w-full justify-start gap-3 px-3 py-2.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+        >
           <LogOut className="h-5 w-5" />
           Logout
         </Button>
