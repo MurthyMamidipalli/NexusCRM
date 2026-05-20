@@ -31,6 +31,33 @@
         "revenue": { "type": "number" },
         "since": { "type": "string" }
       }
+    },
+    "Deal": {
+      "title": "Deal",
+      "description": "An active sales opportunity in the pipeline.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "company": { "type": "string" },
+        "value": { "type": "number" },
+        "status": { "type": "string" },
+        "priority": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "closingDate": { "type": "string", "format": "date" }
+      }
+    },
+    "Task": {
+      "title": "Task",
+      "description": "An activity to be completed.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "leadId": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "priority": { "type": "string", "enum": ["High", "Medium", "Low"] },
+        "status": { "type": "string", "enum": ["Pending", "Completed"] },
+        "assignedTo": { "type": "string" }
+      }
     }
   },
   "auth": {
@@ -44,6 +71,14 @@
     "/customers/{customerId}": {
       "schema": "#/entities/Customer",
       "description": "Collection of active customers."
+    },
+    "/deals/{dealId}": {
+      "schema": "#/entities/Deal",
+      "description": "Collection of sales deals."
+    },
+    "/tasks/{taskId}": {
+      "schema": "#/entities/Task",
+      "description": "User tasks and activities."
     }
   }
 }
