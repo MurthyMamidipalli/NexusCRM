@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useState } from 'react'
+import React, { useMemo } from 'react'
 import { 
   Table, 
   TableBody, 
@@ -18,20 +18,18 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, Mail, Phone, MoreVertical } from 'lucide-react'
+import { MoreHorizontal, Mail, Phone, Trash2, Loader2 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
-
-const initialLeads = [
-  { id: '1', name: 'Robert Fox', email: 'robert@fox.com', company: 'Fox Designs', status: 'New', priority: 'High', owner: 'John Doe' },
-  { id: '2', name: 'Jane Cooper', email: 'jane@cooper.com', company: 'Cooper Co', status: 'Contacted', priority: 'Medium', owner: 'Sarah Smith' },
-  { id: '3', name: 'Wade Warren', email: 'wade@warren.com', company: 'Warren Inc', status: 'Qualified', priority: 'Low', owner: 'John Doe' },
-  { id: '4', name: 'Guy Hawkins', email: 'guy@hawkins.com', company: 'Hawkins Ltd', status: 'Proposal Sent', priority: 'High', owner: 'Alex Wong' },
-  { id: '5', name: 'Eleanor Pena', email: 'eleanor@pena.com', company: 'Pena Corp', status: 'Negotiation', priority: 'Medium', owner: 'Sarah Smith' },
-]
+import { useFirestore, useCollection } from '@/firebase'
+import { collection, query, orderBy } from 'firebase/firestore'
+import { collections, deleteRecord } from '@/lib/firestore-service'
+import { toast } from '@/hooks/use-toast'
 
 export function LeadTable() {
-  const [leads, setLeads] = useState(initialLeads)
+  const db = useFirestore()
+  const leadsQuery = useMemo(() => query(collection(db, collections.LEADS), orderBy('createdAt', 'desc')), [db])
+  const { data: leads, loading } = useCollection(leadsQuery)
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -54,6 +52,31 @@ export function LeadTable() {
     }
   }
 
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteRecord(db, collections.LEADS, id)
+      toast({ title: 'Lead Deleted' })
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message })
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!leads || leads.length === 0) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30">
+        <p className="text-muted-foreground">No leads found. Start by adding a new lead.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="rounded-xl border border-border/50 bg-card/50 shadow-xl overflow-hidden backdrop-blur-md">
       <Table>
@@ -68,7 +91,7 @@ export function LeadTable() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {leads.map((lead) => (
+          {leads.map((lead: any) => (
             <TableRow key={lead.id} className="hover:bg-muted/30 transition-colors">
               <TableCell className="font-medium">
                 <div className="flex items-center gap-3">
@@ -82,7 +105,7 @@ export function LeadTable() {
                   </div>
                 </div>
               </TableCell>
-              <TableCell className="text-muted-foreground">{lead.company}</TableCell>
+              <TableCell className="text-muted-foreground">{lead.company || '-'}</TableCell>
               <TableCell>
                 <Badge variant="outline" className={getStatusColor(lead.status)}>
                   {lead.status}
@@ -96,7 +119,7 @@ export function LeadTable() {
                   </span>
                 </div>
               </TableCell>
-              <TableCell className="text-muted-foreground">{lead.owner}</TableCell>
+              <TableCell className="text-muted-foreground">{lead.ownerName || 'Unknown'}</TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -111,8 +134,8 @@ export function LeadTable() {
                     <DropdownMenuItem className="gap-2">
                       <Phone className="h-4 w-4" /> Call Lead
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive gap-2">
-                      Delete Lead
+                    <DropdownMenuItem className="text-destructive gap-2" onClick={() => handleDelete(lead.id)}>
+                      <Trash2 className="h-4 w-4" /> Delete Lead
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
