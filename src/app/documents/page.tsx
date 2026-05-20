@@ -1,3 +1,4 @@
+
 import React from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 
 const docs = [
   { id: '1', name: 'Service_Agreement_v2.pdf', size: '2.4 MB', type: 'Contract', date: 'Oct 01, 2023', status: 'Signed' },

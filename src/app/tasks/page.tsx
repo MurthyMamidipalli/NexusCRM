@@ -1,3 +1,4 @@
+
 import React from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { NextAction } from '@/components/gen-ai/next-action'
@@ -6,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Calendar, Plus, Clock } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const dummyTasks = [
   { id: '1', task: 'Follow up on proposal', lead: 'Robert Fox', due: 'Today, 2:00 PM', priority: 'High' },

@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState } from 'react'
@@ -6,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Sparkles, ArrowRight, Loader2, Zap, MessageSquare, Phone, Mail } from 'lucide-react'
 import { getNextBestActionSuggestions, type NextBestActionSuggestionsOutput } from '@/ai/flows/next-best-action-suggestions'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 interface NextActionProps {
   leadId: string

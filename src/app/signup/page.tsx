@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { 
@@ -24,8 +24,13 @@ export default function SignupPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const auth = useAuth()
   const router = useRouter()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,6 +84,8 @@ export default function SignupPage() {
       setLoading(false)
     }
   }
+
+  if (!mounted) return null
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4 sm:p-8">

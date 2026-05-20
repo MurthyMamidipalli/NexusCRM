@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState } from 'react'
@@ -19,6 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal, Mail, Phone, MoreVertical } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { cn } from '@/lib/utils'
 
 const initialLeads = [
   { id: '1', name: 'Robert Fox', email: 'robert@fox.com', company: 'Fox Designs', status: 'New', priority: 'High', owner: 'John Doe' },

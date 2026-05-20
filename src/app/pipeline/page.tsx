@@ -1,3 +1,4 @@
+
 "use client"
 
 import React from 'react'
@@ -7,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Plus, MoreVertical, DollarSign, Calendar } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { cn } from '@/lib/utils'
 
 const pipelineStages = [
   { id: 'stage-1', title: 'Qualification', deals: [
