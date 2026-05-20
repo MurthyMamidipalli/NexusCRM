@@ -3,9 +3,9 @@
 
 /**
  * Firebase configuration object.
- * We prioritize environment variables but provide structure to ensure the app handles missing keys gracefully.
+ * Uses NEXT_PUBLIC environment variables for client-side access.
  */
-const config = {
+export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
@@ -14,9 +14,9 @@ const config = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Log warning if config is incomplete
-if (typeof window !== 'undefined' && !config.apiKey) {
-  console.warn('Firebase configuration is missing. Authentication and Firestore will not function until .env variables are populated.');
+// Log a warning if the API key is missing or is a placeholder
+if (typeof window !== 'undefined') {
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('your-api-key')) {
+    console.error('Firebase Error: Invalid or missing API Key in .env file. Please check your NEXT_PUBLIC_FIREBASE_API_KEY.');
+  }
 }
-
-export const firebaseConfig = config as any;

@@ -1,22 +1,29 @@
 
-import React from 'react'
+"use client"
+
+import React, { useMemo } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { NextAction } from '@/components/gen-ai/next-action'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Calendar, Plus, Clock } from 'lucide-react'
+import { Calendar, Plus, Clock, Loader2, ClipboardList } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-const dummyTasks = [
-  { id: '1', task: 'Follow up on proposal', lead: 'Robert Fox', due: 'Today, 2:00 PM', priority: 'High' },
-  { id: '2', task: 'Send quarterly pricing', lead: 'Jane Cooper', due: 'Tomorrow, 10:00 AM', priority: 'Medium' },
-  { id: '3', task: 'Review contract terms', lead: 'Wade Warren', due: 'Oct 15, 4:30 PM', priority: 'Low' },
-  { id: '4', task: 'Onboarding call', lead: 'Eleanor Pena', due: 'Oct 18, 11:00 AM', priority: 'High' },
-]
+import { useFirestore, useCollection } from '@/firebase'
+import { collection, query, orderBy } from 'firebase/firestore'
+import { collections, updateRecord } from '@/lib/firestore-service'
 
 export default function TasksPage() {
+  const db = useFirestore()
+  const tasksQuery = useMemo(() => query(collection(db, collections.TASKS), orderBy('dueDate', 'asc')), [db])
+  const { data: tasks, loading } = useCollection(tasksQuery)
+
+  const handleToggleTask = async (taskId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'Completed' ? 'Pending' : 'Completed'
+    await updateRecord(db, collections.TASKS, taskId, { status: newStatus })
+  }
+
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -38,33 +45,50 @@ export default function TasksPage() {
               <Button variant="ghost" size="sm" className="text-primary font-bold">View Calendar</Button>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {dummyTasks.map((task) => (
-                  <div key={task.id} className="group flex items-center justify-between p-3 rounded-xl hover:bg-muted/50 transition-all border border-transparent hover:border-border/50">
-                    <div className="flex items-center gap-4">
-                      <Checkbox className="h-5 w-5 rounded-md" />
-                      <div>
-                        <p className="text-sm font-semibold group-hover:text-primary transition-colors">{task.task}</p>
-                        <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
-                          <span className="font-bold text-foreground/70 uppercase tracking-tighter">{task.lead}</span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {task.due}
-                          </span>
+              {loading ? (
+                <div className="flex h-32 items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : tasks && tasks.length > 0 ? (
+                <div className="space-y-4">
+                  {tasks.map((task: any) => (
+                    <div key={task.id} className="group flex items-center justify-between p-3 rounded-xl hover:bg-muted/50 transition-all border border-transparent hover:border-border/50">
+                      <div className="flex items-center gap-4">
+                        <Checkbox 
+                          checked={task.status === 'Completed'} 
+                          onCheckedChange={() => handleToggleTask(task.id, task.status)}
+                          className="h-5 w-5 rounded-md" 
+                        />
+                        <div className={cn(task.status === 'Completed' && "opacity-50")}>
+                          <p className={cn("text-sm font-semibold group-hover:text-primary transition-colors", task.status === 'Completed' && "line-through")}>
+                            {task.title}
+                          </p>
+                          <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+                            <span className="font-bold text-foreground/70 uppercase tracking-tighter">{task.leadName || 'General'}</span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {task.dueDate ? new Date(task.dueDate).toLocaleString() : 'No due date'}
+                            </span>
+                          </div>
                         </div>
                       </div>
+                      <Badge variant="outline" className={cn(
+                        "text-[10px] uppercase tracking-tighter px-2 h-6",
+                        task.priority === 'High' ? "border-red-500/20 text-red-500 bg-red-500/5" : 
+                        task.priority === 'Medium' ? "border-yellow-500/20 text-yellow-500 bg-yellow-500/5" : 
+                        "border-green-500/20 text-green-500 bg-green-500/5"
+                      )}>
+                        {task.priority}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className={cn(
-                      "text-[10px] uppercase tracking-tighter px-2 h-6",
-                      task.priority === 'High' ? "border-red-500/20 text-red-500 bg-red-500/5" : 
-                      task.priority === 'Medium' ? "border-yellow-500/20 text-yellow-500 bg-yellow-500/5" : 
-                      "border-green-500/20 text-green-500 bg-green-500/5"
-                    )}>
-                      {task.priority}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-32 flex-col items-center justify-center rounded-lg border border-dashed border-border/50 text-muted-foreground italic">
+                  <ClipboardList className="mb-2 h-6 w-6 opacity-20" />
+                  No tasks assigned. You're all caught up!
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -83,11 +107,11 @@ export default function TasksPage() {
 
         <div className="space-y-6">
           <NextAction 
-            leadId="lead-101" 
-            leadName="Robert Fox" 
-            company="Fox Designs" 
+            leadId="lead-demo" 
+            leadName="Strategic Prospect" 
+            company="Global Industries" 
             status="Qualified" 
-            historySummary="Sent initial proposal yesterday. Robert expressed interest in the enterprise tier but was concerned about integration timelines. No response yet to the email follow-up."
+            historySummary="Ongoing negotiation for enterprise licenses. Customer requested a customized integration roadmap."
           />
           
           <Card className="border-none bg-primary shadow-2xl text-primary-foreground">
@@ -96,7 +120,7 @@ export default function TasksPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm opacity-90 leading-relaxed">
-                Leads contacted within 5 minutes of inquiry are 100x more likely to convert. Use the automated WhatsApp reminders to stay ahead.
+                Leads contacted within 5 minutes of inquiry are 100x more likely to convert. Use automated alerts to stay ahead of the curve.
               </p>
             </CardContent>
           </Card>
