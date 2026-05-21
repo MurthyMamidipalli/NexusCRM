@@ -20,12 +20,14 @@ export const collections = {
   ACHIEVEMENTS: 'achievements',
   TESTIMONIALS: 'testimonials',
   CONTACTS: 'contacts',
-  CUSTOMERS: 'contacts', // Alias for backward compatibility
+  CUSTOMERS: 'contacts', 
   DOCUMENTS: 'documents',
   TASKS: 'tasks',
   MEETINGS: 'meetings',
   LEADS: 'leads',
-  DEALS: 'leads' // Deals are stored in the leads collection
+  CERTIFICATIONS: 'certifications',
+  LINKS: 'links',
+  CAREER: 'profiles' // Store current job info in profile
 };
 
 /**
