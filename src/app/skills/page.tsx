@@ -1,12 +1,11 @@
 
 "use client"
 
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Hammer, Loader2, Trash2, Award } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { useFirestore, useCollection } from '@/firebase'
 import { collection, query, orderBy } from 'firebase/firestore'
@@ -19,16 +18,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 export default function SkillsPage() {
   const db = useFirestore()
-  const [mounted, setMounted] = useState(false)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const skillsQuery = useMemo(() => query(collection(db, collections.SKILLS), orderBy('level', 'desc')), [db])
   const { data: skills, loading: skillsLoading } = useCollection(skillsQuery)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const handleAddSkill = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -60,7 +54,7 @@ export default function SkillsPage() {
     }
   }
 
-  if (!mounted || skillsLoading) {
+  if (skillsLoading) {
     return (
       <CRMLayout>
         <div className="flex h-64 items-center justify-center">

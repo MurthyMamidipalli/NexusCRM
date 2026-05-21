@@ -1,28 +1,13 @@
 
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { useUser } from '@/firebase'
-import { Loader2, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 
 export default function DashboardPage() {
-  const { user, loading } = useUser()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted || loading) {
-    return (
-      <CRMLayout>
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </CRMLayout>
-    )
-  }
+  const { user } = useUser()
 
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'User'
 

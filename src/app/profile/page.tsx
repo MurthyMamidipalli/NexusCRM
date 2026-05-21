@@ -1,14 +1,13 @@
 
 "use client"
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { User, Mail, Phone, MapPin, Save, Loader2, Sparkles, CheckCircle2 } from 'lucide-react'
+import { User, Mail, Phone, MapPin, Loader2, CheckCircle2 } from 'lucide-react'
 import { useUser, useFirestore, useDoc } from '@/firebase'
 import { doc, setDoc } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
@@ -17,15 +16,10 @@ import { toast } from '@/hooks/use-toast'
 export default function ProfilePage() {
   const { user } = useUser()
   const db = useFirestore()
-  const [mounted, setMounted] = useState(false)
   const [savingField, setSavingField] = useState<string | null>(null)
 
-  const profileRef = user ? doc(db, collections.PROFILES, user.uid) : null
+  const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
   const { data: profile, loading: profileLoading } = useDoc(profileRef)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const handleAutoSave = useCallback(async (field: string, value: string) => {
     if (!user || !db || profile?.[field] === value) return
@@ -43,7 +37,7 @@ export default function ProfilePage() {
     }
   }, [user, db, profile])
 
-  if (!mounted || profileLoading) {
+  if (profileLoading) {
     return (
       <CRMLayout>
         <div className="flex h-64 items-center justify-center">

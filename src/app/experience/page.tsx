@@ -1,9 +1,9 @@
 
 "use client"
 
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Briefcase, Loader2, Trash2, Calendar, MapPin } from 'lucide-react'
 import { useFirestore, useCollection } from '@/firebase'
@@ -17,16 +17,11 @@ import { Textarea } from '@/components/ui/textarea'
 
 export default function ExperiencePage() {
   const db = useFirestore()
-  const [mounted, setMounted] = useState(false)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const expQuery = useMemo(() => query(collection(db, collections.EXPERIENCE), orderBy('startDate', 'desc')), [db])
   const { data: experience, loading: expLoading } = useCollection(expQuery)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const handleAddExp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -61,7 +56,7 @@ export default function ExperiencePage() {
     }
   }
 
-  if (!mounted || expLoading) {
+  if (expLoading) {
     return (
       <CRMLayout>
         <div className="flex h-64 items-center justify-center">
