@@ -29,7 +29,7 @@ export function StatsGrid() {
         loading: leadsLoading 
       },
       { 
-        label: 'Customers', 
+        label: 'Active Contacts', 
         value: customers?.length.toLocaleString() || '0', 
         change: '+5%', 
         icon: Users, 
@@ -45,7 +45,7 @@ export function StatsGrid() {
         loading: dealsLoading 
       },
       { 
-        label: 'Potential Pipeline', 
+        label: 'Pipeline Value', 
         value: `$${totalRevenue.toLocaleString()}`, 
         change: '+18%', 
         icon: DollarSign, 

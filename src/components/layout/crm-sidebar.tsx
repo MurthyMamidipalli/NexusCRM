@@ -1,3 +1,4 @@
+
 "use client"
 
 import React from 'react'
@@ -18,7 +19,8 @@ import {
   Settings,
   LogOut,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  UserCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -30,14 +32,14 @@ const navItems = [
   { label: 'Overview', icon: LayoutDashboard, href: '/dashboard' },
   { label: 'Inbox', icon: MessageSquare, href: '/inbox', badge: 140 },
   { label: 'Campaigns', icon: Megaphone, href: '/campaigns', hasSub: true },
-  { label: 'CRM', icon: Users, href: '/leads', hasSub: true },
+  { label: 'Leads', icon: Users, href: '/leads' },
+  { label: 'Contacts', icon: UserCheck, href: '/customers' },
   { label: 'Automations', icon: Zap, href: '/automations', hasSub: true },
   { label: 'Instagram', icon: Instagram, href: '/instagram' },
   { label: 'Appointments', icon: Calendar, href: '/appointments', hasSub: true },
   { label: 'Commerce', icon: ShoppingBag, href: '/commerce', hasSub: true },
-  { label: 'Data Store', icon: Database, href: '/documents' },
+  { label: 'Vault', icon: Database, href: '/documents' },
   { label: 'Reports', icon: BarChart3, href: '/reports', hasSub: true },
-  { label: 'Ads', icon: BadgePercent, href: '/ads', hasSub: true },
 ]
 
 export function CRMSidebar() {
@@ -57,10 +59,10 @@ export function CRMSidebar() {
   return (
     <div className="flex h-screen w-64 flex-col border-r bg-card p-4 transition-all duration-300">
       <div className="flex items-center gap-2 px-2 py-4 mb-6">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-lg shadow-primary/20">
           <Zap className="h-5 w-5 fill-current" />
         </div>
-        <span className="font-headline text-2xl font-bold tracking-tight text-foreground">wenext</span>
+        <span className="font-headline text-2xl font-bold tracking-tight text-foreground">Murthy CRM</span>
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
@@ -107,8 +109,8 @@ export function CRMSidebar() {
               <Sparkles className="h-3 w-3 text-primary" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[11px] font-bold">Nexus AI</span>
-              <span className="text-[9px] text-muted-foreground">Open AI workspace</span>
+              <span className="text-[11px] font-bold">Murthy AI</span>
+              <span className="text-[9px] text-muted-foreground">Strategic workspace</span>
             </div>
           </div>
           <Switch className="scale-75 data-[state=checked]:bg-primary" />

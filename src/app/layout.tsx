@@ -5,7 +5,7 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
-  title: 'Nexus CRM | Intelligence Powered Sales',
+  title: 'Murthy CRM | Intelligence Powered Sales',
   description: 'A modern, production-ready Customer Relationship Management platform.',
 };
 
