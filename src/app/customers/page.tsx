@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,23 +17,34 @@ import { AddContactDialog } from '@/components/contacts/add-contact-dialog'
 export default function ContactsPage() {
   const db = useFirestore()
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
   
-  const customersQuery = useMemo(() => query(collection(db, collections.CUSTOMERS), orderBy('createdAt', 'desc')), [db])
-  const { data: contacts, loading } = useCollection(customersQuery)
+  const contactsQuery = useMemo(() => {
+    if (!db) return null
+    return query(collection(db, collections.CONTACTS), orderBy('createdAt', 'desc'))
+  }, [db])
+  
+  const { data: contacts, loading } = useCollection(contactsQuery)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return null
 
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-headline text-4xl font-bold tracking-tight">Contact Hub</h1>
-          <p className="text-muted-foreground">Manage your relationships and professional network.</p>
+          <h1 className="font-headline text-4xl font-bold tracking-tight text-foreground">Contact Hub</h1>
+          <p className="text-muted-foreground">Manage your relationships and professional network manually.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" className="gap-2 border-border/50 bg-card hover:bg-muted">
             <Download className="h-4 w-4" />
-            Export Data
+            Export
           </Button>
-          <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2 shadow-lg shadow-primary/20">
+          <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white border-none">
             <UserCheck className="h-4 w-4" />
             Add Contact
           </Button>
@@ -82,7 +93,7 @@ export default function ContactsPage() {
                     <p className="text-sm font-bold text-foreground">{contact.industry || 'Client'}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">Member Since</p>
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">Joined</p>
                     <p className="text-sm font-bold text-foreground">{contact.since || '2024'}</p>
                   </div>
                 </div>

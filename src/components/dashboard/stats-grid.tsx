@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { TrendingUp, Users, Target, Activity, DollarSign, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -11,13 +11,23 @@ import { collections } from '@/lib/firestore-service'
 
 export function StatsGrid() {
   const db = useFirestore()
+  const [mounted, setMounted] = useState(false)
   
-  const { data: leads, loading: leadsLoading } = useCollection(collection(db, collections.LEADS))
-  const { data: customers, loading: customersLoading } = useCollection(collection(db, collections.CUSTOMERS))
-  const { data: deals, loading: dealsLoading } = useCollection(collection(db, collections.DEALS))
+  const leadsQuery = useMemo(() => (db ? collection(db, collections.LEADS) : null), [db])
+  const contactsQuery = useMemo(() => (db ? collection(db, collections.CONTACTS) : null), [db])
+  
+  const { data: leads, loading: leadsLoading } = useCollection(leadsQuery)
+  const { data: contacts, loading: contactsLoading } = useCollection(contactsQuery)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const stats = useMemo(() => {
+    if (!mounted) return []
+    
     const totalRevenue = leads?.reduce((acc, lead: any) => acc + (lead.value || 0), 0) || 0;
+    const activeDeals = leads?.filter((l: any) => l.status !== 'Won' && l.status !== 'Lost').length || 0;
     
     return [
       { 
@@ -30,19 +40,19 @@ export function StatsGrid() {
       },
       { 
         label: 'Active Contacts', 
-        value: customers?.length.toLocaleString() || '0', 
+        value: contacts?.length.toLocaleString() || '0', 
         change: '+5%', 
         icon: Users, 
         trend: 'up',
-        loading: customersLoading 
+        loading: contactsLoading 
       },
       { 
         label: 'Active Deals', 
-        value: deals?.length.toLocaleString() || '0', 
-        change: '-2%', 
+        value: activeDeals.toLocaleString(), 
+        change: '+8%', 
         icon: Activity, 
-        trend: 'down',
-        loading: dealsLoading 
+        trend: 'up',
+        loading: leadsLoading 
       },
       { 
         label: 'Pipeline Value', 
@@ -53,7 +63,9 @@ export function StatsGrid() {
         loading: leadsLoading 
       },
     ]
-  }, [leads, customers, deals, leadsLoading, customersLoading, dealsLoading])
+  }, [leads, contacts, leadsLoading, contactsLoading, mounted])
+
+  if (!mounted) return null
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">

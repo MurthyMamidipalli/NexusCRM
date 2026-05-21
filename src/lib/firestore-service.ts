@@ -20,16 +20,19 @@ export const collections = {
   ACHIEVEMENTS: 'achievements',
   TESTIMONIALS: 'testimonials',
   CONTACTS: 'contacts',
+  CUSTOMERS: 'contacts', // Alias for backward compatibility
   DOCUMENTS: 'documents',
   TASKS: 'tasks',
   MEETINGS: 'meetings',
-  LEADS: 'leads'
+  LEADS: 'leads',
+  DEALS: 'leads' // Deals are stored in the leads collection
 };
 
 /**
  * Creates a new record in the specified collection.
  */
 export function createRecord(db: Firestore, collectionName: string, data: any) {
+  if (!collectionName) throw new Error('Collection name is required');
   const colRef = collection(db, collectionName);
   return addDoc(colRef, {
     ...data,
@@ -42,6 +45,7 @@ export function createRecord(db: Firestore, collectionName: string, data: any) {
  * Updates an existing record.
  */
 export function updateRecord(db: Firestore, collectionName: string, id: string, data: any) {
+  if (!collectionName || !id) throw new Error('Collection name and ID are required');
   const docRef = doc(db, collectionName, id);
   return updateDoc(docRef, {
     ...data,
@@ -53,6 +57,7 @@ export function updateRecord(db: Firestore, collectionName: string, id: string, 
  * Deletes a record.
  */
 export function deleteRecord(db: Firestore, collectionName: string, id: string) {
+  if (!collectionName || !id) throw new Error('Collection name and ID are required');
   const docRef = doc(db, collectionName, id);
   return deleteDoc(docRef);
 }
