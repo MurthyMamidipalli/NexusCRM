@@ -1,6 +1,7 @@
+
 "use client"
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Button } from '@/components/ui/button'
 import { 
@@ -37,8 +38,13 @@ import { cn } from '@/lib/utils'
 export default function DashboardPage() {
   const { user } = useUser()
   const db = useFirestore()
+  const [mounted, setMounted] = useState(false)
   const leadsQuery = useMemo(() => query(collection(db, collections.LEADS), limit(100)), [db])
   const { data: leads, loading } = useCollection(leadsQuery)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const stats = useMemo(() => {
     return [
@@ -64,15 +70,18 @@ export default function DashboardPage() {
   return (
     <CRMLayout>
       <div className="space-y-6">
-        {/* Header Greeting */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-headline text-3xl font-bold tracking-tight">
-              Good morning, {user?.email || 'sahith0489@gmail.com'}
+              Good morning, {mounted ? (user?.email || 'Guest') : '...'}
             </h1>
             <div className="flex items-center gap-2 mt-1 text-muted-foreground text-xs">
               <Clock className="h-3 w-3" />
-              <span>{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              <span>
+                {mounted 
+                  ? new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                  : 'Loading date...'}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -85,7 +94,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Action Buttons Row */}
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" className="rounded-full bg-white border-primary/20 text-primary h-9 px-4 gap-2">
             <Send className="h-3 w-3" /> Send Campaign
@@ -101,9 +109,7 @@ export default function DashboardPage() {
           </Button>
         </div>
 
-        {/* Status Banners */}
         <div className="grid grid-cols-1 gap-4">
-          {/* WhatsApp Status Banner */}
           <div className="flex items-center justify-between rounded-xl bg-primary p-1 pl-4 text-white shadow-lg shadow-primary/10">
             <div className="flex items-center gap-8">
               <div className="flex items-center gap-2">
@@ -131,7 +137,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* AI Insights Banner */}
           <div className="flex items-center justify-between rounded-xl bg-accent p-4 text-white shadow-lg shadow-accent/10 relative overflow-hidden group cursor-pointer">
             <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="flex items-center gap-4 relative z-10">
@@ -156,7 +161,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Platform Health Section */}
         <Card className="border-none shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-6">
@@ -200,7 +204,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Acquisition Section */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">

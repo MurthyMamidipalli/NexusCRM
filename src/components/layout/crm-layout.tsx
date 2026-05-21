@@ -1,6 +1,7 @@
+
 "use client"
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { CRMSidebar } from './crm-sidebar'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,11 @@ interface CRMLayoutProps {
 
 export function CRMLayout({ children }: CRMLayoutProps) {
   const { user, loading } = useUser()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -52,13 +58,13 @@ export function CRMLayout({ children }: CRMLayoutProps) {
               <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-primary border-2 border-card" />
             </Button>
             <div className="flex items-center gap-3 pl-2 border-l">
-              {loading ? (
+              {(loading || !mounted) ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : (
                 <>
                   <div className="flex flex-col items-end">
-                    <span className="text-[11px] font-bold leading-tight">{user?.email?.split('@')[0]}</span>
-                    <span className="text-[10px] text-muted-foreground leading-tight">{user?.email}</span>
+                    <span className="text-[11px] font-bold leading-tight">{user?.email?.split('@')[0] || 'User'}</span>
+                    <span className="text-[10px] text-muted-foreground leading-tight">{user?.email || 'Not logged in'}</span>
                   </div>
                   <Avatar className="h-9 w-9 border-2 border-primary/10">
                     <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/40/40`} />
