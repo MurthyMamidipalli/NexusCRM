@@ -6,20 +6,11 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
   LayoutDashboard, 
-  MessageSquare, 
-  Megaphone, 
-  Users, 
-  Zap, 
-  Instagram, 
-  Calendar, 
-  ShoppingBag, 
   Database, 
-  BarChart3, 
-  BadgePercent,
+  Zap, 
   Settings,
   LogOut,
   Sparkles,
-  ChevronRight,
   UserCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -30,16 +21,8 @@ import { Switch } from '@/components/ui/switch'
 
 const navItems = [
   { label: 'Overview', icon: LayoutDashboard, href: '/dashboard' },
-  { label: 'Inbox', icon: MessageSquare, href: '/inbox', badge: 140 },
-  { label: 'Campaigns', icon: Megaphone, href: '/campaigns', hasSub: true },
-  { label: 'Leads', icon: Users, href: '/leads' },
   { label: 'Contacts', icon: UserCheck, href: '/customers' },
-  { label: 'Automations', icon: Zap, href: '/automations', hasSub: true },
-  { label: 'Instagram', icon: Instagram, href: '/instagram' },
-  { label: 'Appointments', icon: Calendar, href: '/appointments', hasSub: true },
-  { label: 'Commerce', icon: ShoppingBag, href: '/commerce', hasSub: true },
   { label: 'Vault', icon: Database, href: '/documents' },
-  { label: 'Reports', icon: BarChart3, href: '/reports', hasSub: true },
 ]
 
 export function CRMSidebar() {
@@ -82,19 +65,6 @@ export function CRMSidebar() {
                     isActive ? "text-white" : "text-muted-foreground group-hover:text-primary"
                   )} />
                   {item.label}
-                </div>
-                <div className="flex items-center gap-2">
-                  {item.badge && (
-                    <span className={cn(
-                      "flex h-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
-                      isActive ? "bg-white text-primary" : "bg-primary/10 text-primary"
-                    )}>
-                      {item.badge}
-                    </span>
-                  )}
-                  {item.hasSub && (
-                    <ChevronRight className={cn("h-3 w-3", isActive ? "text-white/70" : "text-muted-foreground/50")} />
-                  )}
                 </div>
               </div>
             </Link>
