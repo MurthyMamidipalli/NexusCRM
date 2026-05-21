@@ -5,7 +5,7 @@ import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Loader2, Trash2, Calendar, ShieldCheck, Folder, ExternalLink, FileText, Link as LinkIcon } from 'lucide-react'
+import { Plus, Loader2, Trash2, Calendar, ShieldCheck, Folder, ExternalLink, FileText, Link as LinkIcon, FileSpreadsheet } from 'lucide-react'
 import { useFirestore, useCollection } from '@/firebase'
 import { collection, query, orderBy } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
@@ -40,7 +40,7 @@ export default function CertificationsPage() {
 
     try {
       await createRecord(db, collections.CERTIFICATIONS, data)
-      toast({ title: 'Certification Added' })
+      toast({ title: 'Record Added' })
       setIsAddOpen(false)
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message })
@@ -52,7 +52,7 @@ export default function CertificationsPage() {
   const handleDelete = async (id: string) => {
     try {
       await deleteRecord(db, collections.CERTIFICATIONS, id)
-      toast({ title: 'Certification Removed' })
+      toast({ title: 'Record Removed' })
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message })
     }
@@ -78,14 +78,14 @@ export default function CertificationsPage() {
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-headline text-4xl font-bold tracking-tight">🏆 Certifications</h1>
-          <p className="text-muted-foreground">Manage your Study and Course credentials with associated documents and links.</p>
+          <h1 className="font-headline text-4xl font-bold tracking-tight">🏆 Credentials & Grade Sheets</h1>
+          <p className="text-muted-foreground">Manage your Study, Course certificates and academic Grade Sheets.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20">
               <Plus className="h-4 w-4" />
-              Add Certification
+              Add Record
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
@@ -94,7 +94,7 @@ export default function CertificationsPage() {
             </DialogHeader>
             <form onSubmit={handleAddCert} className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="category">Certificate Type (Folder)</Label>
+                <Label htmlFor="category">Type (Folder)</Label>
                 <Select name="category" defaultValue="Course Certificate">
                   <SelectTrigger>
                     <SelectValue placeholder="Select Category" />
@@ -102,24 +102,25 @@ export default function CertificationsPage() {
                   <SelectContent>
                     <SelectItem value="Study Certificate">Study Certificate</SelectItem>
                     <SelectItem value="Course Certificate">Course Certificate</SelectItem>
+                    <SelectItem value="Grade Sheet">Grade Sheet</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="title">Certification Title</Label>
+                <Label htmlFor="title">Title / Course Name</Label>
                 <Input id="title" name="title" placeholder="AWS Certified Cloud Practitioner" required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="issuer">Issuing Organization</Label>
-                <Input id="issuer" name="issuer" placeholder="Amazon Web Services" required />
+                <Label htmlFor="issuer">Issuing Organization / Institution</Label>
+                <Input id="issuer" name="issuer" placeholder="Amazon Web Services or University Name" required />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="date">Issue Date</Label>
+                  <Label htmlFor="date">Date</Label>
                   <Input id="date" name="date" type="date" required />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="credentialId">Credential ID</Label>
+                  <Label htmlFor="credentialId">Credential ID / Roll No.</Label>
                   <Input id="credentialId" name="credentialId" placeholder="e.g. ABC-123-XYZ" />
                 </div>
               </div>
@@ -127,7 +128,7 @@ export default function CertificationsPage() {
                 <Label htmlFor="externalLink">Verification Link (URL)</Label>
                 <div className="relative">
                   <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="externalLink" name="externalLink" className="pl-10" placeholder="https://aws.amazon.com/verify/..." />
+                  <Input id="externalLink" name="externalLink" className="pl-10" placeholder="https://..." />
                 </div>
               </div>
               <div className="space-y-2">
@@ -140,7 +141,7 @@ export default function CertificationsPage() {
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Certification
+                  Save Record
                 </Button>
               </DialogFooter>
             </form>
@@ -149,10 +150,11 @@ export default function CertificationsPage() {
       </div>
 
       <Tabs defaultValue="all" className="space-y-8">
-        <TabsList className="bg-muted/50 p-1">
+        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto">
           <TabsTrigger value="all" className="gap-2">All Records</TabsTrigger>
           <TabsTrigger value="study" className="gap-2"><Folder className="h-3 w-3" /> Study Certificates</TabsTrigger>
           <TabsTrigger value="course" className="gap-2"><Folder className="h-3 w-3" /> Course Certificates</TabsTrigger>
+          <TabsTrigger value="grades" className="gap-2"><FileSpreadsheet className="h-3 w-3" /> Grade Sheets</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-0">
@@ -163,6 +165,9 @@ export default function CertificationsPage() {
         </TabsContent>
         <TabsContent value="course" className="mt-0">
           <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} />
+        </TabsContent>
+        <TabsContent value="grades" className="mt-0">
+          <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} />
         </TabsContent>
       </Tabs>
     </CRMLayout>
@@ -185,7 +190,7 @@ function CertGrid({ items, onDelete }: { items: any[], onDelete: (id: string) =>
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div className="p-3 rounded-2xl bg-primary/10 text-primary">
-                <ShieldCheck className="h-6 w-6" />
+                {cert.category === 'Grade Sheet' ? <FileSpreadsheet className="h-6 w-6" /> : <ShieldCheck className="h-6 w-6" />}
               </div>
               <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => onDelete(cert.id)}>
                 <Trash2 className="h-4 w-4" />
@@ -203,7 +208,7 @@ function CertGrid({ items, onDelete }: { items: any[], onDelete: (id: string) =>
             <div className="mt-6 flex flex-col gap-2">
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-bold uppercase tracking-wider">
                 <Calendar className="h-3 w-3" />
-                Issued {cert.date}
+                Dated {cert.date}
               </div>
               {cert.credentialId && (
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono truncate">
@@ -225,9 +230,9 @@ function CertGrid({ items, onDelete }: { items: any[], onDelete: (id: string) =>
                     <ExternalLink className="h-3 w-3" /> Verify
                   </a>
                 ) : (
-                  <>
+                  <span>
                     <ExternalLink className="h-3 w-3" /> Verify
-                  </>
+                  </span>
                 )}
               </Button>
               <Button 
