@@ -169,7 +169,7 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm opacity-90 leading-relaxed">
-                Your data is securely synchronized with Murthy CRM cloud. You can refresh or switch devices anytime; your progress is always safe.
+                Your data is securely synchronized with NexusCRM cloud. You can refresh or switch devices anytime; your progress is always safe.
               </p>
             </CardContent>
           </Card>

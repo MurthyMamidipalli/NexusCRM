@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState, useEffect } from 'react'
@@ -55,7 +56,7 @@ export default function SignupPage() {
       }
       toast({
         title: 'Account Created',
-        description: 'Welcome to Nexus CRM!'
+        description: 'Welcome to NexusCRM!'
       })
       router.push('/dashboard')
     } catch (error: any) {
@@ -95,7 +96,7 @@ export default function SignupPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary shadow-xl shadow-primary/20">
             <Target className="h-7 w-7 text-primary-foreground" />
           </div>
-          <h1 className="font-headline text-3xl font-bold tracking-tight">Nexus CRM</h1>
+          <h1 className="font-headline text-3xl font-bold tracking-tight">NexusCRM</h1>
           <p className="text-muted-foreground">Join the elite sales orchestrators.</p>
         </div>
 

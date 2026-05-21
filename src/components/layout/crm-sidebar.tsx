@@ -76,7 +76,7 @@ export function CRMSidebar() {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-lg shadow-primary/20">
           <Zap className="h-5 w-5 fill-current" />
         </div>
-        <span className="font-headline text-xl font-bold tracking-tight text-foreground">Murthy CRM</span>
+        <span className="font-headline text-xl font-bold tracking-tight text-foreground">NexusCRM</span>
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto pr-1">
