@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,28 +13,13 @@ import { toast } from '@/hooks/use-toast'
 
 export default function PublicSharePage() {
   const { user } = useUser()
-  const [mounted, setMounted] = useState(false)
   const [isPublic, setIsPublic] = useState(false)
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  const publicUrl = user ? `${window.location.origin}/p/${user.uid}` : ''
+  const publicUrl = user ? `${typeof window !== 'undefined' ? window.location.origin : ''}/p/${user.uid}` : ''
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(publicUrl)
     toast({ title: 'Link Copied', description: 'Your public profile link is now in your clipboard.' })
-  }
-
-  if (!mounted) {
-    return (
-      <CRMLayout>
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </CRMLayout>
-    )
   }
 
   return (

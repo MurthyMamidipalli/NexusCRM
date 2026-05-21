@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,16 +16,11 @@ import { Label } from '@/components/ui/label'
 
 export default function EducationPage() {
   const db = useFirestore()
-  const [mounted, setMounted] = useState(false)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const eduQuery = useMemo(() => query(collection(db, collections.EDUCATION), orderBy('startDate', 'desc')), [db])
   const { data: education, loading: eduLoading } = useCollection(eduQuery)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const handleAddEdu = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -59,7 +54,7 @@ export default function EducationPage() {
     }
   }
 
-  if (!mounted || eduLoading) {
+  if (eduLoading) {
     return (
       <CRMLayout>
         <div className="flex h-64 items-center justify-center">

@@ -21,6 +21,9 @@ export function CRMLayout({ children }: CRMLayoutProps) {
     setMounted(true)
   }, [])
 
+  // Centralize the mounting check here. 
+  // This prevents all child pages from having to manage their own mounting state, 
+  // which significantly speeds up page-to-page transitions.
   if (!mounted) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -59,7 +62,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
               ) : (
                 <>
                   <div className="flex flex-col items-end">
-                    <span className="text-[11px] font-bold leading-tight">{user?.email?.split('@')[0] || 'User'}</span>
+                    <span className="text-[11px] font-bold leading-tight">{user?.displayName || user?.email?.split('@')[0] || 'User'}</span>
                     <span className="text-[10px] text-muted-foreground leading-tight">{user?.email || 'Not logged in'}</span>
                   </div>
                   <Avatar className="h-9 w-9 border-2 border-primary/10">
