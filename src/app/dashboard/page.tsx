@@ -67,20 +67,28 @@ export default function DashboardPage() {
     { name: 'WA Flows', active: true },
   ]
 
+  if (!mounted) {
+    return (
+      <CRMLayout>
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </CRMLayout>
+    )
+  }
+
   return (
     <CRMLayout>
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-headline text-3xl font-bold tracking-tight">
-              Good morning, {mounted ? (user?.email || 'Guest') : '...'}
+              Good morning, {user?.email || 'Guest'}
             </h1>
             <div className="flex items-center gap-2 mt-1 text-muted-foreground text-xs">
               <Clock className="h-3 w-3" />
               <span>
-                {mounted 
-                  ? new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-                  : 'Loading date...'}
+                {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </span>
             </div>
           </div>

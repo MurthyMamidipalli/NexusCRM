@@ -22,6 +22,16 @@ export function CRMLayout({ children }: CRMLayoutProps) {
     setMounted(true)
   }, [])
 
+  // To prevent hydration errors, we don't render the dynamic UI until the client has mounted.
+  // This ensures the server-rendered HTML matches the initial client render.
+  if (!mounted) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <CRMSidebar />
@@ -58,7 +68,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
               <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-primary border-2 border-card" />
             </Button>
             <div className="flex items-center gap-3 pl-2 border-l">
-              {(loading || !mounted) ? (
+              {loading ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : (
                 <>
