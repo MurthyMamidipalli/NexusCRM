@@ -7,21 +7,23 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
-  query, 
-  onSnapshot, 
   serverTimestamp,
-  type QueryConstraint,
   Firestore
 } from 'firebase/firestore';
 
 export const collections = {
-  LEADS: 'leads',
-  CUSTOMERS: 'customers',
-  DEALS: 'deals',
+  PROFILES: 'profiles',
+  SKILLS: 'skills',
+  EXPERIENCE: 'experience',
+  EDUCATION: 'education',
+  PROJECTS: 'projects',
+  ACHIEVEMENTS: 'achievements',
+  TESTIMONIALS: 'testimonials',
+  CONTACTS: 'contacts',
+  DOCUMENTS: 'documents',
   TASKS: 'tasks',
   MEETINGS: 'meetings',
-  ACTIVITIES: 'activities',
-  DOCUMENTS: 'documents'
+  LEADS: 'leads'
 };
 
 /**

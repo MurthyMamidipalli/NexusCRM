@@ -1,66 +1,104 @@
 
 {
   "entities": {
-    "Lead": {
-      "title": "Lead",
-      "description": "A potential sales opportunity or prospect enriched with professional background.",
+    "Profile": {
+      "title": "Personal Profile",
+      "description": "User's core identity, bio, and contact information.",
       "type": "object",
       "properties": {
-        "name": { "type": "string" },
+        "fullName": { "type": "string" },
+        "tagline": { "type": "string" },
+        "bio": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "phone": { "type": "string" },
-        "company": { "type": "string" },
-        "jobTitle": { "type": "string" },
-        "education": { "type": "string" },
-        "experience": { "type": "string" },
-        "links": { "type": "string", "description": "Comma separated URLs (LinkedIn, Portfolio, etc.)" },
-        "status": { "type": "string", "enum": ["New", "Contacted", "Qualified", "Proposal Sent", "Negotiation", "Won", "Lost"] },
-        "priority": { "type": "string", "enum": ["High", "Medium", "Low"] },
-        "ownerId": { "type": "string" },
-        "value": { "type": "number" },
-        "notes": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["name", "status"]
+        "location": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "links": { "type": "array", "items": { "type": "object", "properties": { "label": { "type": "string" }, "url": { "type": "string" } } } }
+      }
     },
-    "Customer": {
-      "title": "Customer",
-      "description": "A converted lead or existing client.",
+    "Skill": {
+      "title": "Skill",
+      "description": "Professional expertise and proficiency levels.",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["Technical", "Soft Skills", "Tools", "Languages"] },
+        "level": { "type": "number", "description": "1 to 100" }
+      }
+    },
+    "Experience": {
+      "title": "Experience",
+      "description": "Professional work history.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string" },
         "company": { "type": "string" },
+        "location": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "isCurrent": { "type": "boolean" },
+        "description": { "type": "string" }
+      }
+    },
+    "Education": {
+      "title": "Education",
+      "description": "Academic background.",
+      "type": "object",
+      "properties": {
+        "degree": { "type": "string" },
+        "institution": { "type": "string" },
+        "fieldOfStudy": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "grade": { "type": "string" }
+      }
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Showcase of work and products.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "technologies": { "type": "array", "items": { "type": "string" } },
+        "url": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["In Progress", "Completed", "Archived"] }
+      }
+    },
+    "Achievement": {
+      "title": "Achievement",
+      "description": "Awards and notable accomplishments.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "issuer": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "description": { "type": "string" }
+      }
+    },
+    "Testimonial": {
+      "title": "Testimonial",
+      "description": "Professional endorsements and reviews.",
+      "type": "object",
+      "properties": {
+        "author": { "type": "string" },
+        "role": { "type": "string" },
+        "company": { "type": "string" },
+        "content": { "type": "string" },
+        "date": { "type": "string", "format": "date" }
+      }
+    },
+    "Contact": {
+      "title": "Contact",
+      "description": "Professional network and connections.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
         "email": { "type": "string", "format": "email" },
-        "industry": { "type": "string" },
-        "revenue": { "type": "number" },
-        "since": { "type": "string" }
-      }
-    },
-    "Deal": {
-      "title": "Deal",
-      "description": "An active sales opportunity in the pipeline.",
-      "type": "object",
-      "properties": {
-        "title": { "type": "string" },
         "company": { "type": "string" },
-        "value": { "type": "number" },
-        "status": { "type": "string" },
-        "priority": { "type": "string" },
-        "ownerId": { "type": "string" },
-        "closingDate": { "type": "string", "format": "date" }
-      }
-    },
-    "Task": {
-      "title": "Task",
-      "description": "An activity to be completed.",
-      "type": "object",
-      "properties": {
-        "title": { "type": "string" },
-        "leadId": { "type": "string" },
-        "dueDate": { "type": "string", "format": "date-time" },
-        "priority": { "type": "string", "enum": ["High", "Medium", "Low"] },
-        "status": { "type": "string", "enum": ["Pending", "Completed"] },
-        "assignedTo": { "type": "string" }
+        "relationship": { "type": "string" },
+        "notes": { "type": "string" }
       }
     }
   },
@@ -68,21 +106,13 @@
     "providers": ["password", "google"]
   },
   "firestore": {
-    "/leads/{leadId}": {
-      "schema": "#/entities/Lead",
-      "description": "Collection of sales leads."
-    },
-    "/customers/{customerId}": {
-      "schema": "#/entities/Customer",
-      "description": "Collection of active customers."
-    },
-    "/deals/{dealId}": {
-      "schema": "#/entities/Deal",
-      "description": "Collection of sales deals."
-    },
-    "/tasks/{taskId}": {
-      "schema": "#/entities/Task",
-      "description": "User tasks and activities."
-    }
+    "/profiles/{uid}": { "schema": "#/entities/Profile", "description": "User profile data." },
+    "/skills/{skillId}": { "schema": "#/entities/Skill", "description": "User skills." },
+    "/experience/{expId}": { "schema": "#/entities/Experience", "description": "Work history." },
+    "/education/{eduId}": { "schema": "#/entities/Education", "description": "Education history." },
+    "/projects/{projectId}": { "schema": "#/entities/Project", "description": "Portfolio projects." },
+    "/achievements/{achId}": { "schema": "#/entities/Achievement", "description": "Awards and achievements." },
+    "/testimonials/{testId}": { "schema": "#/entities/Testimonial", "description": "Professional testimonials." },
+    "/contacts/{contactId}": { "schema": "#/entities/Contact", "description": "Network contacts." }
   }
 }

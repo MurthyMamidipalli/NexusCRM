@@ -1,17 +1,30 @@
 
 "use client"
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
   LayoutDashboard, 
+  User, 
+  Hammer, 
+  GraduationCap, 
+  Trophy, 
+  Briefcase, 
+  Building2, 
+  Rocket, 
+  Target, 
+  Quote, 
+  FileText, 
   Database, 
-  Zap, 
+  Link as LinkIcon, 
+  Milestone, 
+  Phone, 
+  Globe,
   Settings,
   LogOut,
   Sparkles,
-  UserCheck
+  Zap
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -20,15 +33,33 @@ import { useAuth } from '@/firebase'
 import { Switch } from '@/components/ui/switch'
 
 const navItems = [
-  { label: 'Overview', icon: LayoutDashboard, href: '/dashboard' },
-  { label: 'Contacts', icon: UserCheck, href: '/customers' },
-  { label: 'Vault', icon: Database, href: '/documents' },
+  { label: 'Overview', icon: LayoutDashboard, href: '/dashboard', emoji: '🏠' },
+  { label: 'Personal Profile', icon: User, href: '/profile', emoji: '👤' },
+  { label: 'Skills & Expertise', icon: Hammer, href: '/skills', emoji: '🛠' },
+  { label: 'Education', icon: GraduationCap, href: '/education', emoji: '🎓' },
+  { label: 'Certifications', icon: Trophy, href: '/certifications', emoji: '🏆' },
+  { label: 'Experience', icon: Briefcase, href: '/experience', emoji: '💼' },
+  { label: 'Current Job', icon: Building2, href: '/career', emoji: '🏢' },
+  { label: 'Projects & Products', icon: Rocket, href: '/projects', emoji: '🚀' },
+  { label: 'Achievements & Awards', icon: Target, href: '/achievements', emoji: '🎯' },
+  { label: 'Testimonials', icon: Quote, href: '/testimonials', emoji: '🌟' },
+  { label: 'Resume / CV', icon: FileText, href: '/resume', emoji: '📜' },
+  { label: 'Documents', icon: Database, href: '/documents', emoji: '📁' },
+  { label: 'Portfolios & Links', icon: LinkIcon, href: '/links', emoji: '🔗' },
+  { label: 'Career Timeline', icon: Milestone, href: '/timeline', emoji: '📈' },
+  { label: 'Contact Me', icon: Phone, href: '/customers', emoji: '📞' },
+  { label: 'Public Share', icon: Globe, href: '/share', emoji: '🌐' },
 ]
 
 export function CRMSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const auth = useAuth()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleLogout = async () => {
     try {
@@ -39,31 +70,30 @@ export function CRMSidebar() {
     }
   }
 
+  if (!mounted) return <div className="h-screen w-64 border-r bg-card" />
+
   return (
     <div className="flex h-screen w-64 flex-col border-r bg-card p-4 transition-all duration-300">
       <div className="flex items-center gap-2 px-2 py-4 mb-6">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-lg shadow-primary/20">
           <Zap className="h-5 w-5 fill-current" />
         </div>
-        <span className="font-headline text-2xl font-bold tracking-tight text-foreground">Murthy CRM</span>
+        <span className="font-headline text-xl font-bold tracking-tight text-foreground">Murthy CRM</span>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto pr-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href
           return (
             <Link key={item.href} href={item.href}>
               <div className={cn(
-                "group flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                "group flex items-center justify-between rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200",
                 isActive 
                   ? "bg-primary text-white shadow-md shadow-primary/20" 
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}>
-                <div className="flex items-center gap-3">
-                  <item.icon className={cn(
-                    "h-5 w-5 transition-colors",
-                    isActive ? "text-white" : "text-muted-foreground group-hover:text-primary"
-                  )} />
+                <div className="flex items-center gap-2.5">
+                  <span className="text-sm">{item.emoji}</span>
                   {item.label}
                 </div>
               </div>
@@ -79,8 +109,8 @@ export function CRMSidebar() {
               <Sparkles className="h-3 w-3 text-primary" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[11px] font-bold">Murthy AI</span>
-              <span className="text-[9px] text-muted-foreground">Strategic workspace</span>
+              <span className="text-[10px] font-bold">Murthy AI</span>
+              <span className="text-[9px] text-muted-foreground">Active Hub</span>
             </div>
           </div>
           <Switch className="scale-75 data-[state=checked]:bg-primary" />
