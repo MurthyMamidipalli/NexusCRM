@@ -5,7 +5,7 @@ import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Loader2, Trash2, Calendar, ShieldCheck, Folder } from 'lucide-react'
+import { Plus, Loader2, Trash2, Calendar, ShieldCheck, Folder, ExternalLink, FileText, Link as LinkIcon } from 'lucide-react'
 import { useFirestore, useCollection } from '@/firebase'
 import { collection, query, orderBy } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
@@ -34,6 +34,8 @@ export default function CertificationsPage() {
       date: formData.get('date'),
       credentialId: formData.get('credentialId'),
       category: formData.get('category') || 'Course Certificate',
+      externalLink: formData.get('externalLink'),
+      documentUrl: formData.get('documentUrl'),
     }
 
     try {
@@ -77,7 +79,7 @@ export default function CertificationsPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">🏆 Certifications</h1>
-          <p className="text-muted-foreground">Manage your Study and Course credentials in organized folders.</p>
+          <p className="text-muted-foreground">Manage your Study and Course credentials with associated documents and links.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
@@ -86,7 +88,7 @@ export default function CertificationsPage() {
               Add Certification
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Add New Credential</DialogTitle>
             </DialogHeader>
@@ -119,6 +121,20 @@ export default function CertificationsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="credentialId">Credential ID</Label>
                   <Input id="credentialId" name="credentialId" placeholder="e.g. ABC-123-XYZ" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="externalLink">Verification Link (URL)</Label>
+                <div className="relative">
+                  <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="externalLink" name="externalLink" className="pl-10" placeholder="https://aws.amazon.com/verify/..." />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="documentUrl">Document Path / Vault Reference</Label>
+                <div className="relative">
+                  <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="documentUrl" name="documentUrl" className="pl-10" placeholder="Path to document in your vault" />
                 </div>
               </div>
               <DialogFooter>
@@ -165,7 +181,7 @@ function CertGrid({ items, onDelete }: { items: any[], onDelete: (id: string) =>
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {items.map((cert: any) => (
-        <Card key={cert.id} className="group border-none bg-card/50 backdrop-blur-md shadow-md hover:shadow-lg transition-all">
+        <Card key={cert.id} className="group border-none bg-card/50 backdrop-blur-md shadow-md hover:shadow-xl transition-all">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div className="p-3 rounded-2xl bg-primary/10 text-primary">
@@ -183,7 +199,8 @@ function CertGrid({ items, onDelete }: { items: any[], onDelete: (id: string) =>
                 {cert.category}
               </div>
             </div>
-            <div className="mt-6 pt-4 border-t border-border/50 flex flex-col gap-2">
+            
+            <div className="mt-6 flex flex-col gap-2">
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-bold uppercase tracking-wider">
                 <Calendar className="h-3 w-3" />
                 Issued {cert.date}
@@ -193,6 +210,34 @@ function CertGrid({ items, onDelete }: { items: any[], onDelete: (id: string) =>
                   ID: {cert.credentialId}
                 </div>
               )}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-border/50 grid grid-cols-2 gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-[11px] gap-1.5 h-8 disabled:opacity-30" 
+                disabled={!cert.externalLink}
+                asChild={!!cert.externalLink}
+              >
+                {cert.externalLink ? (
+                  <a href={cert.externalLink} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-3 w-3" /> Verify
+                  </a>
+                ) : (
+                  <>
+                    <ExternalLink className="h-3 w-3" /> Verify
+                  </>
+                )}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-[11px] gap-1.5 h-8 disabled:opacity-30" 
+                disabled={!cert.documentUrl}
+              >
+                <FileText className="h-3 w-3" /> Document
+              </Button>
             </div>
           </CardContent>
         </Card>
