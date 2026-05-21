@@ -23,14 +23,12 @@ import {
   Globe,
   Settings,
   LogOut,
-  Sparkles,
   Zap
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { signOut } from 'firebase/auth'
 import { useAuth } from '@/firebase'
-import { Switch } from '@/components/ui/switch'
 
 const navItems = [
   { label: 'Overview', icon: LayoutDashboard, href: '/dashboard', emoji: '🏠' },
@@ -103,19 +101,6 @@ export function CRMSidebar() {
       </nav>
 
       <div className="mt-auto space-y-4 pt-4 border-t">
-        <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-muted/50 border border-border/50">
-          <div className="flex items-center gap-3">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-white border">
-              <Sparkles className="h-3 w-3 text-primary" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-bold">Murthy AI</span>
-              <span className="text-[9px] text-muted-foreground">Active Hub</span>
-            </div>
-          </div>
-          <Switch className="scale-75 data-[state=checked]:bg-primary" />
-        </div>
-        
         <div className="flex flex-col gap-1">
           <Button variant="ghost" size="sm" className="w-full justify-start gap-3 px-3 text-muted-foreground hover:text-foreground">
             <Settings className="h-4 w-4" />

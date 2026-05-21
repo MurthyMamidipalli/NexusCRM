@@ -5,9 +5,8 @@ import React, { useState, useEffect } from 'react'
 import { CRMSidebar } from './crm-sidebar'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search, Sparkles, Bell, User, Bot, Loader2 } from 'lucide-react'
+import { Search, Bell, User, Loader2 } from 'lucide-react'
 import { useUser } from '@/firebase'
-import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 interface CRMLayoutProps {
@@ -22,8 +21,6 @@ export function CRMLayout({ children }: CRMLayoutProps) {
     setMounted(true)
   }, [])
 
-  // To prevent hydration errors, we don't render the dynamic UI until the client has mounted.
-  // This ensures the server-rendered HTML matches the initial client render.
   if (!mounted) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -49,20 +46,9 @@ export function CRMLayout({ children }: CRMLayoutProps) {
                 Ctrl K
               </div>
             </div>
-            <Button variant="outline" className="h-9 gap-2 border-primary/20 text-primary hover:bg-primary/5">
-              <Sparkles className="h-4 w-4" />
-              Ask AI
-            </Button>
           </div>
 
           <div className="flex items-center gap-4">
-            <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20 border-none px-3 font-bold">
-              Basic
-            </Badge>
-            <div className="flex items-center gap-2 rounded-full bg-card-foreground/5 border px-3 py-1.5">
-              <Bot className="h-4 w-4 text-primary" />
-              <span className="text-[11px] font-bold">AI Credits: 83.65</span>
-            </div>
             <Button variant="ghost" size="icon" className="relative text-muted-foreground">
               <Bell className="h-5 w-5" />
               <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-primary border-2 border-card" />
