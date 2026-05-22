@@ -1,10 +1,12 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { CRMSidebar } from './crm-sidebar'
 import { Button } from '@/components/ui/button'
 import { Bell, User, Cloud, CloudOff, RefreshCw } from 'lucide-react'
-import { useUser } from '@/firebase'
+import { useUser, useFirestore, useDoc } from '@/firebase'
+import { doc } from 'firebase/firestore'
+import { collections } from '@/lib/firestore-service'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { usePersistenceStatus } from '@/components/providers/persistence-provider'
 import { usePathname } from 'next/navigation'
@@ -68,14 +70,22 @@ function PersistenceIndicator() {
 
 export function CRMLayout({ children }: CRMLayoutProps) {
   const { user } = useUser()
+  const db = useFirestore()
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
+
+  // Fetch real-time profile for the avatar and display name
+  const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
+  const { data: profile } = useDoc(profileRef, { silent: true })
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
   const currentPageTitle = routeTitles[pathname] || 'Intelligence Hub'
+
+  const displayAvatar = (profile as any)?.avatarUrl || user?.photoURL || `https://picsum.photos/seed/${user?.uid || 'default'}/40/40`;
+  const displayUserName = (profile as any)?.fullName || user?.displayName || user?.email?.split('@')[0] || 'User';
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -106,7 +116,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
                   ) : (
                     <>
                       <span className="text-[11px] font-bold leading-tight truncate max-w-[120px]">
-                        {user?.displayName || user?.email?.split('@')[0] || 'User'}
+                        {displayUserName}
                       </span>
                       <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[120px] lowercase">
                         {user?.email || 'Cloud Profile'}
@@ -115,8 +125,10 @@ export function CRMLayout({ children }: CRMLayoutProps) {
                   )}
                 </div>
                 <Avatar className="h-8 w-8 md:h-9 md:w-9 border-2 border-primary/10 shrink-0">
-                  <AvatarImage src={user?.photoURL || `https://picsum.photos/seed/${user?.uid || 'default'}/40/40`} />
-                  <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
+                  <AvatarImage src={displayAvatar} />
+                  <AvatarFallback className="bg-primary/5 text-primary">
+                    <User className="h-4 w-4" />
+                  </AvatarFallback>
                 </Avatar>
               </div>
             </div>
