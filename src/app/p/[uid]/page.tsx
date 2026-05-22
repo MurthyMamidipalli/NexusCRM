@@ -20,61 +20,67 @@ export default function PublicProfilePage() {
   const [searchingFallback, setSearchingFallback] = useState(false)
 
   // Primary Query: Direct Doc Reference (Fastest)
-  const profileRef = useMemo(() => uid ? doc(db, collections.PROFILES, uid) : null, [db, uid])
+  const profileRef = useMemo(() => uid && db ? doc(db, collections.PROFILES, uid) : null, [db, uid])
   const { data: profileDoc, loading: profileLoading, error: profileError } = useDoc(profileRef)
 
   // Sub-resource Queries
-  const skillsQuery = useMemo(() => uid ? query(collection(db, collections.SKILLS), where('ownerId', '==', uid), orderBy('name', 'asc')) : null, [db, uid])
-  const expQuery = useMemo(() => uid ? query(collection(db, collections.EXPERIENCE), where('ownerId', '==', uid), orderBy('startDate', 'desc')) : null, [db, uid])
-  const projectsQuery = useMemo(() => uid ? query(collection(db, collections.PROJECTS), where('ownerId', '==', uid), orderBy('updatedAt', 'desc')) : null, [db, uid])
+  const skillsQuery = useMemo(() => uid && db ? query(collection(db, collections.SKILLS), where('ownerId', '==', uid), orderBy('name', 'asc')) : null, [db, uid])
+  const expQuery = useMemo(() => uid && db ? query(collection(db, collections.EXPERIENCE), where('ownerId', '==', uid), orderBy('startDate', 'desc')) : null, [db, uid])
+  const projectsQuery = useMemo(() => uid && db ? query(collection(db, collections.PROJECTS), where('ownerId', '==', uid), orderBy('updatedAt', 'desc')) : null, [db, uid])
 
   const { data: skills } = useCollection(skillsQuery)
   const { data: experience } = useCollection(expQuery)
   const { data: projects } = useCollection(projectsQuery)
 
-  // Fallback Logic: If direct doc doesn't exist, search by ownerId field
+  // Diagnostic Logic: Broad search for existing profiles
   useEffect(() => {
-    async function searchFallback() {
-      if (!profileLoading && !profileDoc && uid && db) {
-        setSearchingFallback(true)
-        try {
-          const q = query(collection(db, collections.PROFILES), where('ownerId', '==', uid), limit(1))
-          const querySnapshot = await getDocs(q)
+    async function performDiagnostic() {
+      if (!db) return;
+      
+      console.group('🔍 Public Hub Diagnostic');
+      console.log('Target UID (from URL):', uid);
+      
+      try {
+        // 1. Check all profiles for debugging
+        const qAll = query(collection(db, collections.PROFILES), limit(20));
+        const allDocs = await getDocs(qAll);
+        const profileList = allDocs.docs.map(d => ({
+          docId: d.id,
+          ownerId: d.data().ownerId,
+          isPublic: d.data().isPublic,
+          firstName: d.data().firstName,
+          lastName: d.data().lastName
+        }));
+        console.log('📋 Existing Profiles in Collection:', profileList);
+
+        // 2. Perform fallback search if direct lookup fails
+        if (!profileDoc && !profileLoading) {
+          setSearchingFallback(true);
+          const q = query(collection(db, collections.PROFILES), where('ownerId', '==', uid), limit(1));
+          const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
-            const found = querySnapshot.docs[0].data()
-            setFallbackProfile({ ...found, id: querySnapshot.docs[0].id })
+            const found = querySnapshot.docs[0].data();
+            console.log('✅ Found profile via ownerId fallback:', found);
+            setFallbackProfile({ ...found, id: querySnapshot.docs[0].id });
+          } else {
+            console.log('❌ No profile found via ownerId fallback.');
           }
-        } catch (err) {
-          console.error('Fallback search error:', err)
-        } finally {
-          setSearchingFallback(false)
         }
+      } catch (err: any) {
+        console.error('❌ Diagnostic error:', err.message);
+      } finally {
+        setSearchingFallback(false);
+        console.groupEnd();
       }
     }
-    searchFallback()
-  }, [profileDoc, profileLoading, uid, db])
+    
+    if (uid) performDiagnostic();
+  }, [uid, db, profileDoc, profileLoading]);
 
   const activeProfile = profileDoc || fallbackProfile
   const isVisible = activeProfile && activeProfile.isPublic === true
   const isPrivate = activeProfile && !isVisible
   const isPermissionDenied = !!profileError
-
-  // DIAGNOSTIC LOGS
-  useEffect(() => {
-    if (!profileLoading && !searchingFallback) {
-      console.group('🔍 Public Hub Diagnostic');
-      console.log('Target UID:', uid);
-      console.log('Profile Document Found:', !!activeProfile);
-      if (activeProfile) {
-        console.log('Visibility (isPublic):', activeProfile.isPublic);
-        console.log('Found via Fallback:', !!fallbackProfile);
-      }
-      if (profileError) {
-        console.log('Firestore Error:', profileError.message);
-      }
-      console.groupEnd();
-    }
-  }, [activeProfile, profileDoc, fallbackProfile, profileLoading, searchingFallback, uid, profileError]);
 
   if (profileLoading || (searchingFallback && !activeProfile)) {
     return (
