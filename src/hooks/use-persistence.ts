@@ -10,7 +10,7 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/e
 
 /**
  * A robust hook for auto-saving form data to Firestore.
- * Handles debouncing, user-scoping, and global status reporting.
+ * Ensures that the Auth UID is always used as the document ID for profiles.
  */
 export function usePersistentDocument<T>(
   collectionName: string, 
@@ -24,13 +24,12 @@ export function usePersistentDocument<T>(
   const dataRef = useRef<T>(initialData);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Sync with incoming remote data, but avoid overwriting local changes if possible
+  // Sync with incoming remote data
   useEffect(() => {
     if (initialData && Object.keys(initialData as any).length > 0) {
       setLocalData((prev) => {
         const prevString = JSON.stringify(prev);
         const nextString = JSON.stringify(initialData);
-        // Only update local state if remote data has actually changed and we aren't currently editing
         if (prevString === nextString) return prev;
         return initialData;
       });
@@ -39,17 +38,23 @@ export function usePersistentDocument<T>(
   }, [initialData]);
 
   const saveToFirestore = useCallback((dataToSave: any) => {
-    // SECURITY GUARD: Ensure we have a user and a target ID before attempting a cloud write
-    if (!db || !user || !docId) return;
+    // CRITICAL: Ensure we have a user and a target ID (which should be the user UID)
+    if (!db || !user || !docId) {
+      console.warn('⚠️ Save aborted: Missing required context (db, user, or docId).');
+      return;
+    }
 
     setStatus('saving');
+    // We use the docId (Auth UID) to ensure the document has a predictable, searchable name
     const docRef = doc(db, collectionName, docId);
     
-    setDoc(docRef, {
+    const payload = {
       ...dataToSave,
-      ownerId: user.uid,
+      ownerId: user.uid, // Explicitly redundantly store the ownerId for query fallbacks
       updatedAt: serverTimestamp(),
-    }, { merge: true })
+    };
+
+    setDoc(docRef, payload, { merge: true })
       .then(() => {
         setStatus('saved');
         setTimeout(() => setStatus('idle'), 2000);
@@ -60,7 +65,7 @@ export function usePersistentDocument<T>(
         const permissionError = new FirestorePermissionError({
           path: docRef.path,
           operation: 'write',
-          requestResourceData: dataToSave,
+          requestResourceData: payload,
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       });
@@ -73,7 +78,6 @@ export function usePersistentDocument<T>(
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    // Debounce save operation - reduced to 1s for better responsiveness
     timeoutRef.current = setTimeout(() => {
       saveToFirestore(updated);
       timeoutRef.current = null;

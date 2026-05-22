@@ -27,6 +27,7 @@ export default function PublicSharePage() {
     setMounted(true)
   }, [])
 
+  // Explicitly reference the profile by Auth UID
   const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
   const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
 
@@ -91,7 +92,6 @@ export default function PublicSharePage() {
                   checked={settings.isPublic} 
                   onCheckedChange={(val) => {
                     updateField('isPublic', val);
-                    // Explicit manual save to ensure visibility is updated immediately for the preview
                     save();
                     toast({ 
                       title: val ? 'Hub Published' : 'Hub Private', 
@@ -103,14 +103,11 @@ export default function PublicSharePage() {
 
               {settings.isPublic ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
-                  <div className="p-5 rounded-xl bg-primary/10 border border-primary/20 flex gap-4">
-                    <CheckCircle2 className="h-6 w-6 text-primary shrink-0 mt-0.5" />
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-bold text-primary uppercase tracking-wider">Public Profile</h4>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        Your professional profile is publicly accessible through the generated URL. Share it with recruiters, clients, and networking contacts.
-                      </p>
-                    </div>
+                  <div className="p-5 rounded-xl bg-[#1c1c1f] border border-border/50">
+                    <h4 className="text-sm font-bold text-white mb-2">Public Profile</h4>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      Your professional profile is publicly accessible through the generated URL. Share it with recruiters, clients, and networking contacts.
+                    </p>
                   </div>
 
                   <div className="space-y-2">

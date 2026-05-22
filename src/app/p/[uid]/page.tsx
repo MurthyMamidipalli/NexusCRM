@@ -1,12 +1,12 @@
 
 "use client"
 
-import React, { useMemo, useEffect } from 'react'
+import React, { useMemo, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useFirestore, useDoc, useCollection } from '@/firebase'
-import { doc, collection, query, where, orderBy } from 'firebase/firestore'
+import { doc, collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
-import { Loader2, User, Mail, MapPin, Globe, Briefcase, Rocket, Lock, ShieldAlert } from 'lucide-react'
+import { Loader2, User, Mail, MapPin, Globe, Briefcase, Rocket, Lock, ShieldAlert, Search } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -16,52 +16,78 @@ export default function PublicProfilePage() {
   const params = useParams()
   const uid = params.uid as string
   const db = useFirestore()
+  const [fallbackProfile, setFallbackProfile] = useState<any>(null)
+  const [searchingFallback, setSearchingFallback] = useState(false)
 
-  // Queries
+  // Primary Query: Direct Doc Reference (Fastest)
   const profileRef = useMemo(() => uid ? doc(db, collections.PROFILES, uid) : null, [db, uid])
+  const { data: profileDoc, loading: profileLoading, error: profileError } = useDoc(profileRef)
+
+  // Sub-resource Queries
   const skillsQuery = useMemo(() => uid ? query(collection(db, collections.SKILLS), where('ownerId', '==', uid), orderBy('name', 'asc')) : null, [db, uid])
   const expQuery = useMemo(() => uid ? query(collection(db, collections.EXPERIENCE), where('ownerId', '==', uid), orderBy('startDate', 'desc')) : null, [db, uid])
   const projectsQuery = useMemo(() => uid ? query(collection(db, collections.PROJECTS), where('ownerId', '==', uid), orderBy('updatedAt', 'desc')) : null, [db, uid])
 
-  const { data: profile, loading: profileLoading, error: profileError } = useDoc(profileRef)
   const { data: skills } = useCollection(skillsQuery)
   const { data: experience } = useCollection(expQuery)
   const { data: projects } = useCollection(projectsQuery)
 
-  // DIAGNOSTIC LOGS
+  // Fallback Logic: If direct doc doesn't exist, search by ownerId field
   useEffect(() => {
-    console.group('🔍 Public Profile Diagnostic');
-    console.log('Target UID:', uid);
-    if (profileLoading) {
-      console.log('Status: Loading profile document...');
-    } else {
-      console.log('Profile Document Found:', !!profile);
-      if (profile) {
-        console.log('Full Profile Data:', profile);
-        console.log('isPublic Value:', (profile as any).isPublic);
-      }
-      if (profileError) {
-        console.error('Firestore Error:', profileError);
+    async function searchFallback() {
+      if (!profileLoading && !profileDoc && uid && db) {
+        console.log('⚠️ Direct profile lookup failed. Attempting fallback search by ownerId...');
+        setSearchingFallback(true)
+        try {
+          const q = query(collection(db, collections.PROFILES), where('ownerId', '==', uid), limit(1))
+          const querySnapshot = await getDocs(q)
+          if (!querySnapshot.empty) {
+            const found = querySnapshot.docs[0].data()
+            console.log('✅ Fallback profile found via ownerId search:', found)
+            setFallbackProfile({ ...found, id: querySnapshot.docs[0].id })
+          } else {
+            console.error('❌ No profile document found with this UID or ownerId.')
+          }
+        } catch (err) {
+          console.error('❌ Fallback search error:', err)
+        } finally {
+          setSearchingFallback(false)
+        }
       }
     }
-    console.groupEnd();
-  }, [profile, profileLoading, profileError, uid]);
+    searchFallback()
+  }, [profileDoc, profileLoading, uid, db])
 
-  // Explicitly check isPublic field
-  const isVisible = profile && (profile as any).isPublic === true;
-  const isPrivate = profile && !isVisible;
-  const isPermissionDenied = !!profileError;
+  const activeProfile = profileDoc || fallbackProfile
+  const isVisible = activeProfile && activeProfile.isPublic === true
+  const isPrivate = activeProfile && !isVisible
+  const isPermissionDenied = !!profileError
 
-  if (profileLoading) {
+  // DIAGNOSTIC LOGS
+  useEffect(() => {
+    if (!profileLoading && !searchingFallback) {
+      console.group('🔍 Public Hub Diagnostic');
+      console.log('URL Identifier:', uid);
+      console.log('Active Profile Object:', activeProfile);
+      console.log('Found via Direct Ref:', !!profileDoc);
+      console.log('Found via ownerId Query:', !!fallbackProfile);
+      console.log('Visibility (isPublic):', activeProfile?.isPublic);
+      console.groupEnd();
+    }
+  }, [activeProfile, profileDoc, fallbackProfile, profileLoading, searchingFallback, uid]);
+
+  if (profileLoading || searchingFallback) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#0a0a0c]">
+      <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0c]">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="mt-4 text-xs text-muted-foreground uppercase tracking-widest font-bold animate-pulse">
+          Searching Intelligence Hub...
+        </p>
       </div>
     )
   }
 
-  // Handle case where profile doc exists but visibility is off OR permission was denied by security rules
-  if (isPrivate || isPermissionDenied || !profile) {
+  if (isPrivate || isPermissionDenied || !activeProfile) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0c] text-white p-6 text-center">
         <div className="p-6 rounded-full bg-muted/10 mb-6">
@@ -76,10 +102,10 @@ export default function PublicProfilePage() {
         </h1>
         <p className="text-muted-foreground max-w-md text-lg leading-relaxed">
           {isPermissionDenied 
-            ? "This professional hub is protected by security rules. If you are the owner, please check your Public Share settings."
+            ? "This professional hub is protected by database rules. If you are the owner, please check your Public Share settings."
             : "This professional hub is currently private or does not exist. Please contact the owner for access."}
         </p>
-        <div className="mt-8 flex flex-col gap-4">
+        <div className="mt-8">
           <Button variant="outline" className="border-white/10 text-white h-12 px-8 rounded-xl font-bold" asChild>
             <a href="/login">Manage Your Own Hub</a>
           </Button>
@@ -95,20 +121,20 @@ export default function PublicProfilePage() {
       <div className="container mx-auto px-4 md:px-6 max-w-5xl">
         <div className="flex flex-col md:flex-row items-end gap-8 -mt-20">
           <Avatar className="h-40 w-40 border-8 border-[#0a0a0c] shadow-2xl rounded-[2.5rem]">
-            <AvatarImage src={profile.avatarUrl || `https://picsum.photos/seed/${uid}/200/200`} />
+            <AvatarImage src={activeProfile.avatarUrl || `https://picsum.photos/seed/${uid}/200/200`} />
             <AvatarFallback className="bg-muted text-5xl">
               <User className="h-16 w-16 text-muted-foreground" />
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 space-y-2 mb-2 text-center md:text-left">
-            <h1 className="text-4xl md:text-5xl font-bold font-headline tracking-tight">{profile.fullName || 'Professional'}</h1>
-            <p className="text-xl text-primary font-semibold">{profile.tagline || 'Talent Intelligence'}</p>
+            <h1 className="text-4xl md:text-5xl font-bold font-headline tracking-tight">{activeProfile.fullName || 'Professional'}</h1>
+            <p className="text-xl text-primary font-semibold">{activeProfile.tagline || 'Talent Intelligence'}</p>
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 pt-4 text-sm text-muted-foreground font-medium uppercase tracking-widest">
-              {profile.location && (
-                <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {profile.location}</span>
+              {activeProfile.location && (
+                <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {activeProfile.location}</span>
               )}
-              {profile.email && (
-                <span className="flex items-center gap-1.5 lowercase italic"><Mail className="h-4 w-4" /> {profile.email.toLowerCase()}</span>
+              {activeProfile.email && (
+                <span className="flex items-center gap-1.5 lowercase italic"><Mail className="h-4 w-4" /> {activeProfile.email.toLowerCase()}</span>
               )}
             </div>
           </div>
@@ -119,7 +145,7 @@ export default function PublicProfilePage() {
             <section className="space-y-4">
               <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground border-b border-white/5 pb-2">About</h2>
               <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                {profile.bio || "Professional background summary not provided."}
+                {activeProfile.bio || "Professional background summary not provided."}
               </p>
             </section>
 
@@ -214,7 +240,7 @@ export default function PublicProfilePage() {
 
       <footer className="container mx-auto px-6 max-w-5xl mt-24 pt-12 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
         <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.2em]">
-          &copy; {new Date().getFullYear()} {profile.fullName || 'Nexus Hub'} | Powered by NexusCRM
+          &copy; {new Date().getFullYear()} {activeProfile.fullName || 'Nexus Hub'} | Powered by NexusCRM
         </p>
         <Button size="sm" variant="ghost" className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground hover:text-white" asChild>
           <a href="/login">Manage Your Hub</a>
