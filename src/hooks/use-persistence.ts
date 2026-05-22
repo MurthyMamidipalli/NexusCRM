@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { doc, setDoc, serverTimestamp, Firestore } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { usePersistenceStatus } from '@/components/providers/persistence-provider';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -21,6 +21,7 @@ export function usePersistentDocument<T>(
   const { user } = useUser();
   const { setStatus } = usePersistenceStatus();
   const [localData, setLocalData] = useState<T>(initialData);
+  const dataRef = useRef<T>(initialData);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export function usePersistentDocument<T>(
         if (prevString === nextString) return prev;
         return initialData;
       });
+      dataRef.current = initialData;
     }
   }, [initialData]);
 
@@ -64,6 +66,7 @@ export function usePersistentDocument<T>(
   const updateField = (field: keyof T, value: any) => {
     const updated = { ...localData, [field]: value };
     setLocalData(updated);
+    dataRef.current = updated;
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
@@ -75,7 +78,7 @@ export function usePersistentDocument<T>(
 
   const manualSave = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    saveToFirestore(localData);
+    saveToFirestore(dataRef.current);
   };
 
   return { 

@@ -18,7 +18,18 @@
         "location": { "type": "string" },
         "address": { "type": "string" },
         "avatarUrl": { "type": "string" },
-        "ownerId": { "type": "string" }
+        "ownerId": { "type": "string" },
+        "currentJob": {
+          "type": "object",
+          "properties": {
+            "company": { "type": "string" },
+            "title": { "type": "string" },
+            "startDate": { "type": "string" },
+            "endDate": { "type": "string" },
+            "employmentType": { "type": "string" },
+            "workSetting": { "type": "string" }
+          }
+        }
       }
     },
     "Skill": {

@@ -3,7 +3,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,6 @@ import {
   Building2, 
   Briefcase, 
   Loader2, 
-  Save, 
   Calendar, 
   Clock, 
   Users, 
@@ -81,6 +80,8 @@ export default function CareerPage() {
     }
 
     updateField('currentJob' as any, updatedJob)
+    // We explicitly wait for the state to be updated by using updatedJob if needed,
+    // but our new hook ref-based logic handles this.
     save()
     setIsDialogOpen(false)
     toast({ title: 'Professional Position Updated' })
