@@ -88,6 +88,9 @@ export function CRMLayout({ children }: CRMLayoutProps) {
   const displayAvatar = (profile as any)?.avatarUrl || user?.photoURL || `https://picsum.photos/seed/${user?.uid || 'default'}/40/40`;
   const displayUserName = (profile as any)?.fullName || user?.displayName || user?.email?.split('@')[0] || 'User';
 
+  // Prevent hydration errors by ensuring we only render extension-targeted elements after mount
+  if (!mounted) return null;
+
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -95,7 +98,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           <header className="flex h-16 items-center justify-between border-b bg-card px-4 md:px-6 shrink-0 z-10">
             <div className="flex items-center gap-4 flex-1 min-w-0">
-              <SidebarTrigger className="shrink-0" />
+              <SidebarTrigger className="shrink-0" suppressHydrationWarning />
               <h2 className="text-sm font-bold font-headline truncate hidden sm:block">
                 {currentPageTitle}
               </h2>
@@ -103,27 +106,18 @@ export function CRMLayout({ children }: CRMLayoutProps) {
             </div>
 
             <div className="flex items-center gap-2 md:gap-4 shrink-0">
-              <Button variant="ghost" size="icon" className="relative text-muted-foreground hidden xs:flex">
+              <Button variant="ghost" size="icon" className="relative text-muted-foreground hidden xs:flex" suppressHydrationWarning>
                 <Bell className="h-5 w-5" />
                 <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-primary border-2 border-card" />
               </Button>
               <div className="flex items-center gap-3 pl-2 border-l border-border/50">
                 <div className="flex flex-col items-end hidden sm:flex">
-                  {!mounted ? (
-                    <div className="space-y-1">
-                      <div className="h-3 w-20 bg-muted/50 rounded" />
-                      <div className="h-2 w-24 bg-muted/30 rounded" />
-                    </div>
-                  ) : (
-                    <>
-                      <span className="text-[11px] font-bold leading-tight truncate max-w-[120px]">
-                        {displayUserName}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[120px] lowercase">
-                        {user?.email || 'Cloud Profile'}
-                      </span>
-                    </>
-                  )}
+                  <span className="text-[11px] font-bold leading-tight truncate max-w-[120px]">
+                    {displayUserName}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[120px] lowercase">
+                    {user?.email || 'Cloud Profile'}
+                  </span>
                 </div>
                 <Avatar className="h-8 w-8 md:h-9 md:w-9 border-2 border-primary/10 shrink-0">
                   <AvatarImage src={displayAvatar} />

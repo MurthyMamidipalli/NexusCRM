@@ -14,8 +14,6 @@ import {
   Search,
   Filter,
   Eye,
-  Calendar,
-  Tag,
   CreditCard,
   FileText,
   FileDigit,
@@ -74,7 +72,14 @@ export default function PrivateDocumentsPage() {
   
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [selectedTag, setSelectedTag] = useState<string>("My self")
+  
+  // Controlled form states to ensure validation and correct data capture
+  const [docName, setDocName] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('Other Documents')
+  const [selectedTag, setSelectedTag] = useState('My self')
+  const [issueDate, setIssueDate] = useState('')
+  const [expiryDate, setExpiryDate] = useState('')
+  const [description, setDescription] = useState('')
 
   const docsQuery = useMemo(() => {
     if (!db || !user) return null
@@ -95,8 +100,9 @@ export default function PrivateDocumentsPage() {
     });
 
     return sorted.filter((doc: any) => {
-      const matchesSearch = (doc.documentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          doc.tags?.some((t: string) => t.toLowerCase().includes(searchTerm.toLowerCase()))
+      const name = (doc.documentName || '').toLowerCase()
+      const search = searchTerm.toLowerCase()
+      const matchesSearch = name.includes(search) || doc.tags?.some((t: string) => t.toLowerCase().includes(search))
       const matchesCategory = filterCategory === 'All' || doc.category === filterCategory
       return matchesSearch && matchesCategory
     })
@@ -113,7 +119,7 @@ export default function PrivateDocumentsPage() {
     }
   }
 
-  const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user || !db || !storage) return
     
@@ -122,12 +128,13 @@ export default function PrivateDocumentsPage() {
       return
     }
 
+    if (!docName.trim()) {
+      toast({ variant: 'destructive', title: 'Missing Name', description: 'Please provide a name for the document.' })
+      return
+    }
+
     setLoading(true)
 
-    const formData = new FormData(e.currentTarget)
-    const fileName = formData.get('documentName') as string
-    const category = formData.get('category') as string
-    
     try {
       const filePath = `private_vault/${user.uid}/${Date.now()}_${selectedFile.name}`
       const storageRef = ref(storage, filePath)
@@ -135,11 +142,11 @@ export default function PrivateDocumentsPage() {
       const fileUrl = await getDownloadURL(uploadResult.ref)
 
       const data = {
-        documentName: fileName,
-        category: category,
-        description: formData.get('description') as string,
-        issueDate: formData.get('issueDate') as string,
-        expiryDate: formData.get('expiryDate') as string,
+        documentName: docName,
+        category: selectedCategory,
+        description: description,
+        issueDate: issueDate,
+        expiryDate: expiryDate,
         tags: [selectedTag],
         fileUrl: fileUrl,
         filePath: filePath,
@@ -152,6 +159,7 @@ export default function PrivateDocumentsPage() {
       setIsDialogOpen(false)
       resetForm()
     } catch (err: any) {
+      console.error(err)
       toast({ variant: 'destructive', title: 'Upload Failed', description: err.message })
     } finally {
       setLoading(false)
@@ -160,12 +168,18 @@ export default function PrivateDocumentsPage() {
 
   const resetForm = () => {
     setSelectedFile(null)
+    setDocName('')
+    setSelectedCategory('Other Documents')
     setSelectedTag("My self")
+    setIssueDate('')
+    setExpiryDate('')
+    setDescription('')
     setLoading(false)
   }
 
   const handleDelete = async (doc: any) => {
-    if (!db || !storage || !confirm('Are you sure you want to permanently delete this document?')) return
+    if (!db || !storage) return
+    if (!window.confirm('Are you sure you want to permanently delete this document? This cannot be undone.')) return
     
     try {
       if (doc.filePath) {
@@ -208,18 +222,24 @@ export default function PrivateDocumentsPage() {
           <DialogContent className="sm:max-w-[600px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden">
             <DialogHeader className="p-8 pb-0">
               <DialogTitle className="text-2xl font-bold font-headline">Secure Upload</DialogTitle>
-              <DialogDescription className="text-gray-400">Supported up to 500MB.</DialogDescription>
+              <DialogDescription className="text-gray-400">Supported up to 500MB. Only you can access these files.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleUpload} className="p-8 pt-6 space-y-6 max-h-[80vh] overflow-y-auto">
               <div className="space-y-2">
                 <Label>Document Name</Label>
-                <Input name="documentName" required className="bg-[#1c1c1f] border-none h-12 rounded-xl" placeholder="e.g. Passport 2024" />
+                <Input 
+                  value={docName}
+                  onChange={(e) => setDocName(e.target.value)}
+                  required 
+                  className="bg-[#1c1c1f] border-none h-12 rounded-xl" 
+                  placeholder="e.g. Passport 2024" 
+                />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Category</Label>
-                  <Select name="category" defaultValue="Other Documents">
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                     <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
@@ -244,17 +264,32 @@ export default function PrivateDocumentsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Issue Date (Optional)</Label>
-                  <Input name="issueDate" type="date" className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark]" />
+                  <Input 
+                    type="date" 
+                    value={issueDate}
+                    onChange={(e) => setIssueDate(e.target.value)}
+                    className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark]" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Expiry Date (Optional)</Label>
-                  <Input name="expiryDate" type="date" className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark]" />
+                  <Input 
+                    type="date" 
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                    className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark]" 
+                  />
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label>Description</Label>
-                <Textarea name="description" className="bg-[#1c1c1f] border-none rounded-xl min-h-[80px]" placeholder="Brief context..." />
+                <Textarea 
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="bg-[#1c1c1f] border-none rounded-xl min-h-[80px]" 
+                  placeholder="Brief context..." 
+                />
               </div>
 
               <div 
@@ -271,6 +306,7 @@ export default function PrivateDocumentsPage() {
                   <div className="flex flex-col items-center gap-2 text-center">
                     <ShieldCheck className="text-primary h-12 w-12" />
                     <span className="text-sm font-bold text-primary truncate max-w-[300px]">{selectedFile.name}</span>
+                    <span className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-center">
@@ -281,9 +317,13 @@ export default function PrivateDocumentsPage() {
               </div>
 
               <DialogFooter className="pb-4">
-                <Button type="submit" disabled={loading} className="w-full h-12 bg-primary hover:bg-primary/90 font-bold rounded-xl border-none">
+                <Button 
+                  type="submit" 
+                  disabled={loading || !selectedFile || !docName} 
+                  className="w-full h-12 bg-primary hover:bg-primary/90 font-bold rounded-xl border-none shadow-lg shadow-primary/20"
+                >
                   {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-                  Securely Upload
+                  Securely Upload Document
                 </Button>
               </DialogFooter>
             </form>
