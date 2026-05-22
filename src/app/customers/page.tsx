@@ -85,50 +85,18 @@ export default function ContactsPage() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           {contacts.map((contact: any) => (
             <Card key={contact.id} className="group border-none bg-card/50 backdrop-blur-md shadow-lg hover:shadow-2xl transition-all duration-300">
-              <CardHeader className="flex flex-row items-start justify-between pb-2">
-                <Avatar className="h-12 w-12 border-2 border-primary/20 group-hover:border-primary/50 transition-colors">
-                  <AvatarImage src={`https://picsum.photos/seed/${contact.id}/48/48`} />
+              <CardHeader className="flex flex-row items-center justify-center pb-2">
+                <Avatar className="h-16 w-16 border-2 border-primary/20 group-hover:border-primary/50 transition-colors">
+                  <AvatarImage src={`https://picsum.photos/seed/${contact.id}/64/64`} />
                   <AvatarFallback>{contact.name?.[0] || 'C'}</AvatarFallback>
                 </Avatar>
-                <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] uppercase">
-                  {contact.industry || 'Professional'}
-                </Badge>
               </CardHeader>
-              <CardContent>
-                <h3 className="font-headline text-lg font-bold group-hover:text-primary transition-colors">{contact.name}</h3>
-                <div className="space-y-1 mb-4">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Building2 className="h-3 w-3" />
-                    {contact.company || 'Private'}
-                  </div>
-                  {contact.phone && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Phone className="h-3 w-3" />
-                      {contact.phone}
-                    </div>
-                  )}
-                  {contact.email && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Mail className="h-3 w-3" />
-                      {contact.email}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/50">
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">Category</p>
-                    <p className="text-sm font-bold text-foreground">{contact.industry || 'Client'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">Joined</p>
-                    <p className="text-sm font-bold text-foreground">{contact.since || '2024'}</p>
-                  </div>
-                </div>
+              <CardContent className="text-center">
+                <h3 className="font-headline text-xl font-bold group-hover:text-primary transition-colors mb-6">{contact.name}</h3>
                 
                 <Button 
                   variant="ghost" 
-                  className="w-full mt-6 text-primary group-hover:bg-primary group-hover:text-white transition-all"
+                  className="w-full text-primary group-hover:bg-primary group-hover:text-white transition-all border border-primary/20 group-hover:border-transparent"
                   onClick={() => setSelectedContact(contact)}
                 >
                   View Details
