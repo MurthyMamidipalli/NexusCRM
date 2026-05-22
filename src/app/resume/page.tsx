@@ -18,7 +18,8 @@ import {
   ExternalLink,
   X,
   Lock,
-  Files
+  Files,
+  FileCheck
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -48,6 +49,7 @@ export default function ResumePage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [activeTab, setActiveTab] = useState('PDF')
   const [visibility, setVisibility] = useState<string>("Private")
+  const [docType, setDocType] = useState<string>("Resume")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null)
 
@@ -97,7 +99,6 @@ export default function ResumePage() {
       if (type === 'file') {
         if (selectedFiles.length === 0) { setLoading(false); return; }
         
-        // Loop through each selected file
         for (const file of selectedFiles) {
           const fileId = `${Date.now()}_${file.name}`
           const path = `resumes/${user.uid}/${fileId}`
@@ -118,6 +119,7 @@ export default function ResumePage() {
               const data: any = {
                 name: selectedFiles.length > 1 ? `${baseName} - ${file.name}` : baseName,
                 type: 'file',
+                docType: docType, // Added document sub-type (Resume/CV)
                 visibility,
                 isPublic: visibility === 'Public',
                 ownerId: user.uid,
@@ -129,7 +131,6 @@ export default function ResumePage() {
                 url: null
               }
 
-              // Non-blocking Firestore create
               createRecord(db, collections.RESUMES, data, user.uid).catch(err => {
                 const permissionError = new FirestorePermissionError({
                   path: collections.RESUMES,
@@ -143,7 +144,6 @@ export default function ResumePage() {
           )
         }
       } else {
-        // Handle single Link
         const data: any = {
           name: baseName,
           type: 'link',
@@ -192,7 +192,7 @@ export default function ResumePage() {
         <Dialog open={isDialogOpen} onOpenChange={(o) => setIsDialogOpen(o)}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white">
-              <Plus className="h-4 w-4" /> {activeTab === 'PDF' ? 'Upload Resumes' : 'Add Link'}
+              <Plus className="h-4 w-4" /> {activeTab === 'PDF' ? 'Upload Resumes & CV\'S' : 'Add Link'}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-2xl p-8">
@@ -209,18 +209,34 @@ export default function ResumePage() {
                 <Label>Record Name / Folder Label</Label>
                 <Input id="name" name="name" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="e.g. Senior Software Engineer CV" />
               </div>
-              <div className="space-y-2">
-                <Label>Visibility (Mandatory)</Label>
-                <Select value={visibility} onValueChange={setVisibility}>
-                  <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                    <SelectItem value="Private">🔒 Private (Vault Only)</SelectItem>
-                    <SelectItem value="Public">🌍 Public (Shared on Hub)</SelectItem>
-                  </SelectContent>
-                </Select>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Document Type</Label>
+                  <Select value={docType} onValueChange={setDocType}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                      <SelectItem value="Resume">Resume</SelectItem>
+                      <SelectItem value="CV">CV</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Visibility</Label>
+                  <Select value={visibility} onValueChange={setVisibility}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                      <SelectItem value="Private">🔒 Private</SelectItem>
+                      <SelectItem value="Public">🌍 Public</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+
               {activeTab === 'PDF' ? (
                 <div 
                   className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
@@ -344,10 +360,18 @@ function ResumeCard({ resume, onDelete, onPreview }: { resume: any, onDelete: an
     <Card className="relative group border-none bg-[#0f1115] text-white shadow-xl rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-300">
       <CardContent className="p-8">
         <div className="flex items-center justify-between mb-4">
-          <Badge variant="outline" className={resume.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}>
-            {resume.isPublic ? <Globe className="h-3 w-3 mr-1.5" /> : <Lock className="h-3 w-3 mr-1.5" />}
-            {resume.visibility || (resume.isPublic ? 'Public' : 'Private')}
-          </Badge>
+          <div className="flex gap-2">
+            <Badge variant="outline" className={resume.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}>
+              {resume.isPublic ? <Globe className="h-3 w-3 mr-1.5" /> : <Lock className="h-3 w-3 mr-1.5" />}
+              {resume.visibility || (resume.isPublic ? 'Public' : 'Private')}
+            </Badge>
+            {resume.docType && (
+              <Badge variant="outline" className="border-primary/20 text-primary bg-primary/5">
+                <FileCheck className="h-3 w-3 mr-1.5" />
+                {resume.docType}
+              </Badge>
+            )}
+          </div>
           <button onClick={() => onDelete(resume)} className="text-gray-500 hover:text-destructive transition-colors">
             <Trash2 className="h-5 w-5" />
           </button>
@@ -377,7 +401,7 @@ function ResumeCard({ resume, onDelete, onPreview }: { resume: any, onDelete: an
             ) : (
               <Button className="w-full bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
                 <a href={resume.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4" /> Visit CV
+                  <ExternalLink className="h-4 w-4" /> Visit Link
                 </a>
               </Button>
             )}
