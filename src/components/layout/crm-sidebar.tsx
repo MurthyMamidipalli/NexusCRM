@@ -1,7 +1,6 @@
-
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
@@ -29,6 +28,15 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { signOut } from 'firebase/auth'
 import { useAuth } from '@/firebase'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+} from "@/components/ui/sidebar"
 
 const navItems = [
   { label: 'Overview', icon: LayoutDashboard, href: '/dashboard', emoji: '🏠' },
@@ -53,11 +61,6 @@ export function CRMSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const auth = useAuth()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const handleLogout = async () => {
     try {
@@ -68,66 +71,63 @@ export function CRMSidebar() {
     }
   }
 
-  if (!mounted) return <div className="h-screen w-64 border-r bg-card" />
-
   return (
-    <div className="flex h-screen w-64 flex-col border-r bg-card p-4 transition-all duration-300">
-      <div className="flex items-center gap-2 px-2 py-4 mb-6">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-lg shadow-primary/20">
-          <Zap className="h-5 w-5 fill-current" />
+    <Sidebar className="border-r bg-card">
+      <SidebarHeader className="p-4 mb-2">
+        <div className="flex items-center gap-2 px-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-lg shadow-primary/20 shrink-0">
+            <Zap className="h-5 w-5 fill-current" />
+          </div>
+          <span className="font-headline text-xl font-bold tracking-tight text-foreground truncate">NexusCRM</span>
         </div>
-        <span className="font-headline text-xl font-bold tracking-tight text-foreground">NexusCRM</span>
-      </div>
+      </SidebarHeader>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto pr-1">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href
-          return (
-            <Link key={item.href} href={item.href}>
-              <div className={cn(
-                "group flex items-center justify-between rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200",
-                isActive 
-                  ? "bg-primary text-white shadow-md shadow-primary/20" 
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-sm">{item.emoji}</span>
-                  {item.label}
-                </div>
-              </div>
-            </Link>
-          )
-        })}
-      </nav>
+      <SidebarContent className="px-2">
+        <SidebarMenu>
+          {navItems.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton 
+                  asChild 
+                  isActive={isActive}
+                  className={cn(
+                    "transition-all duration-200",
+                    isActive ? "bg-primary text-white shadow-md shadow-primary/20 hover:bg-primary/90 hover:text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <Link href={item.href} className="flex items-center gap-2.5 w-full">
+                    <span className="text-sm shrink-0">{item.emoji}</span>
+                    <span className="text-xs font-medium">{item.label}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )
+          })}
+        </SidebarMenu>
+      </SidebarContent>
 
-      <div className="mt-auto space-y-4 pt-4 border-t">
-        <div className="flex flex-col gap-1">
-          <Link href="/settings">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className={cn(
-                "w-full justify-start gap-3 px-3 transition-colors",
-                pathname === '/settings' 
-                  ? "bg-primary/10 text-primary font-bold" 
-                  : "text-muted-foreground hover:text-foreground"
-              )}
+      <SidebarFooter className="p-4 border-t gap-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/settings'}>
+              <Link href="/settings" className="flex items-center gap-3">
+                <Settings className="h-4 w-4" />
+                <span className="text-xs font-medium">Settings</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              onClick={handleLogout}
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             >
-              <Settings className="h-4 w-4" />
-              Settings
-            </Button>
-          </Link>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={handleLogout}
-            className="w-full justify-start gap-3 px-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
-        </div>
-      </div>
-    </div>
+              <LogOut className="h-4 w-4" />
+              <span className="text-xs font-medium">Logout</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
   )
 }

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { CRMSidebar } from './crm-sidebar'
 import { Button } from '@/components/ui/button'
-import { Bell, User, Loader2, Cloud, CloudOff, RefreshCw } from 'lucide-react'
+import { Bell, User, Cloud, CloudOff, RefreshCw } from 'lucide-react'
 import { useUser } from '@/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { usePersistenceStatus } from '@/components/providers/persistence-provider'
@@ -39,7 +39,7 @@ function PersistenceIndicator() {
 
   if (!isOnline) {
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold uppercase tracking-widest border border-destructive/20 animate-pulse">
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold uppercase tracking-widest border border-destructive/20 animate-pulse shrink-0">
         <CloudOff className="h-3 w-3" />
         Offline
       </div>
@@ -49,14 +49,14 @@ function PersistenceIndicator() {
   switch (status) {
     case 'saving':
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest border border-primary/20">
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest border border-primary/20 shrink-0">
           <RefreshCw className="h-3 w-3 animate-spin" />
           Syncing...
         </div>
       );
     case 'saved':
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-500 text-[10px] font-bold uppercase tracking-widest border border-green-500/20">
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-500 text-[10px] font-bold uppercase tracking-widest border border-green-500/20 shrink-0">
           <Cloud className="h-3 w-3" />
           Saved
         </div>
@@ -81,40 +81,43 @@ export function CRMLayout({ children }: CRMLayoutProps) {
     <SidebarProvider>
       <div className="flex h-screen w-full overflow-hidden bg-background">
         <CRMSidebar />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <header className="flex h-16 items-center justify-between border-b bg-card px-4 md:px-6 shrink-0">
-            <div className="flex items-center gap-4 flex-1">
-              <SidebarTrigger className="md:hidden" />
+        <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+          <header className="flex h-16 items-center justify-between border-b bg-card px-4 md:px-6 shrink-0 z-10">
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+              <SidebarTrigger className="shrink-0" />
               <h2 className="text-sm font-bold font-headline truncate hidden sm:block">
                 {currentPageTitle}
               </h2>
               <PersistenceIndicator />
             </div>
 
-            <div className="flex items-center gap-2 md:gap-4">
+            <div className="flex items-center gap-2 md:gap-4 shrink-0">
               <Button variant="ghost" size="icon" className="relative text-muted-foreground hidden xs:flex">
                 <Bell className="h-5 w-5" />
                 <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-primary border-2 border-card" />
               </Button>
               <div className="flex items-center gap-3 pl-2 border-l border-border/50">
-                {loading || !mounted ? (
-                  <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
-                ) : (
-                  <>
-                    <div className="flex flex-col items-end hidden sm:flex">
+                <div className="flex flex-col items-end hidden sm:flex">
+                  {loading || !mounted ? (
+                    <div className="space-y-1">
+                      <div className="h-3 w-20 bg-muted animate-pulse rounded" />
+                      <div className="h-2 w-24 bg-muted animate-pulse rounded" />
+                    </div>
+                  ) : (
+                    <>
                       <span className="text-[11px] font-bold leading-tight truncate max-w-[120px]">
                         {user?.displayName || user?.email?.split('@')[0] || 'User'}
                       </span>
                       <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[120px] lowercase">
                         {user?.email || 'Not logged in'}
                       </span>
-                    </div>
-                    <Avatar className="h-8 w-8 md:h-9 md:w-9 border-2 border-primary/10">
-                      <AvatarImage src={user?.photoURL || `https://picsum.photos/seed/${user?.uid}/40/40`} />
-                      <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
-                    </Avatar>
-                  </>
-                )}
+                    </>
+                  )}
+                </div>
+                <Avatar className="h-8 w-8 md:h-9 md:w-9 border-2 border-primary/10 shrink-0">
+                  <AvatarImage src={user?.photoURL || `https://picsum.photos/seed/${user?.uid}/40/40`} />
+                  <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
+                </Avatar>
               </div>
             </div>
           </header>
