@@ -18,8 +18,7 @@ import {
   FileSpreadsheet,
   Pencil,
   Upload,
-  CheckCircle2,
-  AlertTriangle
+  CheckCircle2
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
@@ -46,17 +45,6 @@ import {
 } from '@/components/ui/select'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 
 export default function CertificationsPage() {
   const db = useFirestore()
@@ -167,27 +155,8 @@ export default function CertificationsPage() {
     toast({ title: 'Record Removed' })
   }
 
-  const handleDeleteAll = () => {
-    if (!certifications || !db) return
-    const count = certifications.length
-    if (count === 0) return
-    
-    certifications.forEach((cert: any) => {
-      deleteRecord(db, collections.CERTIFICATIONS, cert.id)
-        .catch(async (err) => {
-          const permissionError = new FirestorePermissionError({
-            path: `${collections.CERTIFICATIONS}/${cert.id}`,
-            operation: 'delete',
-          } satisfies SecurityRuleContext);
-          errorEmitter.emit('permission-error', permissionError);
-        })
-    })
-    toast({ title: `Removed ${count} records`, description: "Your certification vault has been cleared." })
-  }
-
-  const filterCerts = (cat: string | null) => {
+  const filterCerts = (cat: string) => {
     if (!certifications) return []
-    if (!cat) return certifications
     return certifications.filter((c: any) => c.category === cat)
   }
 
@@ -209,34 +178,6 @@ export default function CertificationsPage() {
           <p className="text-muted-foreground">Secure document vault for academic records and certifications.</p>
         </div>
         <div className="flex items-center gap-2">
-          {certifications && certifications.length > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="gap-2 text-destructive border-destructive/20 hover:bg-destructive/10">
-                  <Trash2 className="h-4 w-4" />
-                  Clear All
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-destructive" />
-                    Purge Certification Vault?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete all {certifications.length} records. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive text-white hover:bg-destructive/90">
-                    Purge All Records
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-          
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) {
@@ -348,17 +289,13 @@ export default function CertificationsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="all" className="space-y-8">
+      <Tabs defaultValue="study" className="space-y-8">
         <TabsList className="bg-muted/50 p-1 flex-wrap h-auto">
-          <TabsTrigger value="all" className="gap-2">All Records</TabsTrigger>
           <TabsTrigger value="study" className="gap-2"><Folder className="h-3 w-3" /> Study Certificates</TabsTrigger>
           <TabsTrigger value="course" className="gap-2"><Folder className="h-3 w-3" /> Course Certificates</TabsTrigger>
           <TabsTrigger value="grades" className="gap-2"><FileSpreadsheet className="h-3 w-3" /> Grade Sheets</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-0">
-          <CertGrid items={filterCerts(null)} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
-        </TabsContent>
         <TabsContent value="study" className="mt-0">
           <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
         </TabsContent>
@@ -377,7 +314,7 @@ function CertGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id: st
   if (items.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30 text-muted-foreground italic">
-        No records found in this folder.
+        No records found in this category.
       </div>
     )
   }
