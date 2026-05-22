@@ -6,7 +6,8 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Building2, Briefcase, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Building2, Briefcase, Loader2, Save } from 'lucide-react'
 import { useUser, useFirestore, useDoc } from '@/firebase'
 import { doc } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
@@ -24,7 +25,7 @@ export default function CareerPage() {
   const initialData = useMemo(() => profileDoc || EMPTY_CAREER, [profileDoc]);
 
   // Use global persistence hook for the nested currentJob object
-  const { data: profile, updateField } = usePersistentDocument(
+  const { data: profile, updateField, save } = usePersistentDocument(
     collections.PROFILES,
     user?.uid,
     initialData
@@ -47,11 +48,15 @@ export default function CareerPage() {
 
   return (
     <CRMLayout>
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">🏢 Current Job</h1>
           <p className="text-muted-foreground">Managing your current professional role details with auto-save.</p>
         </div>
+        <Button onClick={save} className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white">
+          <Save className="h-4 w-4" />
+          Save Changes
+        </Button>
       </div>
 
       <div className="max-w-4xl">

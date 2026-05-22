@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { User, Mail, Phone, MapPin, Loader2, Calendar, Home } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { User, Mail, Phone, MapPin, Loader2, Calendar, Home, Save } from 'lucide-react'
 import { useUser, useFirestore, useDoc } from '@/firebase'
 import { doc } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
@@ -26,7 +27,7 @@ export default function ProfilePage() {
   // Use a memoized initial data object to prevent re-render loops
   const initialData = useMemo(() => profileDoc || EMPTY_PROFILE, [profileDoc]);
 
-  const { data: profile, updateField } = usePersistentDocument(
+  const { data: profile, updateField, save } = usePersistentDocument(
     collections.PROFILES,
     user?.uid,
     initialData
@@ -44,9 +45,15 @@ export default function ProfilePage() {
 
   return (
     <CRMLayout>
-      <div className="mb-8">
-        <h1 className="font-headline text-4xl font-bold tracking-tight">👤 Personal Profile</h1>
-        <p className="text-muted-foreground">Manage your core identity, contact details, and demographics.</p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="font-headline text-4xl font-bold tracking-tight">👤 Personal Profile</h1>
+          <p className="text-muted-foreground">Manage your core identity, contact details, and demographics.</p>
+        </div>
+        <Button onClick={save} className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white">
+          <Save className="h-4 w-4" />
+          Save Profile
+        </Button>
       </div>
 
       <div className="max-w-4xl space-y-8">
@@ -187,7 +194,7 @@ export default function ProfilePage() {
                   value={(profile as any)?.gender || 'Prefer not to say'} 
                   onValueChange={(val) => updateField('gender', val)}
                 >
-                  <SelectTrigger id="gender" className="focus:ring-primary">
+                  <SelectTrigger id="gender" className="focus:ring-primary text-foreground">
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
                   <SelectContent>

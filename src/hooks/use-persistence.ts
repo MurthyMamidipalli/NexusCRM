@@ -35,7 +35,7 @@ export function usePersistentDocument<T>(
     }
   }, [initialData]);
 
-  const save = useCallback(async (dataToSave: any) => {
+  const saveToFirestore = useCallback(async (dataToSave: any) => {
     if (!db || !user || !docId) return;
 
     setStatus('saving');
@@ -63,7 +63,7 @@ export function usePersistentDocument<T>(
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     timeoutRef.current = setTimeout(() => {
-      save(updated);
+      saveToFirestore(updated);
       timeoutRef.current = null;
     }, 1500); // 1.5s debounce
   };
@@ -75,15 +75,21 @@ export function usePersistentDocument<T>(
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     timeoutRef.current = setTimeout(() => {
-      save(updated);
+      saveToFirestore(updated);
       timeoutRef.current = null;
     }, 1500);
+  };
+
+  const manualSave = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    saveToFirestore(localData);
   };
 
   return { 
     data: localData, 
     updateField, 
     updateFields,
-    setLocalData 
+    setLocalData,
+    save: manualSave
   };
 }
