@@ -20,7 +20,6 @@ import {
   Plane,
   Home,
   Briefcase,
-  AlertCircle,
   X,
   Plus,
   Users,
@@ -71,6 +70,7 @@ export default function PrivateDocumentsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingDoc, setEditingDoc] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('All')
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
@@ -122,6 +122,7 @@ export default function PrivateDocumentsPage() {
     if (file) {
       if (file.size > MAX_FILE_SIZE) {
         toast({ variant: 'destructive', title: 'File Too Large', description: 'Limit is 500MB.' })
+        e.target.value = ''
         return
       }
       setSelectedFile(file)
@@ -139,6 +140,7 @@ export default function PrivateDocumentsPage() {
     }
 
     setLoading(true)
+    setUploadProgress(0)
     console.log("--- STARTING UPLOAD PIPELINE ---")
 
     try {
@@ -148,28 +150,23 @@ export default function PrivateDocumentsPage() {
       let fileSize = editingDoc?.fileSize || 0
 
       if (selectedFile) {
-        console.log("Encryption started")
-        // Note: Client-side encryption would happen here. For now, we simulate the feedback loop.
-        await new Promise(resolve => setTimeout(resolve, 500))
-        console.log("Encryption completed")
-
-        const storagePath = `privateDocuments/${user.uid}/${Date.now()}_${selectedFile.name}`
+        const storagePath = `privateDocuments/${user.uid}/${Date.now()}_${selectedFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`
         const storageRef = ref(storage, storagePath)
         
         console.log("Upload started")
         const uploadTask = uploadBytesResumable(storageRef, selectedFile)
 
-        // Promise wrapper with timeout protection
         const uploadResult: any = await new Promise((resolve, reject) => {
           const timeoutId = setTimeout(() => {
             uploadTask.cancel()
-            reject(new Error("Upload timed out after 60 seconds. Please check your connection."))
+            reject(new Error("Upload timed out after 60 seconds."))
           }, 60000)
 
           uploadTask.on('state_changed', 
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-              console.log("Upload progress", progress.toFixed(2) + "%")
+              setUploadProgress(progress)
+              console.log("Upload progress", progress.toFixed(0) + "%")
             },
             (error) => {
               clearTimeout(timeoutId)
@@ -178,7 +175,7 @@ export default function PrivateDocumentsPage() {
             },
             async () => {
               clearTimeout(timeoutId)
-              console.log("Upload completed")
+              console.log("Upload completed successfully")
               try {
                 const url = await getDownloadURL(uploadTask.snapshot.ref)
                 console.log("Download URL generated")
@@ -212,31 +209,26 @@ export default function PrivateDocumentsPage() {
 
       if (editingDoc) {
         await updateRecord(db, collections.PRIVATE_DOCUMENTS, editingDoc.id, data)
-        console.log("Firestore document updated successfully")
+        console.log("Firestore document updated")
         toast({ title: 'Metadata Updated' })
       } else {
         await createRecord(db, collections.PRIVATE_DOCUMENTS, data, user.uid)
-        console.log("Firestore document created successfully")
+        console.log("Firestore document created")
         toast({ title: 'Document Secured' })
       }
       
       setIsDialogOpen(false)
       resetForm()
     } catch (err: any) {
-      console.error("Firestore save failed", err)
+      console.error("Pipeline failure", err)
       const permissionError = new FirestorePermissionError({
         path: editingDoc ? `${collections.PRIVATE_DOCUMENTS}/${editingDoc.id}` : collections.PRIVATE_DOCUMENTS,
         operation: editingDoc ? 'update' : 'create',
-        requestResourceData: { documentName: docName, category: selectedCategory },
+        requestResourceData: { documentName: docName },
         originalError: err
       } satisfies SecurityRuleContext);
       
       errorEmitter.emit('permission-error', permissionError);
-      toast({ 
-        variant: 'destructive', 
-        title: 'Vault Error', 
-        description: err.message || 'The upload process failed. Please try again.' 
-      })
     } finally {
       setLoading(false)
       console.log("--- UPLOAD PIPELINE FINISHED ---")
@@ -253,6 +245,8 @@ export default function PrivateDocumentsPage() {
     setExpiryDate('')
     setDescription('')
     setLoading(false)
+    setUploadProgress(0)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleEditClick = (doc: any) => {
@@ -266,20 +260,20 @@ export default function PrivateDocumentsPage() {
     setIsDialogOpen(true)
   }
 
-  const handleDelete = async (doc: any) => {
+  const handleDelete = async (docItem: any) => {
     if (!db || !storage) return
     if (!window.confirm('Permanently delete this document from the secure vault?')) return
     
     try {
-      if (doc.filePath) {
-        const storageRef = ref(storage, doc.filePath)
+      if (docItem.filePath) {
+        const storageRef = ref(storage, docItem.filePath)
         await deleteObject(storageRef).catch(e => console.warn('Storage deletion failed:', e))
       }
-      await deleteRecord(db, collections.PRIVATE_DOCUMENTS, doc.id)
+      await deleteRecord(db, collections.PRIVATE_DOCUMENTS, docItem.id)
       toast({ title: 'Document Removed' })
     } catch (err: any) {
       const permissionError = new FirestorePermissionError({
-        path: `${collections.PRIVATE_DOCUMENTS}/${doc.id}`,
+        path: `${collections.PRIVATE_DOCUMENTS}/${docItem.id}`,
         operation: 'delete',
         originalError: err
       } satisfies SecurityRuleContext);
@@ -305,7 +299,7 @@ export default function PrivateDocumentsPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight flex items-center gap-3">
             <Lock className="h-8 w-8 text-primary" /> Private Vault
           </h1>
-          <p className="text-muted-foreground">Secure storage for personal identity documents (Max 500MB).</p>
+          <p className="text-muted-foreground">High-security storage for identity and legal assets (Max 500MB).</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if(!o && !loading) resetForm(); }}>
           <DialogTrigger asChild>
@@ -316,10 +310,10 @@ export default function PrivateDocumentsPage() {
           <DialogContent className="sm:max-w-[600px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden">
             <DialogHeader className="p-8 pb-0">
               <DialogTitle className="text-2xl font-bold font-headline">
-                {editingDoc ? 'Edit Metadata' : 'Secure Vault Upload'}
+                {editingDoc ? 'Update Metadata' : 'Secure Vault Upload'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                {editingDoc ? 'Update document details below.' : 'Stay on this page until upload finishes.'}
+                {editingDoc ? 'Modify document details in your private registry.' : 'Files are stored on dedicated secure cloud infrastructure.'}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSave} className="p-8 pt-6 space-y-6 max-h-[80vh] overflow-y-auto">
@@ -339,7 +333,7 @@ export default function PrivateDocumentsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Tag (Owner)</Label>
+                  <Label>Tag (Identity)</Label>
                   <Select value={selectedTag} onValueChange={setSelectedTag} disabled={loading}>
                     <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
@@ -351,18 +345,18 @@ export default function PrivateDocumentsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Issue Date (Optional)</Label>
+                  <Label>Issue Date</Label>
                   <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} disabled={loading} className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark]" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Expiry Date (Optional)</Label>
+                  <Label>Expiry Date</Label>
                   <Input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} disabled={loading} className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark]" />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} disabled={loading} className="bg-[#1c1c1f] border-none rounded-xl min-h-[80px]" placeholder="Brief context..." />
+                <Label>Internal Description</Label>
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} disabled={loading} className="bg-[#1c1c1f] border-none rounded-xl min-h-[80px]" placeholder="Contextual notes for this record..." />
               </div>
 
               <div 
@@ -379,21 +373,31 @@ export default function PrivateDocumentsPage() {
                 ) : editingDoc?.fileUrl ? (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <FileText className="text-primary/40 h-12 w-12" />
-                    <span className="text-xs text-gray-500">Update file? (Optional)</span>
-                    <span className="text-[10px] text-gray-600">Current file stored in vault</span>
+                    <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Update Cloud Asset?</span>
+                    <span className="text-[10px] text-gray-600">Selecting a new file replaces the old one.</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <Upload className="text-gray-500 h-12 w-12 mb-2" />
-                    <span className="text-xs text-gray-500">Click to select (Up to 500MB)</span>
+                    <span className="text-xs text-gray-500">Select Document (PDF/Image)</span>
+                    <span className="text-[10px] text-gray-600">Strictly private, encrypted at rest.</span>
                   </div>
                 )}
               </div>
 
               <DialogFooter className="pb-4">
                 <Button type="submit" disabled={loading || (!editingDoc && !selectedFile) || !docName} className="w-full h-12 bg-primary hover:bg-primary/90 font-bold rounded-xl border-none">
-                  {loading ? <RefreshCw className="animate-spin h-4 w-4 mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-                  {loading ? (editingDoc ? 'Updating Metadata...' : 'Encrypting & Uploading...') : (editingDoc ? 'Save Changes' : 'Securely Upload Document')}
+                  {loading ? (
+                    <div className="flex items-center gap-3">
+                      <RefreshCw className="animate-spin h-4 w-4" />
+                      <span>{uploadProgress > 0 ? `Uploading ${uploadProgress.toFixed(0)}%` : 'Initializing...'}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>{editingDoc ? 'Save Metadata Changes' : 'Securly Upload to Vault'}</span>
+                    </div>
+                  )}
                 </Button>
               </DialogFooter>
             </form>
@@ -403,17 +407,17 @@ export default function PrivateDocumentsPage() {
 
       <div className="mb-8 flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search vault..." className="pl-10 h-11 bg-card/50 border-none rounded-xl" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search document names or tags..." className="pl-12 h-11 bg-card/50 border-none rounded-xl" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-[180px] h-11 bg-card/50 border-none rounded-xl"><Filter className="mr-2 h-4 w-4 opacity-50" /><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-[200px] h-11 bg-card/50 border-none rounded-xl"><Filter className="mr-2 h-4 w-4 opacity-50" /><SelectValue /></SelectTrigger>
           <SelectContent className="bg-card border-border"><SelectItem value="All">All Categories</SelectItem>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
         </Select>
       </div>
 
       {docsLoading ? (
-        <div className="flex h-64 items-center justify-center"><Loader2 className="animate-spin text-primary h-8 w-8" /></div>
+        <div className="flex h-64 items-center justify-center"><Loader2 className="animate-spin text-primary h-10 w-10" /></div>
       ) : documents.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {documents.map((doc: any) => (
@@ -444,8 +448,11 @@ export default function PrivateDocumentsPage() {
       ) : (
         <div className="flex h-96 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-[32px] bg-card/20 text-muted-foreground gap-4">
           <ShieldCheck className="h-16 w-16 opacity-20 text-primary" />
-          <p className="font-headline text-xl font-bold text-foreground">Secure Vault Empty</p>
-          <Button onClick={() => setIsDialogOpen(true)} variant="outline" className="gap-2 rounded-xl">Add First Document</Button>
+          <div className="text-center space-y-2">
+            <p className="font-headline text-xl font-bold text-foreground">Secure Vault Empty</p>
+            <p className="text-sm max-w-xs mx-auto">Digitize and secure your important documents here. They are only visible to you.</p>
+          </div>
+          <Button onClick={() => setIsDialogOpen(true)} variant="outline" className="gap-2 rounded-xl px-8 h-12">Initialize First Upload</Button>
         </div>
       )}
 
