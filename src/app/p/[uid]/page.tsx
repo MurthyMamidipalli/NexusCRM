@@ -20,12 +20,10 @@ import {
   FileText, 
   Download, 
   Eye, 
-  Link as LinkIcon,
   Github,
   Linkedin,
   Twitter,
-  X,
-  ShieldCheck
+  X
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
@@ -172,6 +170,60 @@ export default function PublicProfilePage() {
               </p>
             </section>
 
+            {resumes && resumes.length > 0 && (
+              <section className="space-y-6">
+                <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground border-b border-white/5 pb-2">Resume Vault</h2>
+                <div className="grid grid-cols-1 gap-4">
+                  {resumes.map((res: any) => (
+                    <Card key={res.id} className="bg-[#121214] border-white/10 shadow-lg overflow-hidden group hover:border-primary/50 transition-all">
+                      <CardContent className="p-5 space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                            <FileText className="h-5 w-5" />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-bold truncate text-white">{res.name}</span>
+                            <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest">{res.type === 'file' ? 'PDF Document' : 'External Link'}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {res.type === 'file' ? (
+                            <>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="flex-1 text-[10px] h-9 font-bold gap-2 bg-white/5 border-white/5 hover:bg-white/10"
+                                onClick={() => setPreviewFile({ url: res.fileUrl, name: res.name })}
+                              >
+                                <Eye className="h-3.5 w-3.5" /> View
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="flex-1 text-[10px] h-9 font-bold gap-2 bg-primary text-white border-none hover:bg-primary/90"
+                                asChild
+                              >
+                                <a href={res.fileUrl} download={res.fileName || 'resume.pdf'}><Download className="h-3.5 w-3.5" /> Download</a>
+                              </Button>
+                            </>
+                          ) : (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="w-full text-[10px] h-9 font-bold gap-2 bg-primary text-white border-none hover:bg-primary/90"
+                              asChild
+                            >
+                              <a href={res.url} target="_blank" rel="noopener noreferrer"><Globe className="h-3.5 w-3.5" /> Visit CV</a>
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {links && links.length > 0 && (
               <section className="space-y-6">
                 <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground border-b border-white/5 pb-2">Links</h2>
@@ -214,55 +266,6 @@ export default function PublicProfilePage() {
                 )}
               </div>
             </section>
-
-            {resumes && resumes.length > 0 && (
-              <section className="space-y-6">
-                <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground border-b border-white/5 pb-2">Resume Vault</h2>
-                <div className="grid grid-cols-1 gap-4">
-                  {resumes.map((res: any) => (
-                    <Card key={res.id} className="bg-white/5 border-white/10 shadow-none overflow-hidden">
-                      <CardContent className="p-4 space-y-4">
-                        <div className="flex items-center gap-3">
-                          <FileText className="h-5 w-5 text-primary" />
-                          <span className="text-xs font-bold truncate">{res.name}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          {res.type === 'file' ? (
-                            <>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="flex-1 text-[10px] gap-2 border-white/10"
-                                onClick={() => setPreviewFile({ url: res.fileUrl, name: res.name })}
-                              >
-                                <Eye className="h-3 w-3" /> View
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="flex-1 text-[10px] gap-2 border-white/10"
-                                asChild
-                              >
-                                <a href={res.fileUrl} download={res.fileName || 'resume.pdf'}><Download className="h-3 w-3" /> Get PDF</a>
-                              </Button>
-                            </>
-                          ) : (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="w-full text-[10px] gap-2 border-white/10"
-                              asChild
-                            >
-                              <a href={res.url} target="_blank" rel="noopener noreferrer"><Globe className="h-3 w-3" /> Visit Live CV</a>
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </section>
-            )}
           </div>
 
           <div className="lg:col-span-2 space-y-16">

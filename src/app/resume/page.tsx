@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useState, useMemo, useRef, useEffect } from 'react'
@@ -17,7 +16,6 @@ import {
   Link as LinkIcon,
   Globe,
   ExternalLink,
-  AlertTriangle,
   X
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
@@ -154,11 +152,6 @@ export default function ResumePage() {
     toast({ title: 'Record Removed' })
   }
 
-  const filteredItems = (type: string) => {
-    if (!resumes) return []
-    return resumes.filter((r: any) => (r.type || 'file') === type)
-  }
-
   if (!mounted || resumeLoading) {
     return (
       <CRMLayout>
@@ -251,7 +244,7 @@ export default function ResumePage() {
                 <Button 
                   type="submit" 
                   disabled={loading} 
-                  className="bg-[#7299f0] hover:bg-[#6387d9] text-white font-bold h-12 px-8 rounded-xl border-none ml-auto"
+                  className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none ml-auto"
                 >
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Record'}
                 </Button>
@@ -263,10 +256,10 @@ export default function ResumePage() {
 
       <Tabs defaultValue="PDF" onValueChange={setActiveTab} className="space-y-8">
         <TabsList className="bg-card/30 p-1 flex h-auto w-fit rounded-2xl border border-border/50">
-          <TabsTrigger value="PDF" className="gap-2 px-8 py-2.5 rounded-xl data-[state=active]:bg-[#7299f0] data-[state=active]:text-white font-bold text-sm">
+          <TabsTrigger value="PDF" className="gap-2 px-8 py-2.5 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold text-sm">
             <FileText className="h-4 w-4" /> PDF Vault
           </TabsTrigger>
-          <TabsTrigger value="Link" className="gap-2 px-8 py-2.5 rounded-xl data-[state=active]:bg-[#7299f0] data-[state=active]:text-white font-bold text-sm">
+          <TabsTrigger value="Link" className="gap-2 px-8 py-2.5 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold text-sm">
             <LinkIcon className="h-4 w-4" /> CV Links
           </TabsTrigger>
         </TabsList>
@@ -293,15 +286,19 @@ export default function ResumePage() {
                       </p>
                     </div>
                     <div className="flex gap-4 mt-2">
-                      <Button variant="outline" className="flex-1 bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-white/10 rounded-xl" asChild>
-                        <a href={resume.fileUrl} download={resume.fileName || 'resume.pdf'}><Download className="h-4 w-4" /></a>
-                      </Button>
                       <Button 
                         variant="outline" 
                         className="flex-1 bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-white/10 rounded-xl"
                         onClick={() => setPreviewFile({ url: resume.fileUrl, name: resume.name })}
                       >
                         <Eye className="h-4 w-4" /> View
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="flex-1 bg-primary border-none text-white font-bold h-12 gap-3 hover:bg-primary/90 rounded-xl" 
+                        asChild
+                      >
+                        <a href={resume.fileUrl} download={resume.fileName || 'resume.pdf'}><Download className="h-4 w-4" /> Download</a>
                       </Button>
                     </div>
                   </div>
@@ -323,15 +320,15 @@ export default function ResumePage() {
                     <Trash2 className="h-5 w-5" />
                   </button>
                   <div className="flex flex-col gap-6">
-                    <div className="w-16 h-16 rounded-2xl bg-[#7299f0]/20 flex items-center justify-center">
-                      <Globe className="h-8 w-8 text-[#7299f0]" />
+                    <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">
+                      <Globe className="h-8 w-8 text-primary" />
                     </div>
                     <div className="space-y-2">
                       <h3 className="text-2xl font-bold tracking-tight truncate" title={resume.name}>{resume.name}</h3>
                       <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">EXTERNAL LINK</p>
                     </div>
-                    <Button variant="outline" className="w-full bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-[#7299f0] rounded-xl" asChild>
-                      <a href={resume.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /> Visit Live CV</a>
+                    <Button variant="outline" className="w-full bg-primary border-none text-white font-bold h-12 gap-3 hover:bg-primary/90 rounded-xl" asChild>
+                      <a href={resume.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /> Visit CV</a>
                     </Button>
                   </div>
                 </CardContent>
@@ -351,9 +348,6 @@ export default function ResumePage() {
                 {previewFile?.name || 'Resume Preview'}
               </DialogTitle>
             </div>
-            <DialogDescription className="sr-only">
-              Full screen resume document previewer.
-            </DialogDescription>
             <Button variant="ghost" size="icon" onClick={() => setPreviewFile(null)} className="h-8 w-8 hover:bg-white/5">
               <X className="h-5 w-5" />
             </Button>
