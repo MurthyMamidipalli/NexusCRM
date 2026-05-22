@@ -99,11 +99,12 @@ export default function PrivateDocumentsPage() {
   const documents = useMemo(() => {
     if (!rawDocuments) return []
     
+    // Sort logic: Handle pending timestamps correctly so new items always appear on top
     const sorted = [...rawDocuments].sort((a: any, b: any) => {
       const getVal = (doc: any) => {
         if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
         if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
-        return Date.now();
+        return Date.now() + 10000; // Place items with pending timestamps at the absolute top
       }
       return getVal(b) - getVal(a);
     });
@@ -183,7 +184,7 @@ export default function PrivateDocumentsPage() {
         tags: [selectedTag],
       }
 
-      // NON-BLOCKING MUTATION: Start the database save and close the UI immediately
+      // NON-BLOCKING MUTATION: UI resets immediately, cloud sync happens in background
       const mutation = editingDoc
         ? updateRecord(db, collections.PRIVATE_DOCUMENTS, editingDoc.id, data)
         : createRecord(db, collections.PRIVATE_DOCUMENTS, data, user.uid);
