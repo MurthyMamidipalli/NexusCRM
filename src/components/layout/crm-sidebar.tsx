@@ -102,10 +102,21 @@ export function CRMSidebar() {
 
       <div className="mt-auto space-y-4 pt-4 border-t">
         <div className="flex flex-col gap-1">
-          <Button variant="ghost" size="sm" className="w-full justify-start gap-3 px-3 text-muted-foreground hover:text-foreground">
-            <Settings className="h-4 w-4" />
-            Settings
-          </Button>
+          <Link href="/settings">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className={cn(
+                "w-full justify-start gap-3 px-3 transition-colors",
+                pathname === '/settings' 
+                  ? "bg-primary/10 text-primary font-bold" 
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Button>
+          </Link>
           <Button 
             variant="ghost" 
             size="sm"
