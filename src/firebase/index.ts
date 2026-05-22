@@ -1,4 +1,3 @@
-
 'use client';
 
 import { initializeApp, getApps, FirebaseApp, getApp } from 'firebase/app';
@@ -10,11 +9,13 @@ import {
   persistentLocalCache, 
   persistentMultipleTabManager 
 } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig } from './config';
 
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
+let storage: FirebaseStorage;
 
 /**
  * Initializes Firebase services with a robust singleton pattern.
@@ -49,11 +50,15 @@ export function initializeFirebase() {
   if (!auth) {
     auth = getAuth(app);
   }
+
+  if (!storage) {
+    storage = getStorage(app);
+  }
   
-  return { app, auth, db };
+  return { app, auth, db, storage };
 }
 
-export { FirebaseProvider, useFirebase, useAuth, useFirestore, useFirebaseApp } from './provider';
+export { FirebaseProvider, useFirebase, useAuth, useFirestore, useFirebaseApp, useStorage } from './provider';
 export { FirebaseClientProvider } from './client-provider';
 export { useUser } from './auth/use-user';
 export { useCollection } from './firestore/use-collection';

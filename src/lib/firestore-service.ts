@@ -1,4 +1,3 @@
-
 'use client';
 
 import { 
@@ -27,7 +26,8 @@ export const collections = {
   LEADS: 'leads',
   CERTIFICATIONS: 'certifications',
   LINKS: 'links',
-  RESUMES: 'resumes'
+  RESUMES: 'resumes',
+  PRIVATE_DOCUMENTS: 'privateDocuments'
 };
 
 /**

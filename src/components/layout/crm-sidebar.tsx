@@ -22,7 +22,8 @@ import {
   Globe,
   Settings,
   LogOut,
-  Zap
+  Zap,
+  ShieldCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,7 @@ import {
 const navItems = [
   { label: 'Overview', icon: LayoutDashboard, href: '/dashboard', emoji: '🏠' },
   { label: 'Personal Profile', icon: User, href: '/profile', emoji: '👤' },
+  { label: 'Private Documents', icon: ShieldCheck, href: '/private-documents', emoji: '🔒' },
   { label: 'Skills & Expertise', icon: Hammer, href: '/skills', emoji: '🛠' },
   { label: 'Education', icon: GraduationCap, href: '/education', emoji: '🎓' },
   { label: 'Certifications', icon: Trophy, href: '/certifications', emoji: '🏆' },
