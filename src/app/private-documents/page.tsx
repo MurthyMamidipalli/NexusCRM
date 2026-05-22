@@ -24,14 +24,15 @@ import {
   X,
   Plus,
   Users,
-  RefreshCw
+  RefreshCw,
+  Pencil
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
-import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
+import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -68,6 +69,7 @@ export default function PrivateDocumentsPage() {
   const storage = useStorage()
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingDoc, setEditingDoc] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('All')
@@ -76,6 +78,7 @@ export default function PrivateDocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   
+  // Controlled form states
   const [docName, setDocName] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('Other Documents')
   const [selectedTag, setSelectedTag] = useState('My self')
@@ -96,12 +99,11 @@ export default function PrivateDocumentsPage() {
   const documents = useMemo(() => {
     if (!rawDocuments) return []
     
-    // Ultra-Robust sorting to handle pending server timestamps and ensure data doesn't "disappear"
     const sorted = [...rawDocuments].sort((a: any, b: any) => {
       const getVal = (doc: any) => {
-        if (doc.createdAt?.toMillis) return doc.createdAt.toMillis();
-        if (doc.createdAt?.seconds) return doc.createdAt.seconds * 1000;
-        return Date.now(); // Newly created items stay at top
+        if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
+        if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
+        return Date.now();
       }
       return getVal(b) - getVal(a);
     });
@@ -127,19 +129,27 @@ export default function PrivateDocumentsPage() {
     }
   }
 
-  const handleUpload = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !db || !storage || !selectedFile) return
+    if (!user || !db || !storage) return
+    if (!editingDoc && !selectedFile) {
+      toast({ variant: 'destructive', title: 'File Required', description: 'Please select a document to upload.' })
+      return
+    }
 
     setLoading(true)
 
     try {
-      const filePath = `private_vault/${user.uid}/${Date.now()}_${selectedFile.name}`
-      const storageRef = ref(storage, filePath)
-      
-      // Sequential await for maximum reliability on large files
-      const uploadResult = await uploadBytes(storageRef, selectedFile)
-      const fileUrl = await getDownloadURL(uploadResult.ref)
+      let fileUrl = editingDoc?.fileUrl || ''
+      let filePath = editingDoc?.filePath || ''
+
+      if (selectedFile) {
+        const path = `private_vault/${user.uid}/${Date.now()}_${selectedFile.name}`
+        const storageRef = ref(storage, path)
+        const uploadResult = await uploadBytes(storageRef, selectedFile)
+        fileUrl = await getDownloadURL(uploadResult.ref)
+        filePath = path
+      }
 
       const data = {
         documentName: docName,
@@ -153,15 +163,21 @@ export default function PrivateDocumentsPage() {
         ownerId: user.uid
       }
 
-      await createRecord(db, collections.PRIVATE_DOCUMENTS, data, user.uid)
+      if (editingDoc) {
+        await updateRecord(db, collections.PRIVATE_DOCUMENTS, editingDoc.id, data)
+        toast({ title: 'Metadata Updated' })
+      } else {
+        await createRecord(db, collections.PRIVATE_DOCUMENTS, data, user.uid)
+        toast({ title: 'Document Secured' })
+      }
       
-      toast({ title: 'Document Secured', description: 'Your file has been encrypted and stored.' })
       setIsDialogOpen(false)
       resetForm()
     } catch (err: any) {
       const permissionError = new FirestorePermissionError({
-        path: collections.PRIVATE_DOCUMENTS,
-        operation: 'create',
+        path: editingDoc ? `${collections.PRIVATE_DOCUMENTS}/${editingDoc.id}` : collections.PRIVATE_DOCUMENTS,
+        operation: editingDoc ? 'update' : 'create',
+        requestResourceData: { documentName: docName, category: selectedCategory },
         originalError: err
       } satisfies SecurityRuleContext);
       errorEmitter.emit('permission-error', permissionError);
@@ -171,6 +187,7 @@ export default function PrivateDocumentsPage() {
   }
 
   const resetForm = () => {
+    setEditingDoc(null)
     setSelectedFile(null)
     setDocName('')
     setSelectedCategory('Other Documents')
@@ -181,9 +198,20 @@ export default function PrivateDocumentsPage() {
     setLoading(false)
   }
 
+  const handleEditClick = (doc: any) => {
+    setEditingDoc(doc)
+    setDocName(doc.documentName || '')
+    setSelectedCategory(doc.category || 'Other Documents')
+    setSelectedTag(doc.tags?.[0] || 'My self')
+    setIssueDate(doc.issueDate || '')
+    setExpiryDate(doc.expiryDate || '')
+    setDescription(doc.description || '')
+    setIsDialogOpen(true)
+  }
+
   const handleDelete = async (doc: any) => {
     if (!db || !storage) return
-    if (!window.confirm('Permanently delete this document?')) return
+    if (!window.confirm('Permanently delete this document from the secure vault?')) return
     
     try {
       if (doc.filePath) {
@@ -224,16 +252,20 @@ export default function PrivateDocumentsPage() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if(!o && !loading) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary shadow-lg shadow-primary/20 h-12 px-6 rounded-xl">
+            <Button className="gap-2 bg-primary shadow-lg shadow-primary/20 h-12 px-6 rounded-xl" onClick={resetForm}>
               <Plus className="h-4 w-4" /> Add Document
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden">
             <DialogHeader className="p-8 pb-0">
-              <DialogTitle className="text-2xl font-bold font-headline">Secure Vault Upload</DialogTitle>
-              <DialogDescription className="text-gray-400">Stay on this page until upload finishes.</DialogDescription>
+              <DialogTitle className="text-2xl font-bold font-headline">
+                {editingDoc ? 'Edit Metadata' : 'Secure Vault Upload'}
+              </DialogTitle>
+              <DialogDescription className="text-gray-400">
+                {editingDoc ? 'Update document details below.' : 'Stay on this page until upload finishes.'}
+              </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleUpload} className="p-8 pt-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleSave} className="p-8 pt-6 space-y-6 max-h-[80vh] overflow-y-auto">
               <div className="space-y-2">
                 <Label>Document Name</Label>
                 <Input value={docName} onChange={(e) => setDocName(e.target.value)} disabled={loading} required className="bg-[#1c1c1f] border-none h-12 rounded-xl" placeholder="e.g. Passport 2024" />
@@ -286,6 +318,11 @@ export default function PrivateDocumentsPage() {
                     <ShieldCheck className="text-primary h-12 w-12" />
                     <span className="text-sm font-bold text-primary truncate max-w-[300px]">{selectedFile.name}</span>
                   </div>
+                ) : editingDoc?.fileUrl ? (
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <FileText className="text-primary/40 h-12 w-12" />
+                    <span className="text-xs text-gray-500">Update file? (Optional)</span>
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <Upload className="text-gray-500 h-12 w-12 mb-2" />
@@ -295,9 +332,9 @@ export default function PrivateDocumentsPage() {
               </div>
 
               <DialogFooter className="pb-4">
-                <Button type="submit" disabled={loading || !selectedFile || !docName} className="w-full h-12 bg-primary hover:bg-primary/90 font-bold rounded-xl border-none">
+                <Button type="submit" disabled={loading || (!editingDoc && !selectedFile) || !docName} className="w-full h-12 bg-primary hover:bg-primary/90 font-bold rounded-xl border-none">
                   {loading ? <RefreshCw className="animate-spin h-4 w-4 mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-                  {loading ? 'Encrypting & Storing...' : 'Securely Upload Document'}
+                  {loading ? (editingDoc ? 'Updating...' : 'Encrypting & Storing...') : (editingDoc ? 'Save Changes' : 'Securely Upload Document')}
                 </Button>
               </DialogFooter>
             </form>
@@ -325,7 +362,8 @@ export default function PrivateDocumentsPage() {
               <CardContent className="p-0">
                 <div className="h-32 bg-gradient-to-br from-primary/10 to-accent/5 flex items-center justify-center relative">
                   <div className="p-4 rounded-2xl bg-background/50 backdrop-blur-sm text-primary">{getCategoryIcon(doc.category)}</div>
-                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="secondary" size="icon" onClick={() => handleEditClick(doc)} className="bg-black/40 text-white h-8 w-8 rounded-lg hover:bg-primary"><Pencil className="h-4 w-4" /></Button>
                     <Button variant="secondary" size="icon" onClick={() => handleDelete(doc)} className="bg-red-500/10 text-red-500 h-8 w-8 rounded-lg hover:bg-red-500 hover:text-white"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>

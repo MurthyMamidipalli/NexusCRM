@@ -13,14 +13,15 @@ service cloud.firestore {
       allow list, write: if isAuthenticated() && request.auth.uid == uid;
     }
 
-    // STRICT: Private Documents collection - OWNER ONLY, never public.
+    // STRICT: Private Documents collection - OWNER ONLY.
+    // Explicitly isolated from generic rules for maximum security.
     match /privateDocuments/{docId} {
       allow read, write: if isAuthenticated() && 
         (resource == null || resource.data.ownerId == request.auth.uid) &&
         (request.resource == null || request.resource.data.ownerId == request.auth.uid);
     }
 
-    // Generic rule for all user-owned records
+    // Generic rule for all other user-owned records
     match /{collection}/{id} {
       // READ: Allow if owner OR if item is marked public
       allow read: if (isAuthenticated() && (resource == null || resource.data.ownerId == request.auth.uid)) 
