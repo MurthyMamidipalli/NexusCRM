@@ -29,7 +29,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
-import { collection, query, where, orderBy } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
@@ -65,12 +65,12 @@ export default function PrivateDocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
+  // Use a simple query to avoid Index requirements
   const docsQuery = useMemo(() => {
     if (!db || !user) return null
     return query(
       collection(db, collections.PRIVATE_DOCUMENTS), 
-      where('ownerId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
@@ -78,8 +78,17 @@ export default function PrivateDocumentsPage() {
 
   const documents = useMemo(() => {
     if (!rawDocuments) return []
-    return rawDocuments.filter((doc: any) => {
-      const matchesSearch = doc.documentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    
+    // 1. Sort in-memory to prevent Firebase Index errors
+    const sorted = [...rawDocuments].sort((a: any, b: any) => {
+      const timeA = a.createdAt?.seconds || 0;
+      const timeB = b.createdAt?.seconds || 0;
+      return timeB - timeA;
+    });
+
+    // 2. Apply filtering
+    return sorted.filter((doc: any) => {
+      const matchesSearch = (doc.documentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           doc.tags?.some((t: string) => t.toLowerCase().includes(searchTerm.toLowerCase()))
       const matchesCategory = filterCategory === 'All' || doc.category === filterCategory
       return matchesSearch && matchesCategory
