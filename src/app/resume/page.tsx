@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
+import { format } from 'date-fns'
 
 export default function ResumePage() {
   const db = useFirestore()
@@ -173,7 +174,7 @@ export default function ResumePage() {
           }
         }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20">
+            <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white">
               <Plus className="h-4 w-4" /> 
               {activeTab === 'PDF' ? 'Upload Resume' : 'Add CV Link'}
             </Button>
@@ -266,57 +267,62 @@ export default function ResumePage() {
         </TabsList>
 
         <TabsContent value="PDF" className="mt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredItems('file').length > 0 ? (
               filteredItems('file').map((resume: any) => (
-                <Card key={resume.id} className="group border-none bg-card/50 backdrop-blur-md shadow-md hover:shadow-xl transition-all">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="p-3 rounded-2xl bg-primary/10 text-primary">
-                        <FileText className="h-8 w-8" />
+                <Card key={resume.id} className="relative group border-none bg-[#0f1115] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden">
+                  <CardContent className="p-8">
+                    <button 
+                      className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      onClick={() => handleDelete(resume.id)}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+
+                    <div className="flex flex-col gap-6">
+                      <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">
+                        <FileText className="h-8 w-8 text-primary" />
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-bold tracking-tight truncate" title={resume.name}>
+                          {resume.name}
+                        </h3>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+                          UPLOADED {resume.createdAt ? format(new Date(resume.createdAt.seconds * 1000), 'M/d/yyyy') : format(new Date(), 'M/d/yyyy')}
+                        </p>
+                      </div>
+
+                      <div className="flex gap-4 mt-2">
                         <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="text-muted-foreground hover:text-destructive" 
-                          onClick={() => handleDelete(resume.id)}
+                          variant="outline" 
+                          className="flex-1 bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-white/10 rounded-xl"
+                          disabled={!resume.fileUrl}
+                          asChild={!!resume.fileUrl}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {resume.fileUrl ? (
+                            <a href={resume.fileUrl} download={resume.fileName || 'resume'}>
+                              <Download className="h-4 w-4" /> Download
+                            </a>
+                          ) : (
+                            <span><Download className="h-4 w-4" /> Download</span>
+                          )}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="flex-1 bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-white/10 rounded-xl"
+                          disabled={!resume.fileUrl}
+                          asChild={!!resume.fileUrl}
+                        >
+                          {resume.fileUrl ? (
+                            <a href={resume.fileUrl} target="_blank">
+                              <Eye className="h-4 w-4" /> View
+                            </a>
+                          ) : (
+                            <span><Eye className="h-4 w-4" /> View</span>
+                          )}
                         </Button>
                       </div>
-                    </div>
-                    
-                    <div className="mt-4 space-y-1">
-                      <h3 className="font-headline font-bold text-lg truncate" title={resume.name}>{resume.name}</h3>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest pt-1">
-                        Uploaded {new Date(resume.createdAt?.seconds * 1000 || Date.now()).toLocaleDateString()}
-                      </p>
-                    </div>
-
-                    <div className="mt-6 flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1 text-[11px] font-bold h-8 gap-2" 
-                        disabled={!resume.fileUrl}
-                        asChild={!!resume.fileUrl}
-                      >
-                        {resume.fileUrl ? (
-                          <a href={resume.fileUrl} download={resume.fileName || 'resume'}>
-                            <Download className="h-3 w-3" /> Download
-                          </a>
-                        ) : (
-                          <span><Download className="h-3 w-3" /> Download</span>
-                        )}
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="flex-1 text-[11px] font-bold h-8 gap-2 text-muted-foreground hover:bg-muted"
-                      >
-                        <Eye className="h-3 w-3" /> View
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -328,45 +334,43 @@ export default function ResumePage() {
         </TabsContent>
 
         <TabsContent value="Link" className="mt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredItems('link').length > 0 ? (
               filteredItems('link').map((resume: any) => (
-                <Card key={resume.id} className="group border-none bg-card/50 backdrop-blur-md shadow-md hover:shadow-xl transition-all">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="p-3 rounded-2xl bg-[#7299f0]/10 text-[#7299f0]">
-                        <Globe className="h-8 w-8" />
+                <Card key={resume.id} className="relative group border-none bg-[#0f1115] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden">
+                  <CardContent className="p-8">
+                    <button 
+                      className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      onClick={() => handleDelete(resume.id)}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+
+                    <div className="flex flex-col gap-6">
+                      <div className="w-16 h-16 rounded-2xl bg-[#7299f0]/20 flex items-center justify-center">
+                        <Globe className="h-8 w-8 text-[#7299f0]" />
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-bold tracking-tight truncate" title={resume.name}>
+                          {resume.name}
+                        </h3>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+                          LINKED {resume.createdAt ? format(new Date(resume.createdAt.seconds * 1000), 'M/d/yyyy') : format(new Date(), 'M/d/yyyy')}
+                        </p>
+                      </div>
+
+                      <div className="mt-2">
                         <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="text-muted-foreground hover:text-destructive" 
-                          onClick={() => handleDelete(resume.id)}
+                          variant="outline" 
+                          className="w-full bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-[#7299f0] rounded-xl transition-all" 
+                          asChild
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <a href={resume.url} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-4 w-4" /> Visit Live CV
+                          </a>
                         </Button>
                       </div>
-                    </div>
-                    
-                    <div className="mt-4 space-y-1">
-                      <h3 className="font-headline font-bold text-lg truncate" title={resume.name}>{resume.name}</h3>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest pt-1">
-                        Linked {new Date(resume.createdAt?.seconds * 1000 || Date.now()).toLocaleDateString()}
-                      </p>
-                    </div>
-
-                    <div className="mt-6">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full text-[11px] font-bold h-8 gap-2 group-hover:bg-[#7299f0] group-hover:text-white transition-all" 
-                        asChild
-                      >
-                        <a href={resume.url} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-3 w-3" /> Visit Live CV
-                        </a>
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -383,7 +387,7 @@ export default function ResumePage() {
 
 function EmptyState({ icon: Icon, message }: { icon: any, message: string }) {
   return (
-    <div className="col-span-full flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border/50 bg-card/30 text-muted-foreground italic">
+    <div className="col-span-full flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border/50 bg-card/10 text-muted-foreground italic">
       <Icon className="h-12 w-12 opacity-10 mb-4" />
       {message}
     </div>
