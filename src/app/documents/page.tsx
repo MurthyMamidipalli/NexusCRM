@@ -18,10 +18,8 @@ import {
   FileCheck,
   FolderLock,
   Lock,
-  AlertCircle,
   CheckCircle2,
-  ShieldCheck,
-  MoreVertical
+  ShieldCheck
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -37,6 +35,14 @@ import { Badge } from '@/components/ui/badge'
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
+interface UploadedFileInfo {
+  url: string;
+  path: string;
+  name: string;
+  size: number;
+  type: string;
+}
+
 export default function DocumentVaultPage() {
   const db = useFirestore()
   const storage = useStorage()
@@ -48,10 +54,11 @@ export default function DocumentVaultPage() {
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [loading, setLoading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({})
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFileInfo[]>([])
+  const [pendingFilesCount, setPendingFilesCount] = useState(0)
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
   
-  // Form States from UI Spec
+  // Form States
   const [visibility, setVisibility] = useState('Private')
   const [status, setStatus] = useState('Active')
   const [category, setCategory] = useState('')
@@ -81,24 +88,62 @@ export default function DocumentVaultPage() {
           if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
           if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
           return Date.now() + 10000;
-        }
+        };
         return getVal(b) - getVal(a);
       })
   }, [rawDocs, searchTerm, categoryFilter])
 
-  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // EAGER UPLOAD: Starts immediately on selection
+  const handleFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    const validFiles = files.filter(f => f.size <= MAX_FILE_SIZE)
-    if (files.length !== validFiles.length) {
-      toast({ variant: 'destructive', title: 'File Too Large', description: 'Some files exceeded 500MB.' })
-    }
-    setSelectedFiles(validFiles)
-    console.log(`📂 Selected ${validFiles.length} files. Starting eager background upload...`)
+    if (!files.length || !user || !storage) return
+
+    setPendingFilesCount(prev => prev + files.length)
+    console.log(`🚀 Starting high-speed eager upload for ${files.length} files...`)
+
+    files.forEach((file) => {
+      if (file.size > MAX_FILE_SIZE) {
+        toast({ variant: 'destructive', title: 'File Too Large', description: `${file.name} exceeds 500MB.` })
+        setPendingFilesCount(prev => Math.max(0, prev - 1))
+        return
+      }
+
+      const fileName = `${Date.now()}_${file.name}`
+      const path = `documents/${user.uid}/${fileName}`
+      const storageRef = ref(storage, path)
+      const uploadTask = uploadBytesResumable(storageRef, file)
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / (snapshot.totalBytes || 1)) * 100
+          setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
+          console.log(`📊 Uploading ${file.name}: ${Math.round(progress)}%`)
+        },
+        (error) => {
+          console.error(`❌ Upload failed for ${file.name}:`, error)
+          setPendingFilesCount(prev => Math.max(0, prev - 1))
+          toast({ variant: 'destructive', title: 'Upload Failed', description: error.message })
+        },
+        async () => {
+          const fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
+          setUploadedFiles(prev => [...prev, {
+            url: fileUrl,
+            path: path,
+            name: file.name,
+            size: file.size,
+            type: file.type
+          }])
+          setPendingFilesCount(prev => Math.max(0, prev - 1))
+          console.log(`✅ ${file.name} secured in cloud.`)
+        }
+      )
+    })
   }
 
-  const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db || !storage || selectedFiles.length === 0) return
+    if (!user || !db || uploadedFiles.length === 0) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
@@ -106,61 +151,38 @@ export default function DocumentVaultPage() {
     const docDescription = formData.get('description') as string
 
     try {
-      const uploadPromises = selectedFiles.map(async (file) => {
-        const fileName = `${Date.now()}_${file.name}`
-        const path = `documents/${user.uid}/${fileName}`
-        const storageRef = ref(storage, path)
-        const uploadTask = uploadBytesResumable(storageRef, file)
-
-        return new Promise((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-              setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
-            },
-            (error) => {
-              console.error(`❌ Upload failed for ${file.name}:`, error)
-              reject(error)
-            },
-            async () => {
-              const fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
-              const data = {
-                title: selectedFiles.length > 1 ? `${file.name}` : docTitle || file.name,
-                category: category || 'Other',
-                description: docDescription || '',
-                fileUrl,
-                filePath: path,
-                fileType: file.type,
-                fileSize: file.size,
-                status: status.toLowerCase(),
-                isPublic: visibility === 'Public',
-                ownerId: user.uid
-              }
-
-              createRecord(db, collections.DOCUMENTS, data, user.uid)
-                .then(() => resolve(null))
-                .catch(reject)
-            }
-          )
-        })
+      const savePromises = uploadedFiles.map((file) => {
+        const data = {
+          title: uploadedFiles.length > 1 ? `${file.name}` : docTitle || file.name,
+          category: category || 'Other',
+          description: docDescription || '',
+          fileUrl: file.url,
+          filePath: file.path,
+          fileType: file.type,
+          fileSize: file.size,
+          status: status.toLowerCase(),
+          isPublic: visibility === 'Public',
+          ownerId: user.uid
+        }
+        return createRecord(db, collections.DOCUMENTS, data, user.uid)
       })
 
-      await Promise.all(uploadPromises)
+      await Promise.all(savePromises)
       
       toast({ title: 'Vault Updated', description: 'Records successfully secured.' })
       setIsDialogOpen(false)
       resetForm()
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Security Sync Error', description: error.message })
+      toast({ variant: 'destructive', title: 'Save Error', description: error.message })
     } finally {
       setLoading(false)
     }
   }
 
   const resetForm = () => {
-    setSelectedFiles([])
+    setUploadedFiles([])
     setUploadProgress({})
+    setPendingFilesCount(0)
     setCategory('')
     setStatus('Active')
     setVisibility('Private')
@@ -179,6 +201,10 @@ export default function DocumentVaultPage() {
       toast({ variant: 'destructive', title: 'Deletion Failed', description: err.message })
     }
   }
+
+  const totalProgress = Object.values(uploadProgress).length > 0
+    ? Object.values(uploadProgress).reduce((a, b) => a + b, 0) / (Object.values(uploadProgress).length || 1)
+    : 0
 
   if (!mounted) return null
 
@@ -201,10 +227,10 @@ export default function DocumentVaultPage() {
             <DialogHeader className="p-8 pb-4">
               <DialogTitle className="text-3xl font-bold font-headline">Upload to Vault</DialogTitle>
               <DialogDescription className="text-gray-400 text-sm mt-2">
-                Max 500MB per file. Items marked Public will appear on your Hub.
+                Max 500MB per file. Items marked Private remain in the vault.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleUpload} className="p-8 pt-0 space-y-6">
+            <form onSubmit={handleFinalSave} className="p-8 pt-0 space-y-6">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-white">Document Name</Label>
                 <Input 
@@ -245,7 +271,7 @@ export default function DocumentVaultPage() {
                 <Select value={visibility} onValueChange={setVisibility}>
                   <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
                     <div className="flex items-center gap-2">
-                      {visibility === 'Private' ? <Lock className="h-4 w-4 text-orange-400" /> : <ShieldCheck className="h-4 w-4 text-emerald-400" />}
+                      <Lock className="h-4 w-4 text-orange-400" />
                       <SelectValue placeholder="Private (Vault Only)" />
                     </div>
                   </SelectTrigger>
@@ -267,33 +293,35 @@ export default function DocumentVaultPage() {
                   multiple 
                   onChange={handleFileSelection} 
                 />
-                {selectedFiles.length > 0 ? (
+                {uploadedFiles.length > 0 || pendingFilesCount > 0 ? (
                   <div className="text-[#10b981] text-center">
                     <FileCheck className="mx-auto mb-2 h-12 w-12" />
-                    <span className="text-sm font-bold">{selectedFiles.length} Records Prepared</span>
+                    <span className="text-sm font-bold">
+                      {pendingFilesCount > 0 ? `Uploading ${pendingFilesCount} files...` : `${uploadedFiles.length} Files Ready`}
+                    </span>
                   </div>
                 ) : (
                   <div className="text-center">
                     <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
-                    <p className="text-sm text-gray-500 font-medium">Click to Upload (Max 500MB)</p>
+                    <p className="text-sm text-gray-500 font-medium">Click to Select Files (Max 500MB)</p>
                   </div>
                 )}
               </div>
 
-              {loading && (
+              {(pendingFilesCount > 0 || (uploadedFiles.length > 0 && totalProgress < 100)) && (
                 <div className="space-y-3">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-[#10b981]">
-                    <span>Encrypting & Storing...</span>
-                    <span>{Math.round(Object.values(uploadProgress).reduce((a, b) => a + b, 0) / (selectedFiles.length || 1))}%</span>
+                    <span>Uploading...</span>
+                    <span>{Math.round(totalProgress)}%</span>
                   </div>
-                  <Progress value={Object.values(uploadProgress).reduce((a, b) => a + b, 0) / (selectedFiles.length || 1)} className="h-1 bg-gray-800" />
+                  <Progress value={totalProgress} className="h-1 bg-gray-800" />
                 </div>
               )}
 
               <Button 
                 type="submit" 
-                disabled={loading || selectedFiles.length === 0} 
-                className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                disabled={loading || uploadedFiles.length === 0 || pendingFilesCount > 0} 
+                className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
               >
                 {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : 'Save Record'}
               </Button>
@@ -384,7 +412,7 @@ export default function DocumentVaultPage() {
           <FolderLock className="h-12 w-12 opacity-10" />
           <div className="text-center">
             <p className="font-bold">Private Vault Empty</p>
-            <p className="text-xs italic">Encrypted identification documents will appear here.</p>
+            <p className="text-xs italic">Secure identification documents will appear here.</p>
           </div>
         </div>
       )}
@@ -393,7 +421,7 @@ export default function DocumentVaultPage() {
         <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col">
           <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
             <div className="flex items-center gap-3">
-              <Lock className="text-[#10b981] h-5 w-5" />
+              <ShieldCheck className="text-[#10b981] h-5 w-5" />
               <DialogTitle className="truncate font-bold text-sm max-w-md">{previewDoc?.name}</DialogTitle>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setPreviewDoc(null)} className="h-8 w-8 hover:bg-white/10">
