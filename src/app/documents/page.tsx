@@ -244,7 +244,7 @@ export default function DocumentsPage() {
           <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none p-8 rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold font-headline flex items-center gap-2">
-                <FileBox className="text-primary h-6 w-6" />
+                <FileBox className="text-primary h-6 v-6" />
                 {editingDoc ? 'Edit Document' : 'Quick Upload'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
