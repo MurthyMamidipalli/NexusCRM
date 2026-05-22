@@ -5,10 +5,10 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Quote, Loader2, Trash2, User } from 'lucide-react'
+import { Plus, Quote, Loader2, Trash2, User, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
-import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
+import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,8 @@ export default function TestimonialsPage() {
   const db = useFirestore()
   const { user } = useUser()
   const [mounted, setMounted] = useState(false)
-  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingTest, setEditingTest] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   const testQuery = useMemo(() => {
@@ -38,7 +39,7 @@ export default function TestimonialsPage() {
     setMounted(true)
   }, [])
 
-  const handleAddTest = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveTest = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user) return
 
@@ -49,13 +50,19 @@ export default function TestimonialsPage() {
       role: formData.get('role'),
       company: formData.get('company'),
       content: formData.get('content'),
-      date: new Date().toISOString().split('T')[0],
+      date: editingTest?.date || new Date().toISOString().split('T')[0],
     }
 
     try {
-      await createRecord(db, collections.TESTIMONIALS, data, user.uid)
-      toast({ title: 'Endorsement Added' })
-      setIsAddOpen(false)
+      if (editingTest) {
+        await updateRecord(db, collections.TESTIMONIALS, editingTest.id, data)
+        toast({ title: 'Endorsement Updated' })
+      } else {
+        await createRecord(db, collections.TESTIMONIALS, data, user.uid)
+        toast({ title: 'Endorsement Added' })
+      }
+      setIsDialogOpen(false)
+      setEditingTest(null)
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message })
     } finally {
@@ -89,35 +96,38 @@ export default function TestimonialsPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">🌟 Testimonials</h1>
           <p className="text-muted-foreground">What your peers and managers say about your work.</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setEditingTest(null);
+        }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20">
+            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingTest(null)}>
               <Plus className="h-4 w-4" />
               Add Testimonial
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add New Endorsement</DialogTitle>
+              <DialogTitle>{editingTest ? 'Edit Endorsement' : 'Add New Endorsement'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleAddTest} className="space-y-4 py-4">
+            <form onSubmit={handleSaveTest} className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="author">Author Name</Label>
-                <Input id="author" name="author" placeholder="Jane Cooper" required />
+                <Input id="author" name="author" defaultValue={editingTest?.author || ''} placeholder="Jane Cooper" required />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="role">Role</Label>
-                  <Input id="role" name="role" placeholder="CTO" required />
+                  <Input id="role" name="role" defaultValue={editingTest?.role || ''} placeholder="CTO" required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="company">Company</Label>
-                  <Input id="company" name="company" placeholder="Acme Inc." required />
+                  <Input id="company" name="company" defaultValue={editingTest?.company || ''} placeholder="Acme Inc." required />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="content">Testimonial Content</Label>
-                <Textarea id="content" name="content" placeholder="Share the feedback..." className="min-h-[120px]" required />
+                <Textarea id="content" name="content" defaultValue={editingTest?.content || ''} placeholder="Share the feedback..." className="min-h-[120px]" required />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
@@ -152,14 +162,27 @@ export default function TestimonialsPage() {
                       </span>
                     </div>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100" 
-                    onClick={() => handleDelete(test.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-muted-foreground hover:text-primary" 
+                      onClick={() => {
+                        setEditingTest(test);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-muted-foreground hover:text-destructive" 
+                      onClick={() => handleDelete(test.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

@@ -5,11 +5,11 @@ import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Hammer, Loader2, Trash2, Award, AlertCircle } from 'lucide-react'
+import { Plus, Hammer, Loader2, Trash2, Award, AlertCircle, Pencil } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
-import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
+import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 export default function SkillsPage() {
   const db = useFirestore()
   const { user } = useUser()
-  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingSkill, setEditingSkill] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   const skillsQuery = useMemo(() => {
@@ -34,7 +35,7 @@ export default function SkillsPage() {
 
   const { data: skills, loading: skillsLoading, error } = useCollection(skillsQuery)
 
-  const handleAddSkill = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveSkill = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user) return
     
@@ -47,9 +48,15 @@ export default function SkillsPage() {
     }
 
     try {
-      await createRecord(db, collections.SKILLS, data, user.uid)
-      toast({ title: 'Skill Added Successfully' })
-      setIsAddOpen(false)
+      if (editingSkill) {
+        await updateRecord(db, collections.SKILLS, editingSkill.id, data)
+        toast({ title: 'Skill Updated' })
+      } else {
+        await createRecord(db, collections.SKILLS, data, user.uid)
+        toast({ title: 'Skill Created' })
+      }
+      setIsDialogOpen(false)
+      setEditingSkill(null)
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Error', description: err.message })
     } finally {
@@ -73,25 +80,28 @@ export default function SkillsPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">🛠 Skills & Expertise</h1>
           <p className="text-muted-foreground">Mapping your core competencies and professional tools.</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setEditingSkill(null);
+        }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20">
+            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingSkill(null)}>
               <Plus className="h-4 w-4" />
               Add Skill
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add New Expertise</DialogTitle>
+              <DialogTitle>{editingSkill ? 'Edit Expertise' : 'Add New Expertise'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleAddSkill} className="space-y-4 py-4">
+            <form onSubmit={handleSaveSkill} className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Skill Name</Label>
-                <Input id="name" name="name" placeholder="e.g. React.js, Sales Strategy" required />
+                <Input id="name" name="name" defaultValue={editingSkill?.name || ''} placeholder="e.g. React.js, Sales Strategy" required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
-                <Select name="category" defaultValue="Technical">
+                <Select name="category" defaultValue={editingSkill?.category || "Technical"}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select Category" />
                   </SelectTrigger>
@@ -105,7 +115,7 @@ export default function SkillsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="level">Proficiency Level (0-100)</Label>
-                <Input id="level" name="level" type="number" min="0" max="100" defaultValue="80" required />
+                <Input id="level" name="level" type="number" min="0" max="100" defaultValue={editingSkill?.level || 80} required />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
@@ -147,14 +157,27 @@ export default function SkillsPage() {
                       <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">{skill.category}</p>
                     </div>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => handleDelete(skill.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => {
+                        setEditingSkill(skill);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleDelete(skill.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="space-y-1.5">

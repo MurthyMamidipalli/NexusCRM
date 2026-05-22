@@ -5,10 +5,10 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Target, Loader2, Trash2, Calendar, Trophy } from 'lucide-react'
+import { Plus, Target, Loader2, Trash2, Calendar, Trophy, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
-import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
+import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -19,7 +19,8 @@ export default function AchievementsPage() {
   const db = useFirestore()
   const { user } = useUser()
   const [mounted, setMounted] = useState(false)
-  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingAch, setEditingAch] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   const achQuery = useMemo(() => {
@@ -37,7 +38,7 @@ export default function AchievementsPage() {
     setMounted(true)
   }, [])
 
-  const handleAddAch = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveAch = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user) return
 
@@ -51,9 +52,15 @@ export default function AchievementsPage() {
     }
 
     try {
-      await createRecord(db, collections.ACHIEVEMENTS, data, user.uid)
-      toast({ title: 'Achievement Recorded' })
-      setIsAddOpen(false)
+      if (editingAch) {
+        await updateRecord(db, collections.ACHIEVEMENTS, editingAch.id, data)
+        toast({ title: 'Achievement Updated' })
+      } else {
+        await createRecord(db, collections.ACHIEVEMENTS, data, user.uid)
+        toast({ title: 'Achievement Recorded' })
+      }
+      setIsDialogOpen(false)
+      setEditingAch(null)
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message })
     } finally {
@@ -87,33 +94,36 @@ export default function AchievementsPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">🎯 Achievements & Awards</h1>
           <p className="text-muted-foreground">Celebrating your professional milestones and excellence.</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setEditingAch(null);
+        }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20">
+            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingAch(null)}>
               <Plus className="h-4 w-4" />
               Add Record
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add Achievement</DialogTitle>
+              <DialogTitle>{editingAch ? 'Edit Achievement' : 'Add Achievement'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleAddAch} className="space-y-4 py-4">
+            <form onSubmit={handleSaveAch} className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
-                <Input id="title" name="title" placeholder="Employee of the Year" required />
+                <Input id="title" name="title" defaultValue={editingAch?.title || ''} placeholder="Employee of the Year" required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="issuer">Issued by</Label>
-                <Input id="issuer" name="issuer" placeholder="Global Tech Corp" required />
+                <Input id="issuer" name="issuer" defaultValue={editingAch?.issuer || ''} placeholder="Global Tech Corp" required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="date">Date</Label>
-                <Input id="date" name="date" type="date" required />
+                <Input id="date" name="date" type="date" defaultValue={editingAch?.date || ''} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
-                <Textarea id="description" name="description" placeholder="Briefly describe the significance..." />
+                <Textarea id="description" name="description" defaultValue={editingAch?.description || ''} placeholder="Briefly describe the significance..." />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
@@ -150,9 +160,27 @@ export default function AchievementsPage() {
                       )}
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDelete(ach.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity" 
+                      onClick={() => {
+                        setEditingAch(ach);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" 
+                      onClick={() => handleDelete(ach.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

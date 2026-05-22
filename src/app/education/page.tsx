@@ -5,10 +5,10 @@ import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, GraduationCap, Loader2, Trash2, Calendar, BookOpen, Award } from 'lucide-react'
+import { Plus, GraduationCap, Loader2, Trash2, Calendar, BookOpen, Award, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
-import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
+import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -18,7 +18,8 @@ import { Textarea } from '@/components/ui/textarea'
 export default function EducationPage() {
   const db = useFirestore()
   const { user } = useUser()
-  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingEdu, setEditingEdu] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   const eduQuery = useMemo(() => {
@@ -32,7 +33,7 @@ export default function EducationPage() {
 
   const { data: education, loading: eduLoading } = useCollection(eduQuery)
 
-  const handleAddEdu = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveEdu = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user) return
 
@@ -50,9 +51,15 @@ export default function EducationPage() {
     }
 
     try {
-      await createRecord(db, collections.EDUCATION, data, user.uid)
-      toast({ title: 'Education Added' })
-      setIsAddOpen(false)
+      if (editingEdu) {
+        await updateRecord(db, collections.EDUCATION, editingEdu.id, data)
+        toast({ title: 'Education Updated' })
+      } else {
+        await createRecord(db, collections.EDUCATION, data, user.uid)
+        toast({ title: 'Education Added' })
+      }
+      setIsDialogOpen(false)
+      setEditingEdu(null)
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message })
     } finally {
@@ -86,56 +93,61 @@ export default function EducationPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">🎓 Education</h1>
           <p className="text-muted-foreground">Your academic background and formal learning.</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setEditingEdu(null);
+        }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20">
+            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingEdu(null)}>
               <Plus className="h-4 w-4" />
               Add Record
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-bold font-headline">Add Education</DialogTitle>
+              <DialogTitle className="text-2xl font-bold font-headline">
+                {editingEdu ? 'Edit Education' : 'Add Education'}
+              </DialogTitle>
               <DialogDescription>
                 Enter the details of your educational institution.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleAddEdu} className="space-y-6 py-4">
+            <form onSubmit={handleSaveEdu} className="space-y-6 py-4">
               <div className="space-y-2">
                 <Label htmlFor="institution">Institution</Label>
-                <Input id="institution" name="institution" placeholder="e.g. Stanford University" required />
+                <Input id="institution" name="institution" defaultValue={editingEdu?.institution || ''} placeholder="e.g. Stanford University" required />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="degree">Degree</Label>
-                  <Input id="degree" name="degree" placeholder="e.g. Bachelor of Science" required />
+                  <Input id="degree" name="degree" defaultValue={editingEdu?.degree || ''} placeholder="e.g. Bachelor of Science" required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="fieldOfStudy">Field of Study</Label>
-                  <Input id="fieldOfStudy" name="fieldOfStudy" placeholder="e.g. Computer Science" />
+                  <Input id="fieldOfStudy" name="fieldOfStudy" defaultValue={editingEdu?.fieldOfStudy || ''} placeholder="e.g. Computer Science" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="startDate">Start Date</Label>
-                  <Input id="startDate" name="startDate" type="date" required />
+                  <Input id="startDate" name="startDate" type="date" defaultValue={editingEdu?.startDate || ''} required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="endDate">End Date (Optional)</Label>
-                  <Input id="endDate" name="endDate" type="date" />
+                  <Input id="endDate" name="endDate" type="date" defaultValue={editingEdu?.endDate || ''} />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="cgpa">CGPA</Label>
-                  <Input id="cgpa" name="cgpa" placeholder="e.g. 3.8/4.0" />
+                  <Input id="cgpa" name="cgpa" defaultValue={editingEdu?.cgpa || ''} placeholder="e.g. 3.8/4.0" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="percentage">Percentage</Label>
-                  <Input id="percentage" name="percentage" placeholder="e.g. 92%" />
+                  <Input id="percentage" name="percentage" defaultValue={editingEdu?.percentage || ''} placeholder="e.g. 92%" />
                 </div>
               </div>
 
@@ -144,6 +156,7 @@ export default function EducationPage() {
                 <Textarea 
                   id="description" 
                   name="description" 
+                  defaultValue={editingEdu?.description || ''}
                   placeholder="Describe your major accomplishments..." 
                   className="min-h-[120px]"
                 />
@@ -152,7 +165,7 @@ export default function EducationPage() {
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Add Record
+                  Save Record
                 </Button>
               </DialogFooter>
             </form>
@@ -211,14 +224,27 @@ export default function EducationPage() {
                       )}
                     </div>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" 
-                    onClick={() => handleDelete(edu.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-muted-foreground hover:text-primary" 
+                      onClick={() => {
+                        setEditingEdu(edu);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-muted-foreground hover:text-destructive" 
+                      onClick={() => handleDelete(edu.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

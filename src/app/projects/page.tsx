@@ -16,11 +16,12 @@ import {
   Paperclip, 
   FolderCode, 
   Box,
-  Layers
+  Layers,
+  Pencil
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
-import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
+import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -32,7 +33,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export default function ProjectsPage() {
   const db = useFirestore()
   const { user } = useUser()
-  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingProj, setEditingProj] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   const projectsQuery = useMemo(() => {
@@ -46,7 +48,7 @@ export default function ProjectsPage() {
 
   const { data: projects, loading: projectsLoading } = useCollection(projectsQuery)
 
-  const handleAddProject = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user) return
 
@@ -64,9 +66,15 @@ export default function ProjectsPage() {
     }
 
     try {
-      await createRecord(db, collections.PROJECTS, data, user.uid)
-      toast({ title: 'Record Added to Vault' })
-      setIsAddOpen(false)
+      if (editingProj) {
+        await updateRecord(db, collections.PROJECTS, editingProj.id, data)
+        toast({ title: 'Record Updated' })
+      } else {
+        await createRecord(db, collections.PROJECTS, data, user.uid)
+        toast({ title: 'Record Added to Vault' })
+      }
+      setIsDialogOpen(false)
+      setEditingProj(null)
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message })
     } finally {
@@ -107,25 +115,30 @@ export default function ProjectsPage() {
           </h1>
           <p className="text-muted-foreground font-medium">Manage your technical projects and digital products.</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setEditingProj(null);
+        }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
+            <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90" onClick={() => setEditingProj(null)}>
               <Plus className="h-4 w-4" />
               Add Record
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px] bg-[#121214] text-white border-none">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-bold font-headline">Add New Entry</DialogTitle>
+              <DialogTitle className="text-2xl font-bold font-headline">
+                {editingProj ? 'Edit Entry' : 'Add New Entry'}
+              </DialogTitle>
               <DialogDescription className="text-gray-400">
                 Provide details, upload visuals, or attach technical documentation.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleAddProject} className="space-y-6 py-4">
+            <form onSubmit={handleSaveProject} className="space-y-6 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="category" className="text-sm font-semibold text-white">Classification</Label>
-                  <Select name="category" defaultValue="Project">
+                  <Select name="category" defaultValue={editingProj?.category || "Project"}>
                     <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12">
                       <SelectValue placeholder="Select Category" />
                     </SelectTrigger>
@@ -140,6 +153,7 @@ export default function ProjectsPage() {
                   <Input 
                     id="title" 
                     name="title" 
+                    defaultValue={editingProj?.title || ''}
                     placeholder="e.g. Nexus Core Engine" 
                     required 
                     className="bg-[#1c1c1f] border-none text-white focus:ring-1 focus:ring-primary h-12"
@@ -154,6 +168,7 @@ export default function ProjectsPage() {
                     id="date" 
                     name="date" 
                     type="date" 
+                    defaultValue={editingProj?.date || ''}
                     className="bg-[#1c1c1f] border-none text-white focus:ring-1 focus:ring-primary h-12"
                   />
                 </div>
@@ -162,6 +177,7 @@ export default function ProjectsPage() {
                   <Input 
                     id="url" 
                     name="url" 
+                    defaultValue={editingProj?.url || ''}
                     placeholder="https://nexus.ai" 
                     className="bg-[#1c1c1f] border-none text-white focus:ring-1 focus:ring-primary h-12"
                   />
@@ -173,6 +189,7 @@ export default function ProjectsPage() {
                 <Textarea 
                   id="description" 
                   name="description" 
+                  defaultValue={editingProj?.description || ''}
                   placeholder="Describe core features, technologies, and project impact..." 
                   required 
                   className="bg-[#1c1c1f] border-none text-white focus:ring-1 focus:ring-primary min-h-[100px] resize-none"
@@ -200,7 +217,7 @@ export default function ProjectsPage() {
                 <Button 
                   type="button" 
                   variant="ghost" 
-                  onClick={() => setIsAddOpen(false)}
+                  onClick={() => setIsDialogOpen(false)}
                   className="bg-[#1c1c1f] hover:bg-gray-800 text-white font-bold h-10 px-8"
                 >
                   Cancel
@@ -211,7 +228,7 @@ export default function ProjectsPage() {
                   className="bg-[#7299f0] hover:bg-[#6387d9] text-white font-bold h-10 px-8"
                 >
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Add to Vault
+                  Save to Vault
                 </Button>
               </DialogFooter>
             </form>
@@ -236,17 +253,17 @@ export default function ProjectsPage() {
         </TabsList>
 
         <TabsContent value="Project" className="mt-0">
-          <ProjectGrid items={filteredItems('Project')} onDelete={handleDelete} />
+          <ProjectGrid items={filteredItems('Project')} onDelete={handleDelete} onEdit={(p) => { setEditingProj(p); setIsDialogOpen(true); }} />
         </TabsContent>
         <TabsContent value="Product" className="mt-0">
-          <ProjectGrid items={filteredItems('Product')} onDelete={handleDelete} />
+          <ProjectGrid items={filteredItems('Product')} onDelete={handleDelete} onEdit={(p) => { setEditingProj(p); setIsDialogOpen(true); }} />
         </TabsContent>
       </Tabs>
     </CRMLayout>
   )
 }
 
-function ProjectGrid({ items, onDelete }: { items: any[], onDelete: (id: string) => void }) {
+function ProjectGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id: string) => void, onEdit: (item: any) => void }) {
   if (items.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border/50 bg-card/10 text-muted-foreground italic">
@@ -274,14 +291,24 @@ function ProjectGrid({ items, onDelete }: { items: any[], onDelete: (id: string)
                   <h3 className="font-headline text-2xl font-bold group-hover:text-[#7299f0] transition-colors">{proj.title}</h3>
                   <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{proj.description}</p>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="text-muted-foreground hover:text-destructive h-8 w-8" 
-                  onClick={() => onDelete(proj.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-muted-foreground hover:text-primary h-8 w-8" 
+                    onClick={() => onEdit(proj)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-muted-foreground hover:text-destructive h-8 w-8" 
+                    onClick={() => onDelete(proj.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               
               <div className="mt-6 pt-4 border-t border-border/20 flex items-center justify-between">
