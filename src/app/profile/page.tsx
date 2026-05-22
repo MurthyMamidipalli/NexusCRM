@@ -1,17 +1,17 @@
 
 "use client"
 
-import React, { useMemo, useRef, useEffect } from 'react'
+import React, { useMemo, useRef, useEffect, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { User, Mail, Phone, MapPin, Loader2, Calendar, Home, Save, Camera, Upload, Trash2 } from 'lucide-react'
+import { User, Mail, Phone, Loader2, Save, Camera, Upload, Trash2, Fingerprint } from 'lucide-react'
 import { useUser, useFirestore, useDoc } from '@/firebase'
 import { doc } from 'firebase/firestore'
+import { updateProfile } from 'firebase/auth'
 import { collections } from '@/lib/firestore-service'
 import { usePersistentDocument } from '@/hooks/use-persistence'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -23,22 +23,10 @@ export default function ProfilePage() {
   const { user } = useUser()
   const db = useFirestore()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
   const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
   const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
-
-  // Diagnostic: Log exactly what is being loaded
-  useEffect(() => {
-    if (user && profileDoc) {
-      console.group('👤 Profile Data Diagnostic');
-      console.log('Auth UID:', user.uid);
-      console.log('Document ID:', profileDoc.id);
-      console.log('Collection:', collections.PROFILES);
-      console.log('Path:', `${collections.PROFILES}/${user.uid}`);
-      console.log('Full JSON Data:', profileDoc);
-      console.groupEnd();
-    }
-  }, [user, profileDoc]);
 
   const initialData = useMemo(() => profileDoc || EMPTY_PROFILE, [profileDoc]);
 
@@ -58,9 +46,9 @@ export default function ProfilePage() {
       return;
     }
 
-    const maxSize = 500 * 1024 * 1024;
+    const maxSize = 2 * 1024 * 1024; // Standard 2MB limit for avatars
     if (file.size > maxSize) {
-      toast({ variant: 'destructive', title: 'File Too Large', description: 'Maximum allowed size is 500MB.' });
+      toast({ variant: 'destructive', title: 'File Too Large', description: 'Maximum allowed size is 2MB.' });
       return;
     }
 
@@ -68,7 +56,7 @@ export default function ProfilePage() {
     reader.onloadstart = () => { toast({ title: 'Processing Image', description: 'Preparing your new profile picture...' }); };
     reader.onloadend = () => {
       updateField('avatarUrl' as any, reader.result as string);
-      toast({ title: 'Image Uploaded', description: 'Your profile picture has been updated locally and will sync shortly.' });
+      toast({ title: 'Image Uploaded', description: 'Your profile picture has been updated.' });
     };
     reader.readAsDataURL(file);
   }
@@ -76,6 +64,34 @@ export default function ProfilePage() {
   const removeAvatar = () => {
     updateField('avatarUrl' as any, '');
     toast({ title: 'Avatar Removed' });
+  }
+
+  const handleFullProfileSave = async () => {
+    setIsSaving(true)
+    try {
+      // 1. Save to Firestore (via hook)
+      save()
+
+      // 2. Sync with Firebase Auth Display Name if it changed
+      if (user && (profile as any)?.fullName) {
+        await updateProfile(user, {
+          displayName: (profile as any).fullName
+        })
+      }
+
+      toast({
+        title: 'Profile Synchronized',
+        description: 'Your changes have been saved to your account and profile.'
+      })
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Save Failed',
+        description: error.message
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   if (profileLoading) {
@@ -90,20 +106,25 @@ export default function ProfilePage() {
 
   const displayFirstName = (profile as any)?.firstName || '';
   const displayLastName = (profile as any)?.lastName || '';
-  const displayHeaderName = displayFirstName || displayLastName 
-    ? `${displayFirstName} ${displayLastName}`.trim()
-    : (profile as any)?.fullName || user?.displayName || 'Set your name';
+  const displayHeaderName = (profile as any)?.fullName || 
+    (displayFirstName || displayLastName 
+      ? `${displayFirstName} ${displayLastName}`.trim()
+      : user?.displayName || 'Set your name');
 
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">👤 Personal Profile</h1>
-          <p className="text-muted-foreground">Manage your core identity, contact details, and demographics.</p>
+          <p className="text-muted-foreground">Manage your core identity, contact details, and professional appearance.</p>
         </div>
-        <Button onClick={save} className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white">
-          <Save className="h-4 w-4" />
-          Save Profile
+        <Button 
+          onClick={handleFullProfileSave} 
+          disabled={isSaving}
+          className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white min-w-[140px]"
+        >
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Save Changes
         </Button>
       </div>
 
@@ -145,25 +166,43 @@ export default function ProfilePage() {
 
         {/* Identity Section */}
         <Card className="border-none bg-card/50 backdrop-blur-md shadow-xl">
-          <CardHeader><CardTitle className="font-headline text-xl">Identity</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="font-headline text-xl flex items-center gap-2">
+              <Fingerprint className="h-5 w-5 text-primary" /> Identity & Naming
+            </CardTitle>
+          </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Full Name / Display Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  id="fullName" 
+                  value={(profile as any)?.fullName || ''} 
+                  onChange={(e) => updateField('fullName', e.target.value)} 
+                  className="pl-10 focus:ring-primary h-12 text-lg font-bold" 
+                  placeholder="e.g. Johnathan Doe" 
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest pl-1"> This is your primary identity name used throughout the application. </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-border/50">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="firstName" value={(profile as any)?.firstName || ''} onChange={(e) => updateField('firstName', e.target.value)} className="pl-10 focus:ring-primary" placeholder="John" />
-                </div>
+                <Input id="firstName" value={(profile as any)?.firstName || ''} onChange={(e) => updateField('firstName', e.target.value)} className="focus:ring-primary" placeholder="John" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lastName">Last Name</Label>
                 <Input id="lastName" value={(profile as any)?.lastName || ''} onChange={(e) => updateField('lastName', e.target.value)} className="focus:ring-primary" placeholder="Doe" />
               </div>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="tagline">Professional Tagline</Label>
               <Input id="tagline" value={(profile as any)?.tagline || ''} onChange={(e) => updateField('tagline', e.target.value)} placeholder="Software Engineer | AI Specialist" className="focus:ring-primary" />
             </div>
+            
             <div className="space-y-2">
               <Label htmlFor="bio">Professional Bio</Label>
               <Textarea id="bio" className="min-h-[120px] focus:ring-primary" value={(profile as any)?.bio || ''} onChange={(e) => updateField('bio', e.target.value)} placeholder="Brief summary of your professional background..." />
