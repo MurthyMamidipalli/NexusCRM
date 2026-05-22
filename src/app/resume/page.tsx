@@ -16,7 +16,8 @@ import {
   CheckCircle2,
   Link as LinkIcon,
   Globe,
-  ExternalLink
+  ExternalLink,
+  AlertTriangle
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
@@ -29,6 +30,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 import { format } from 'date-fns'
+
+const MAX_FIRESTORE_SIZE = 1048576; // 1MB
 
 export default function ResumePage() {
   const db = useFirestore()
@@ -60,12 +63,11 @@ export default function ResumePage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const maxSize = 1024 * 1024 * 1024 // 1GB
-    if (file.size > maxSize) {
+    if (file.size > MAX_FIRESTORE_SIZE) {
       toast({
         variant: 'destructive',
         title: 'File Too Large',
-        description: 'Document must be less than 1GB.'
+        description: 'Direct database storage is limited to 1MB. Please use a smaller file or a link.'
       })
       return
     }
@@ -87,32 +89,30 @@ export default function ResumePage() {
     const formData = new FormData(e.currentTarget)
     const type = activeTab === 'PDF' ? 'file' : 'link'
     
-    let data: any = {
+    const data: any = {
       name: formData.get('name') as string,
       type: type,
       ownerId: user.uid,
     }
 
     if (type === 'file') {
-      const isTooLargeForFirestore = fileData.length > 1048576; 
-      data = {
-        ...data,
-        fileUrl: isTooLargeForFirestore ? '' : fileData,
-        fileName: selectedFile?.name || '',
-        isMetadataOnly: isTooLargeForFirestore
+      if (!fileData) {
+        toast({ variant: 'destructive', title: 'Upload Missing', description: 'Please select a PDF file.' });
+        setLoading(false);
+        return;
       }
+      data.fileUrl = fileData;
+      data.fileName = selectedFile?.name || 'resume.pdf';
     } else {
-      data = {
-        ...data,
-        url: formData.get('url') as string
-      }
+      data.url = formData.get('url') as string;
     }
-
-    setIsDialogOpen(false)
 
     createRecord(db, collections.RESUMES, data, user.uid)
       .then(() => {
-        toast({ title: type === 'file' ? 'Resume Uploaded' : 'Link Added' })
+        toast({ title: type === 'file' ? 'Resume Uploaded' : 'Link Added', description: 'Successfully synced to your cloud vault.' });
+        setIsDialogOpen(false);
+        setSelectedFile(null);
+        setFileData('');
       })
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
@@ -124,8 +124,6 @@ export default function ResumePage() {
       })
       .finally(() => {
         setLoading(false)
-        setSelectedFile(null)
-        setFileData('')
       })
   }
 
@@ -162,7 +160,7 @@ export default function ResumePage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">📜 Resume Vault</h1>
-          <p className="text-muted-foreground">Manage multiple versions of your CVs and live professional links.</p>
+          <p className="text-muted-foreground">Manage multiple versions of your CVs and live professional links across all devices.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
@@ -183,7 +181,7 @@ export default function ResumePage() {
                 {activeTab === 'PDF' ? 'Upload Resume PDF' : 'Add Resume Link'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                {activeTab === 'PDF' ? 'Your file will be safely stored in your cloud vault.' : 'Add a link to your online portfolio or CV builder.'}
+                {activeTab === 'PDF' ? 'Files under 1MB will be synced to your global profile.' : 'Add a link to your online portfolio or CV builder.'}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSave} className="space-y-6">
@@ -214,6 +212,7 @@ export default function ResumePage() {
                       <div className="flex flex-col items-center">
                         <Upload className="h-10 w-10 text-gray-500 group-hover:text-primary transition-colors mb-2" />
                         <span className="text-sm font-semibold text-gray-400">Select PDF</span>
+                        <span className="text-[10px] text-muted-foreground mt-2 uppercase tracking-widest">Max 1MB for Sync</span>
                       </div>
                     )}
                   </div>
@@ -240,7 +239,7 @@ export default function ResumePage() {
                   disabled={loading} 
                   className="bg-[#7299f0] hover:bg-[#6387d9] text-white font-bold h-12 px-8 rounded-xl border-none ml-auto"
                 >
-                  {activeTab === 'PDF' ? 'Store in Vault' : 'Save Link'}
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (activeTab === 'PDF' ? 'Store in Vault' : 'Save Link')}
                 </Button>
               </DialogFooter>
             </form>
@@ -299,7 +298,7 @@ export default function ResumePage() {
                           asChild={!!resume.fileUrl}
                         >
                           {resume.fileUrl ? (
-                            <a href={resume.fileUrl} download={resume.fileName || 'resume'}>
+                            <a href={resume.fileUrl} download={resume.fileName || 'resume.pdf'}>
                               <Download className="h-4 w-4" /> Download
                             </a>
                           ) : (

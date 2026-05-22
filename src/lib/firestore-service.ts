@@ -27,7 +27,6 @@ export const collections = {
   LEADS: 'leads',
   CERTIFICATIONS: 'certifications',
   LINKS: 'links',
-  CAREER: 'profiles',
   RESUMES: 'resumes'
 };
 
@@ -47,7 +46,7 @@ export function createRecord(db: Firestore, collectionName: string, data: any, u
   };
 
   if (!payload.ownerId) {
-    console.warn(`Record created in ${collectionName} without an ownerId. This data will not sync across devices.`);
+    throw new Error(`Record creation failed: ownerId is required for cloud synchronization in ${collectionName}.`);
   }
 
   return addDoc(colRef, payload);
