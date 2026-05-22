@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState, useEffect } from 'react'
@@ -124,14 +125,13 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <Button 
+                  <button 
                     type="button"
-                    variant="link" 
-                    className="px-0 text-xs text-primary font-bold h-auto"
+                    className="text-xs text-primary font-bold hover:underline"
                     onClick={handleForgotPassword}
                   >
                     Forgot password?
-                  </Button>
+                  </button>
                 </div>
                 <div className="relative">
                   <Input 

@@ -38,19 +38,19 @@ export function usePersistentDocument<T>(
   }, [initialData]);
 
   const saveToFirestore = useCallback((dataToSave: any) => {
-    // CRITICAL: Ensure we have a user and a target ID (which should be the user UID)
+    // CRITICAL: Ensure we have a user and a target ID
     if (!db || !user || !docId) {
       console.warn('⚠️ Save aborted: Missing required context (db, user, or docId).');
       return;
     }
 
     setStatus('saving');
-    // We use the docId (Auth UID) to ensure the document has a predictable, searchable name
+    // For profiles, docId is the UID. For others, it's the record ID.
     const docRef = doc(db, collectionName, docId);
     
     const payload = {
       ...dataToSave,
-      ownerId: user.uid, // Explicitly redundantly store the ownerId for query fallbacks
+      ownerId: user.uid,
       updatedAt: serverTimestamp(),
     };
 
