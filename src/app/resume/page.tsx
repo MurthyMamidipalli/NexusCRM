@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject, UploadTask } from 'firebase/storage'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
@@ -41,6 +41,7 @@ interface PendingResumeUpload {
   url?: string;
   path?: string;
   done: boolean;
+  task?: UploadTask;
 }
 
 export default function ResumePage() {
@@ -79,7 +80,6 @@ export default function ResumePage() {
     })
   }, [rawResumes])
 
-  // INSTANT UPLOAD: Starts the moment files are chosen
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (!files.length || !user || !storage) return
@@ -94,25 +94,31 @@ export default function ResumePage() {
 
       setActiveUploads(prev => ({
         ...prev,
-        [file.name]: { file, progress: 0, done: false }
+        [file.name]: { file, progress: 0, done: false, path, task: uploadTask }
       }))
 
       uploadTask.on(
         'state_changed',
         (snap) => {
           const progress = (snap.bytesTransferred / snap.totalBytes) * 100
-          setActiveUploads(prev => ({
-            ...prev,
-            [file.name]: { ...prev[file.name], progress }
-          }))
+          setActiveUploads(prev => {
+            if (!prev[file.name]) return prev;
+            return {
+              ...prev,
+              [file.name]: { ...prev[file.name], progress }
+            };
+          })
         },
         console.error,
         async () => {
           const url = await getDownloadURL(uploadTask.snapshot.ref)
-          setActiveUploads(prev => ({
-            ...prev,
-            [file.name]: { ...prev[file.name], url, path, done: true, progress: 100 }
-          }))
+          setActiveUploads(prev => {
+            if (!prev[file.name]) return prev;
+            return {
+              ...prev,
+              [file.name]: { ...prev[file.name], url, done: true, progress: 100 }
+            };
+          })
         }
       )
     })
@@ -123,70 +129,66 @@ export default function ResumePage() {
     if (!user || !db) return
     
     const formData = new FormData(e.currentTarget)
-    const baseName = formData.get('name') as string
-    const docType = formData.get('docType') as string || 'Resume'
-    const visibility = formData.get('visibility') as string || 'Private'
+    const formConfig = {
+      name: formData.get('name') as string,
+      docType: formData.get('docType') as string || 'Resume',
+      visibility: formData.get('visibility') as string || 'Private',
+      url: formData.get('url') as string
+    }
 
     // INSTANT UI CLOSURE
     toast({ title: 'Syncing to Vault', description: 'Records are being secured in the background.' })
     setIsDialogOpen(false)
 
     if (activeTab === 'PDF') {
-      const uploads = Object.values(activeUploads)
-      uploads.forEach((upload) => {
-        const finalize = async (u: PendingResumeUpload) => {
-          if (!u.url) return;
+      const uploadsList = Object.values(activeUploads)
+      uploadsList.forEach(async (upload) => {
+        const finalize = async (url: string, path: string, file: File) => {
           const data: any = {
-            name: uploads.length > 1 ? `${baseName} - ${u.file.name}` : baseName,
+            name: uploadsList.length > 1 ? `${formConfig.name} - ${file.name}` : formConfig.name,
             type: 'file',
-            docType: docType,
-            visibility,
-            isPublic: visibility === 'Public',
+            docType: formConfig.docType,
+            visibility: formConfig.visibility,
+            isPublic: formConfig.visibility === 'Public',
             ownerId: user.uid,
-            fileUrl: u.url,
-            fileName: u.file.name,
-            filePath: u.path,
-            fileSize: u.file.size,
-            fileType: u.file.type
+            fileUrl: url,
+            fileName: file.name,
+            filePath: path,
+            fileSize: file.size,
+            fileType: file.type
           }
           await createRecord(db, collections.RESUMES, data, user.uid).catch(console.error)
           
           setActiveUploads(prev => {
             const next = { ...prev }
-            delete next[u.file.name]
+            delete next[file.name]
             return next
           })
         }
 
-        if (upload.done && upload.url) {
-          finalize(upload)
-        } else {
-          // Direct background promise handling
-          const itv = setInterval(() => {
-            setActiveUploads(curr => {
-              const current = curr[upload.file.name]
-              if (current?.done && current.url) {
-                finalize(current)
-                clearInterval(itv)
-              }
-              return curr
-            })
-          }, 300)
+        if (upload.done && upload.url && upload.path) {
+          finalize(upload.url, upload.path, upload.file)
+        } else if (upload.task) {
+          try {
+            await upload.task;
+            const url = await getDownloadURL(upload.task.snapshot.ref);
+            finalize(url, upload.path!, upload.file);
+          } catch (err) {
+            console.error(`❌ Background resume finalize failed`, err);
+          }
         }
       })
     } else {
       const data: any = {
-        name: baseName,
+        name: formConfig.name,
         type: 'link',
-        visibility,
-        isPublic: visibility === 'Public',
+        visibility: formConfig.visibility,
+        isPublic: formConfig.visibility === 'Public',
         ownerId: user.uid,
-        url: formData.get('url') as string
+        url: formConfig.url
       }
       createRecord(db, collections.RESUMES, data, user.uid).catch(console.error)
     }
-
-    setActiveUploads({})
   }
 
   const handleDelete = async (resume: any) => {
@@ -209,7 +211,7 @@ export default function ResumePage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">📜 Resume & Links Vault</h1>
           <p className="text-muted-foreground">High-speed secure storage for your Resumes, CV'S and Professional Links.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o) setActiveUploads({}); }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o && !Object.values(activeUploads).some(u => !u.done)) setActiveUploads({}); }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white">
               <Plus className="h-4 w-4" /> {activeTab === 'PDF' ? 'Upload Resumes & CV\'S' : 'Add Link'}
@@ -273,7 +275,7 @@ export default function ResumePage() {
                   {Object.keys(activeUploads).length > 0 ? (
                     <div className="text-primary text-center">
                       <Files className="mx-auto mb-2 h-10 w-10" />
-                      <span className="text-xs font-bold">{Object.keys(activeUploads).length} Files Selected</span>
+                      <span className="text-sm font-bold">{Object.keys(activeUploads).length} Files Selected</span>
                     </div>
                   ) : (
                     <div className="text-center">

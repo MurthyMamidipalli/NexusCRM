@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject, UploadTask } from 'firebase/storage'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
@@ -38,6 +38,7 @@ interface ActiveUpload {
   done: boolean;
   url?: string;
   path?: string;
+  task?: UploadTask;
 }
 
 export default function DocumentVaultPage() {
@@ -53,8 +54,6 @@ export default function DocumentVaultPage() {
   
   // High-speed task management
   const [activeUploads, setActiveUploads] = useState<{ [key: string]: ActiveUpload }>({})
-  const formValuesRef = useRef({ title: '', category: 'Other', status: 'Active', visibility: 'Private' })
-  
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { setMounted(true) }, [])
@@ -84,7 +83,6 @@ export default function DocumentVaultPage() {
       })
   }, [rawDocs, searchTerm, categoryFilter])
 
-  // TRUE EAGER UPLOAD: Starts immediately on selection
   const handleFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (!files.length || !user || !storage) return
@@ -104,17 +102,20 @@ export default function DocumentVaultPage() {
 
       setActiveUploads(prev => ({
         ...prev,
-        [file.name]: { file, progress: 0, done: false }
+        [file.name]: { file, progress: 0, done: false, path, task: uploadTask }
       }))
 
       uploadTask.on(
         'state_changed',
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / (snapshot.totalBytes || 1)) * 100
-          setActiveUploads(prev => ({
-            ...prev,
-            [file.name]: { ...prev[file.name], progress }
-          }))
+          setActiveUploads(prev => {
+            if (!prev[file.name]) return prev;
+            return {
+              ...prev,
+              [file.name]: { ...prev[file.name], progress }
+            };
+          })
         },
         (error) => {
           console.error(`❌ Upload failed: ${file.name}`, error)
@@ -126,12 +127,15 @@ export default function DocumentVaultPage() {
         },
         async () => {
           const url = await getDownloadURL(uploadTask.snapshot.ref)
-          console.log(`✅ File synchronized to cloud: ${file.name}`)
+          console.log(`✅ File synced to cloud: ${file.name}`)
           
-          setActiveUploads(prev => ({
-            ...prev,
-            [file.name]: { ...prev[file.name], url, path, done: true, progress: 100 }
-          }))
+          setActiveUploads(prev => {
+            if (!prev[file.name]) return prev;
+            return {
+              ...prev,
+              [file.name]: { ...prev[file.name], url, done: true, progress: 100 }
+            };
+          })
         }
       )
     })
@@ -141,63 +145,61 @@ export default function DocumentVaultPage() {
     e.preventDefault()
     if (!user || !db) return
 
-    const uploads = Object.values(activeUploads)
-    if (uploads.length === 0) {
+    const uploadsList = Object.values(activeUploads)
+    if (uploadsList.length === 0) {
       toast({ variant: 'destructive', title: 'Empty Vault', description: 'Please select documents first.' })
       return
     }
 
     const formData = new FormData(e.currentTarget)
-    const baseTitle = formData.get('title') as string
-    const cat = formData.get('category') as string || 'Other'
-    const stat = formData.get('status') as string || 'Active'
-    const vis = formData.get('visibility') as string || 'Private'
+    const formConfig = {
+      baseTitle: formData.get('title') as string,
+      category: formData.get('category') as string || 'Other',
+      status: formData.get('status') as string || 'Active',
+      visibility: formData.get('visibility') as string || 'Private'
+    }
 
     // INSTANT UI CLOSURE
     toast({ title: 'Securing Records', description: 'Your files are syncing to your private vault.' })
     setIsDialogOpen(false)
 
-    // Process every upload in a non-blocking background thread
-    uploads.forEach(async (upload) => {
-      const finalize = async (u: ActiveUpload) => {
-        if (!u.url) return;
+    // PROCESS IN BACKGROUND (Fully independent of component state clearing)
+    uploadsList.forEach(async (upload) => {
+      const finalizeRecord = async (url: string, path: string, file: File) => {
         const data = {
-          title: uploads.length > 1 ? u.file.name : baseTitle || u.file.name,
-          category: cat,
-          fileUrl: u.url,
-          filePath: u.path,
-          fileType: u.file.type,
-          fileSize: u.file.size,
-          status: stat.toLowerCase(),
-          isPublic: vis === 'Public',
+          title: uploadsList.length > 1 ? file.name : formConfig.baseTitle || file.name,
+          category: formConfig.category,
+          fileUrl: url,
+          filePath: path,
+          fileType: file.type,
+          fileSize: file.size,
+          status: formConfig.status.toLowerCase(),
+          isPublic: formConfig.visibility === 'Public',
           ownerId: user.uid
         }
         await createRecord(db, collections.DOCUMENTS, data, user.uid).catch(console.error)
-        console.log(`📁 Database record created for: ${u.file.name}`)
+        console.log(`📁 Record secured: ${file.name}`)
         
-        // Cleanup active state once saved
+        // Final cleanup of this specific item from state
         setActiveUploads(prev => {
           const next = { ...prev }
-          delete next[u.file.name]
+          delete next[file.name]
           return next
         })
       }
 
-      if (upload.done && upload.url) {
-        finalize(upload)
-      } else {
-        // Direct wait for the pending promise state
-        console.log(`⏳ Waiting for background transfer to complete: ${upload.file.name}`)
-        const checkInterval = setInterval(() => {
-          setActiveUploads(curr => {
-            const current = curr[upload.file.name]
-            if (current?.done && current.url) {
-              finalize(current)
-              clearInterval(checkInterval)
-            }
-            return curr
-          })
-        }, 300)
+      if (upload.done && upload.url && upload.path) {
+        finalizeRecord(upload.url, upload.path, upload.file)
+      } else if (upload.task) {
+        // Wait for the specific task to finish if it hasn't yet
+        console.log(`⏳ Background task awaiting: ${upload.file.name}`)
+        try {
+          await upload.task;
+          const url = await getDownloadURL(upload.task.snapshot.ref);
+          finalizeRecord(url, upload.path!, upload.file);
+        } catch (err) {
+          console.error(`❌ Background finalize failed for ${upload.file.name}`, err);
+        }
       }
     })
   }
@@ -230,10 +232,10 @@ export default function DocumentVaultPage() {
           </h1>
           <p className="text-muted-foreground">High-speed secure storage for identification and professional records.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o) setActiveUploads({}); }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o && !Object.values(activeUploads).some(u => !u.done)) setActiveUploads({}); }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl">
-              <Plus className="h-5 w-5" /> Secure New Document
+              <Plus className="h-5 v-5" /> Secure New Document
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[480px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden">
@@ -308,7 +310,7 @@ export default function DocumentVaultPage() {
                   <div className="text-[#10b981] text-center">
                     <FileCheck className="mx-auto mb-2 h-12 w-12" />
                     <span className="text-sm font-bold">
-                      {Object.keys(activeUploads).length} Files Synchronizing
+                      {Object.keys(activeUploads).length} Files Selected
                     </span>
                   </div>
                 ) : (
