@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -30,6 +30,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
@@ -41,6 +42,7 @@ export default function ResumePage() {
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [mounted, setMounted] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [activeTab, setActiveTab] = useState('PDF')
@@ -59,7 +61,14 @@ export default function ResumePage() {
 
   const resumes = useMemo(() => {
     if (!rawResumes) return []
-    return [...rawResumes].sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    return [...rawResumes].sort((a: any, b: any) => {
+      const getVal = (doc: any) => {
+        if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
+        if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
+        return Date.now() + 10000;
+      }
+      return getVal(b) - getVal(a);
+    })
   }, [rawResumes])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,6 +85,7 @@ export default function ResumePage() {
     e.preventDefault()
     if (!user || !db || !storage) return
     setLoading(true)
+    setUploadProgress(0)
 
     const formData = new FormData(e.currentTarget)
     const type = activeTab === 'PDF' ? 'file' : 'link'
@@ -90,8 +100,21 @@ export default function ResumePage() {
         if (!selectedFile) { setLoading(false); return; }
         const path = `resumes/${user.uid}/${Date.now()}_${selectedFile.name}`
         const storageRef = ref(storage, path)
-        const uploadResult = await uploadBytes(storageRef, selectedFile)
-        fileUrl = await getDownloadURL(uploadResult.ref)
+        const uploadTask = uploadBytesResumable(storageRef, selectedFile)
+
+        await new Promise((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+              setUploadProgress(progress)
+            },
+            (error) => reject(error),
+            () => resolve(null)
+          )
+        })
+        
+        fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
         fileName = selectedFile.name
         filePath = path
       }
@@ -108,17 +131,22 @@ export default function ResumePage() {
         url: type === 'link' ? formData.get('url') as string : null
       }
 
-      await createRecord(db, collections.RESUMES, data, user.uid)
+      const mutation = createRecord(db, collections.RESUMES, data, user.uid)
       toast({ title: 'Resume Stored' })
       setIsDialogOpen(false)
       setSelectedFile(null)
+
+      mutation.catch(async (err: any) => {
+        const permissionError = new FirestorePermissionError({
+          path: collections.RESUMES,
+          operation: 'create',
+          requestResourceData: data,
+          originalError: err
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
     } catch (err: any) {
-      const permissionError = new FirestorePermissionError({
-        path: collections.RESUMES,
-        operation: 'create',
-        originalError: err
-      } satisfies SecurityRuleContext);
-      errorEmitter.emit('permission-error', permissionError);
+      toast({ variant: 'destructive', title: 'Error', description: err.message });
     } finally {
       setLoading(false)
     }
@@ -126,16 +154,12 @@ export default function ResumePage() {
 
   const handleDelete = async (resume: any) => {
     if (!db || !storage) return
-    try {
-      if (resume.filePath) {
-        const storageRef = ref(storage, resume.filePath)
-        await deleteObject(storageRef).catch(console.warn)
-      }
-      await deleteRecord(db, collections.RESUMES, resume.id)
-      toast({ title: 'Removed' })
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Delete failed.' })
+    deleteRecord(db, collections.RESUMES, resume.id).catch(console.error)
+    if (resume.filePath) {
+      const storageRef = ref(storage, resume.filePath)
+      deleteObject(storageRef).catch(console.warn)
     }
+    toast({ title: 'Removed' })
   }
 
   return (
@@ -148,7 +172,25 @@ export default function ResumePage() {
             <form onSubmit={handleSave} className="space-y-6">
               <div className="space-y-2"><Label>Document Name</Label><Input id="name" name="name" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" /></div>
               <div className="space-y-2"><Label>Visibility (Mandatory)</Label><Select value={visibility} onValueChange={setVisibility}><SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl"><SelectValue /></SelectTrigger><SelectContent className="bg-[#1c1c1f] border-gray-800 text-white"><SelectItem value="Private">🔒 Private (Vault Only)</SelectItem><SelectItem value="Public">🌍 Public (Shared on Hub)</SelectItem></SelectContent></Select></div>
-              {activeTab === 'PDF' ? <div className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer" onClick={() => fileInputRef.current?.click()}><input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileChange} />{selectedFile ? <div className="text-primary text-center"><CheckCircle2 className="mx-auto mb-2" /> {selectedFile.name}</div> : <Upload className="text-gray-500" />}</div> : <div className="space-y-2"><Label>URL</Label><Input name="url" required className="bg-[#1c1c1f] border-none h-12 rounded-xl" /></div>}
+              {activeTab === 'PDF' ? (
+                <div className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                  <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileChange} />
+                  {selectedFile ? <div className="text-primary text-center"><CheckCircle2 className="mx-auto mb-2" /> {selectedFile.name}</div> : <Upload className="text-gray-500" />}
+                </div>
+              ) : (
+                <div className="space-y-2"><Label>URL</Label><Input name="url" required className="bg-[#1c1c1f] border-none h-12 rounded-xl" /></div>
+              )}
+              
+              {loading && activeTab === 'PDF' && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
+                    <span>Uploading...</span>
+                    <span>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-1 bg-gray-800" />
+                </div>
+              )}
+
               <DialogFooter><Button type="submit" disabled={loading} className="bg-primary h-12 px-8 rounded-xl">{loading ? <Loader2 className="animate-spin" /> : 'Save Record'}</Button></DialogFooter>
             </form>
           </DialogContent>

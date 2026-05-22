@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
@@ -63,7 +62,6 @@ export default function DocumentsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setFilter] = useState('All')
 
@@ -91,9 +89,12 @@ export default function DocumentsPage() {
     }
 
     return filtered.sort((a: any, b: any) => {
-      const timeA = a.updatedAt?.seconds || 0;
-      const timeB = b.updatedAt?.seconds || 0;
-      return timeB - timeA;
+      const getVal = (doc: any) => {
+        if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
+        if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
+        return Date.now() + 10000; // Push pending docs to top
+      }
+      return getVal(b) - getVal(a);
     })
   }, [rawDocuments, searchQuery, categoryFilter])
 
@@ -132,7 +133,6 @@ export default function DocumentsPage() {
       if (selectedFile) {
         const storagePath = `documents/${user.uid}/${Date.now()}_${selectedFile.name}`
         const storageRef = ref(storage, storagePath)
-        
         const uploadTask = uploadBytesResumable(storageRef, selectedFile)
 
         await new Promise((resolve, reject) => {
@@ -142,10 +142,7 @@ export default function DocumentsPage() {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
               setUploadProgress(progress)
             },
-            (error) => {
-              console.error("Storage upload failed:", error);
-              reject(error);
-            },
+            (error) => reject(error),
             () => resolve(null)
           )
         })
@@ -168,7 +165,6 @@ export default function DocumentsPage() {
         ownerId: user.uid
       }
 
-      // NON-BLOCKING: Save to Firestore instantly in background
       const mutation = editingDoc
         ? updateRecord(db, collections.DOCUMENTS, editingDoc.id, data)
         : createRecord(db, collections.DOCUMENTS, data, user.uid);
@@ -196,16 +192,12 @@ export default function DocumentsPage() {
 
   const handleDelete = async (docItem: any) => {
     if (!db || !storage) return
-    try {
-      if (docItem.filePath) {
-        const storageRef = ref(storage, docItem.filePath)
-        await deleteObject(storageRef).catch(console.warn)
-      }
-      await deleteRecord(db, collections.DOCUMENTS, docItem.id)
-      toast({ title: 'Document Removed' })
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete record.' })
+    deleteRecord(db, collections.DOCUMENTS, docItem.id).catch(console.error)
+    if (docItem.filePath) {
+      const storageRef = ref(storage, docItem.filePath)
+      deleteObject(storageRef).catch(console.warn)
     }
+    toast({ title: 'Document Removed' })
   }
 
   const reset = () => { 
@@ -396,7 +388,6 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {/* Full-screen Document Preview */}
       <Dialog open={!!previewDoc} onOpenChange={(o) => !o && setPreviewDoc(null)}>
         <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col">
           <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">

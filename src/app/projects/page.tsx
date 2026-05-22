@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -30,6 +30,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Progress } from '@/components/ui/progress'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
@@ -42,6 +43,7 @@ export default function ProjectsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingProj, setEditingProj] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('Project')
 
@@ -63,7 +65,14 @@ export default function ProjectsPage() {
 
   const projects = useMemo(() => {
     if (!rawProjects) return []
-    return [...rawProjects].sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    return [...rawProjects].sort((a: any, b: any) => {
+      const getVal = (doc: any) => {
+        if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
+        if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
+        return Date.now() + 10000;
+      }
+      return getVal(b) - getVal(a);
+    })
   }, [rawProjects])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'pdf') => {
@@ -81,6 +90,7 @@ export default function ProjectsPage() {
     e.preventDefault()
     if (!user || !db || !storage) return
     setLoading(true)
+    setUploadProgress(0)
 
     const formData = new FormData(e.currentTarget)
     try {
@@ -93,16 +103,22 @@ export default function ProjectsPage() {
       if (selectedImage) {
         const path = `projects/${user.uid}/images/${Date.now()}_${selectedImage.name}`
         const storageRef = ref(storage, path)
-        const uploadResult = await uploadBytes(storageRef, selectedImage)
-        imageUrl = await getDownloadURL(uploadResult.ref)
+        const uploadTask = uploadBytesResumable(storageRef, selectedImage)
+        await new Promise((resolve, reject) => {
+          uploadTask.on('state_changed', (snap) => setUploadProgress((snap.bytesTransferred / snap.totalBytes) * 50), reject, () => resolve(null))
+        })
+        imageUrl = await getDownloadURL(uploadTask.snapshot.ref)
         imagePath = path
       }
 
       if (selectedDoc) {
         const path = `projects/${user.uid}/docs/${Date.now()}_${selectedDoc.name}`
         const storageRef = ref(storage, path)
-        const uploadResult = await uploadBytes(storageRef, selectedDoc)
-        documentUrl = await getDownloadURL(uploadResult.ref)
+        const uploadTask = uploadBytesResumable(storageRef, selectedDoc)
+        await new Promise((resolve, reject) => {
+          uploadTask.on('state_changed', (snap) => setUploadProgress(50 + (snap.bytesTransferred / snap.totalBytes) * 50), reject, () => resolve(null))
+        })
+        documentUrl = await getDownloadURL(uploadTask.snapshot.ref)
         documentPath = path
         documentName = selectedDoc.name
       }
@@ -121,22 +137,25 @@ export default function ProjectsPage() {
         ownerId: user.uid
       }
 
-      if (editingProj) {
-        await updateRecord(db, collections.PROJECTS, editingProj.id, data)
-      } else {
-        await createRecord(db, collections.PROJECTS, data, user.uid)
-      }
+      const mutation = editingProj
+        ? updateRecord(db, collections.PROJECTS, editingProj.id, data)
+        : createRecord(db, collections.PROJECTS, data, user.uid);
 
       toast({ title: editingProj ? 'Updated' : 'Created' })
       setIsDialogOpen(false)
       resetForm()
+
+      mutation.catch(async (err: any) => {
+        const permissionError = new FirestorePermissionError({
+          path: editingProj ? `${collections.PROJECTS}/${editingProj.id}` : collections.PROJECTS,
+          operation: 'write',
+          requestResourceData: data,
+          originalError: err
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
     } catch (err: any) {
-      const permissionError = new FirestorePermissionError({
-        path: editingProj ? `${collections.PROJECTS}/${editingProj.id}` : collections.PROJECTS,
-        operation: editingProj ? 'update' : 'create',
-        originalError: err
-      } satisfies SecurityRuleContext);
-      errorEmitter.emit('permission-error', permissionError);
+      toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
     } finally {
       setLoading(false)
     }
@@ -146,25 +165,22 @@ export default function ProjectsPage() {
     setEditingProj(null); 
     setSelectedImage(null); 
     setSelectedDoc(null); 
+    setUploadProgress(0);
   }
 
   const handleDelete = async (proj: any) => {
     if (!db || !storage) return
-    try {
-      if (proj.imagePath) await deleteObject(ref(storage, proj.imagePath)).catch(console.warn)
-      if (proj.documentPath) await deleteObject(ref(storage, proj.documentPath)).catch(console.warn)
-      await deleteRecord(db, collections.PROJECTS, proj.id)
-      toast({ title: 'Removed' })
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete project.' })
-    }
+    deleteRecord(db, collections.PROJECTS, proj.id).catch(console.error)
+    if (proj.imagePath) deleteObject(ref(storage, proj.imagePath)).catch(console.warn)
+    if (proj.documentPath) deleteObject(ref(storage, proj.documentPath)).catch(console.warn)
+    toast({ title: 'Removed' })
   }
 
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="font-headline text-4xl font-bold tracking-tight flex items-center gap-3">Projects & Products <Rocket className="h-8 w-8 text-primary/40" /></h1>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90"><Plus className="h-4 w-4" /> Add {activeTab}</Button>
           </DialogTrigger>
@@ -185,7 +201,7 @@ export default function ProjectsPage() {
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label>Visual Cover</Label>
-                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => imageInputRef.current?.click()}>
+                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => !loading && imageInputRef.current?.click()}>
                     <input type="file" ref={imageInputRef} className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'image')} />
                     {selectedImage ? <CheckCircle2 className="text-primary" /> : <ImageIcon className="text-gray-500" />}
                     <span className="text-[10px] text-gray-500 mt-2">{selectedImage?.name || 'Change Image'}</span>
@@ -193,13 +209,24 @@ export default function ProjectsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Documentation (PDF)</Label>
-                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => docInputRef.current?.click()}>
+                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => !loading && docInputRef.current?.click()}>
                     <input type="file" ref={docInputRef} className="hidden" accept=".pdf" onChange={(e) => handleFileChange(e, 'pdf')} />
                     {selectedDoc ? <FileText className="text-primary" /> : <Paperclip className="text-gray-500" />}
                     <span className="text-[10px] text-gray-500 mt-2">{selectedDoc?.name || 'Change PDF'}</span>
                   </div>
                 </div>
               </div>
+              
+              {loading && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
+                    <span>Syncing...</span>
+                    <span>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-1 bg-gray-800" />
+                </div>
+              )}
+
               <DialogFooter><Button type="submit" disabled={loading} className="bg-[#7299f0] hover:bg-[#6387d9] h-12 px-8 rounded-xl">{loading && <Loader2 className="animate-spin mr-2" />}{editingProj ? 'Update' : 'Add'}</Button></DialogFooter>
             </form>
           </DialogContent>

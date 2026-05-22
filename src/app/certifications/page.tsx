@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useRef, useEffect } from 'react'
@@ -24,7 +23,7 @@ import {
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -33,6 +32,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
@@ -45,6 +45,7 @@ export default function CertificationsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCert, setEditingCert] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [activeTab, setActiveTab] = useState<string>("study")
   
   const [category, setCategory] = useState<string>("Study Certificate")
@@ -75,7 +76,7 @@ export default function CertificationsPage() {
       const getVal = (doc: any) => {
         if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
         if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
-        return Date.now();
+        return Date.now() + 10000;
       }
       return getVal(b) - getVal(a);
     })
@@ -95,6 +96,7 @@ export default function CertificationsPage() {
     e.preventDefault()
     if (!user || !db || !storage) return
     setLoading(true)
+    setUploadProgress(0)
 
     const formData = new FormData(e.currentTarget)
     try {
@@ -104,8 +106,21 @@ export default function CertificationsPage() {
       if (selectedFile) {
         const path = `credentials/${user.uid}/${Date.now()}_${selectedFile.name}`
         const storageRef = ref(storage, path)
-        const uploadResult = await uploadBytes(storageRef, selectedFile)
-        documentUrl = await getDownloadURL(uploadResult.ref)
+        const uploadTask = uploadBytesResumable(storageRef, selectedFile)
+
+        await new Promise((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+              setUploadProgress(progress)
+            },
+            (error) => reject(error),
+            () => resolve(null)
+          )
+        })
+        
+        documentUrl = await getDownloadURL(uploadTask.snapshot.ref)
         filePath = path
       }
 
@@ -122,7 +137,6 @@ export default function CertificationsPage() {
         ownerId: user.uid
       }
 
-      // NON-BLOCKING: Save to Firestore instantly in background
       const mutation = editingCert
         ? updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
         : createRecord(db, collections.CERTIFICATIONS, data, user.uid);
@@ -151,19 +165,16 @@ export default function CertificationsPage() {
   const resetForm = () => {
     setEditingCert(null)
     setSelectedFile(null)
-    setVisibility("Private")
+    setUploadProgress(0)
   }
 
   const handleDelete = async (cert: any) => {
     if (!db || !storage) return
-    
     deleteRecord(db, collections.CERTIFICATIONS, cert.id).catch(console.error);
-    
     if (cert.filePath) {
       const storageRef = ref(storage, cert.filePath)
       deleteObject(storageRef).catch(console.warn)
     }
-    
     toast({ title: 'Record Removed' })
   }
 
@@ -221,6 +232,17 @@ export default function CertificationsPage() {
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
                 {selectedFile ? (<div className="flex flex-col items-center gap-2"><CheckCircle2 className="h-10 w-10 text-primary" /><span className="text-xs font-bold text-primary truncate max-w-[200px]">{selectedFile.name}</span></div>) : editingCert?.documentUrl ? (<div className="flex flex-col items-center gap-2"><ShieldCheck className="h-10 w-10 text-primary/50" /><span className="text-xs font-bold text-gray-400">File stored</span></div>) : (<div className="flex flex-col items-center gap-2 text-center"><Upload className="h-10 w-10 text-gray-500 mb-2" /><span className="text-xs text-gray-500">Upload (Max 500MB)</span></div>)}
               </div>
+              
+              {loading && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
+                    <span>Uploading...</span>
+                    <span>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-1 bg-gray-800" />
+                </div>
+              )}
+
               <DialogFooter><Button type="submit" disabled={loading} className="w-full bg-primary h-12 rounded-xl">{loading ? <Loader2 className="animate-spin h-4 w-4" /> : 'Save Record'}</Button></DialogFooter>
             </form>
           </DialogContent>
