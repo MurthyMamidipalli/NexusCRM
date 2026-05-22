@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
@@ -25,7 +26,7 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject, UploadTask } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -62,6 +63,12 @@ export default function DocumentsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
+  // High-speed upload tracking
+  const [activeUploadTask, setActiveUploadTask] = useState<UploadTask | null>(null)
+  const [isUploadComplete, setIsUploadComplete] = useState(false)
+  const [pendingFileUrl, setPendingFileUrl] = useState<string | null>(null)
+  const [pendingFilePath, setPendingFilePath] = useState<string | null>(null)
+
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setFilter] = useState('All')
 
@@ -92,98 +99,111 @@ export default function DocumentsPage() {
       const getVal = (doc: any) => {
         if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
         if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
-        return Date.now() + 10000; // Push pending docs to top
+        return Date.now() + 10000;
       }
       return getVal(b) - getVal(a);
     })
   }, [rawDocuments, searchQuery, categoryFilter])
 
+  // Optimize: Start upload immediately on selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !user || !storage) return
+
     if (file.size > MAX_FILE_SIZE) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'File Too Large', 
-        description: 'Maximum limit is 500MB.' 
-      })
-      e.target.value = '';
+      toast({ variant: 'destructive', title: 'File Too Large', description: 'Maximum limit is 500MB.' })
       return
     }
+
+    console.log("File selected:", file.name)
     setSelectedFile(file)
+    setIsUploadComplete(false)
+    setUploadProgress(0)
+
+    const storagePath = `documents/${user.uid}/${Date.now()}_${file.name}`
+    const storageRef = ref(storage, storagePath)
+    const uploadTask = uploadBytesResumable(storageRef, file)
+    setActiveUploadTask(uploadTask)
+
+    console.log("Upload started...")
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+        setUploadProgress(progress)
+        console.log(`Upload progress: ${Math.round(progress)}%`)
+      },
+      (error) => {
+        console.error("Storage upload failed:", error)
+        toast({ variant: 'destructive', title: 'Upload Failed', description: error.message })
+        setActiveUploadTask(null)
+      },
+      async () => {
+        console.log("Upload completed successfully.")
+        const url = await getDownloadURL(uploadTask.snapshot.ref)
+        console.log("Download URL generated.")
+        setPendingFileUrl(url)
+        setPendingFilePath(storagePath)
+        setIsUploadComplete(true)
+        setActiveUploadTask(null)
+      }
+    )
   }
 
   const handleSaveDoc = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db || !storage) return
-    setLoading(true)
-    setUploadProgress(0)
+    if (!user || !db) return
+    
+    // Validate that if we're adding a new file, it's done uploading
+    if (!editingDoc && !isUploadComplete && activeUploadTask) {
+      toast({ title: 'Please Wait', description: 'File is still uploading...' })
+      return
+    }
 
+    setLoading(true)
     const formData = new FormData(e.currentTarget)
     const title = formData.get('title') as string
     const category = formData.get('category') as string
     const description = formData.get('description') as string
 
     try {
-      let fileUrl = editingDoc?.fileUrl || ''
-      let filePath = editingDoc?.filePath || ''
-      let fileType = editingDoc?.fileType || ''
-      let fileSize = editingDoc?.fileSize || 0
-
-      if (selectedFile) {
-        const storagePath = `documents/${user.uid}/${Date.now()}_${selectedFile.name}`
-        const storageRef = ref(storage, storagePath)
-        const uploadTask = uploadBytesResumable(storageRef, selectedFile)
-
-        await new Promise((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-              setUploadProgress(progress)
-            },
-            (error) => reject(error),
-            () => resolve(null)
-          )
-        })
-        
-        fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
-        filePath = storagePath
-        fileType = selectedFile.type
-        fileSize = selectedFile.size
-      }
-
-      const data = {
+      const data: any = {
         title,
         category,
         description,
         status: 'active',
-        fileUrl,
-        filePath,
-        fileType,
-        fileSize,
-        ownerId: user.uid
+        ownerId: user.uid,
+        fileUrl: isUploadComplete ? pendingFileUrl : (editingDoc?.fileUrl || ''),
+        filePath: isUploadComplete ? pendingFilePath : (editingDoc?.filePath || ''),
+        fileType: isUploadComplete ? selectedFile?.type : (editingDoc?.fileType || ''),
+        fileSize: isUploadComplete ? selectedFile?.size : (editingDoc?.fileSize || 0)
       }
 
       const mutation = editingDoc
         ? updateRecord(db, collections.DOCUMENTS, editingDoc.id, data)
         : createRecord(db, collections.DOCUMENTS, data, user.uid);
 
-      toast({ title: editingDoc ? 'Document Updated' : 'Document Secured' })
+      console.log(editingDoc ? "Firestore update initiated." : "Firestore creation initiated.")
+      
+      toast({ title: editingDoc ? 'Changes Saved' : 'Document Added' })
       setIsDialogOpen(false)
       reset()
 
-      mutation.catch(async (err: any) => {
-        const permissionError = new FirestorePermissionError({
-          path: editingDoc ? `${collections.DOCUMENTS}/${editingDoc.id}` : collections.DOCUMENTS,
-          operation: 'write',
-          requestResourceData: data,
-          originalError: err
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      })
+      mutation
+        .then(() => console.log("Firestore save completed."))
+        .catch(async (err: any) => {
+          console.error("Firestore save failed:", err)
+          const permissionError = new FirestorePermissionError({
+            path: editingDoc ? `${collections.DOCUMENTS}/${editingDoc.id}` : collections.DOCUMENTS,
+            operation: 'write',
+            requestResourceData: data,
+            originalError: err
+          } satisfies SecurityRuleContext);
+          errorEmitter.emit('permission-error', permissionError);
+        })
 
     } catch (err: any) {
+      console.error("Save process failed:", err)
       toast({ variant: 'destructive', title: 'Action Failed', description: err.message });
     } finally {
       setLoading(false)
@@ -204,6 +224,10 @@ export default function DocumentsPage() {
     setEditingDoc(null); 
     setSelectedFile(null); 
     setUploadProgress(0);
+    setActiveUploadTask(null);
+    setIsUploadComplete(false);
+    setPendingFileUrl(null);
+    setPendingFilePath(null);
   }
 
   return (
@@ -211,28 +235,28 @@ export default function DocumentsPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight text-foreground">📁 Document Vault</h1>
-          <p className="text-muted-foreground">Secure primary storage for personal identification and critical records.</p>
+          <p className="text-muted-foreground">High-speed secure storage for critical personal records.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if (!o) reset(); }}>
           <DialogTrigger asChild>
             <Button className="gap-2 bg-primary shadow-lg shadow-primary/20 h-11 px-6">
-              <Upload className="h-4 w-4" /> Securely Upload
+              <Upload className="h-4 w-4" /> Add Document
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none p-8 rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold font-headline flex items-center gap-2">
-                <ShieldCheck className="text-primary h-6 w-6" />
-                {editingDoc ? 'Edit Metadata' : 'Add Secure Document'}
+                <FileBox className="text-primary h-6 w-6" />
+                {editingDoc ? 'Edit Document' : 'Upload Document'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Documents are strictly private and encrypted-at-rest. (Max 500MB)
+                Direct cloud upload (Max 500MB). Files are owner-private.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveDoc} className="space-y-6 pt-4">
               <div className="space-y-2">
                 <Label>Document Title</Label>
-                <Input name="title" defaultValue={editingDoc?.title} required className="bg-[#1c1c1f] border-none rounded-xl h-12" placeholder="e.g. My Aadhaar Card" />
+                <Input name="title" defaultValue={editingDoc?.title} required className="bg-[#1c1c1f] border-none rounded-xl h-12" placeholder="e.g. My Passport" />
               </div>
               
               <div className="space-y-2">
@@ -251,36 +275,36 @@ export default function DocumentsPage() {
 
               <div className="space-y-2">
                 <Label>Description (Optional)</Label>
-                <Textarea name="description" defaultValue={editingDoc?.description} className="bg-[#1c1c1f] border-none rounded-xl min-h-[80px]" placeholder="Briefly describe this document..." />
+                <Textarea name="description" defaultValue={editingDoc?.description} className="bg-[#1c1c1f] border-none rounded-xl min-h-[80px]" placeholder="Brief notes about this file..." />
               </div>
 
-              <div 
-                className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
-                onClick={() => !loading && fileInputRef.current?.click()}
-              >
-                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                {selectedFile ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <CheckCircle2 className="text-primary h-12 w-12" />
-                    <span className="text-xs font-bold text-primary truncate max-w-[300px]">{selectedFile.name}</span>
-                  </div>
-                ) : editingDoc?.fileUrl ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <FileText className="text-primary/50 h-12 w-12" />
-                    <span className="text-xs font-bold text-gray-400">Update Stored File?</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <Upload className="text-gray-500 h-12 w-12 mb-2" />
-                    <span className="text-xs text-gray-500">Click to Select (Max 500MB)</span>
-                  </div>
-                )}
-              </div>
+              {!editingDoc && (
+                <div 
+                  className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
+                  onClick={() => !loading && fileInputRef.current?.click()}
+                >
+                  <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                  {selectedFile ? (
+                    <div className="flex flex-col items-center gap-2">
+                      {isUploadComplete ? <CheckCircle2 className="text-primary h-12 w-12" /> : <Loader2 className="text-primary h-12 w-12 animate-spin" />}
+                      <span className="text-xs font-bold text-primary truncate max-w-[300px]">
+                        {isUploadComplete ? 'Upload Complete' : `Uploading... ${Math.round(uploadProgress)}%`}
+                      </span>
+                      <span className="text-[10px] text-gray-500">{selectedFile.name}</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-center">
+                      <Upload className="text-gray-500 h-12 w-12 mb-2" />
+                      <span className="text-xs text-gray-500">Click to Select File</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
-              {loading && (
+              {(activeUploadTask || isUploadComplete) && !editingDoc && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                    <span>Securing & Storing...</span>
+                    <span>{isUploadComplete ? 'Ready to Save' : 'Cloud Syncing...'}</span>
                     <span>{Math.round(uploadProgress)}%</span>
                   </div>
                   <Progress value={uploadProgress} className="h-1 bg-gray-800" />
@@ -288,8 +312,12 @@ export default function DocumentsPage() {
               )}
 
               <DialogFooter>
-                <Button type="submit" disabled={loading} className="w-full h-12 bg-primary hover:bg-primary/90 font-bold rounded-xl border-none">
-                  {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : editingDoc ? 'Update Record' : 'Upload & Encrypt'}
+                <Button 
+                  type="submit" 
+                  disabled={loading || (!editingDoc && !isUploadComplete)} 
+                  className="w-full h-12 bg-primary hover:bg-primary/90 font-bold rounded-xl border-none"
+                >
+                  {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : editingDoc ? 'Save Changes' : 'Complete Upload'}
                 </Button>
               </DialogFooter>
             </form>
@@ -301,7 +329,7 @@ export default function DocumentsPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
-            placeholder="Search documents by title or description..." 
+            placeholder="Search by title or description..." 
             className="pl-10 bg-card/50 border-none h-11"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -334,7 +362,7 @@ export default function DocumentsPage() {
               <CardContent className="p-0">
                 <div className="h-32 bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center relative">
                   <Badge variant="outline" className="absolute top-4 left-4 bg-black/40 border-white/10 text-[9px] uppercase font-bold tracking-widest text-primary">
-                    Private Vault
+                    Secure
                   </Badge>
                   <FileText className="h-12 w-12 text-primary opacity-20" />
                   <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -384,7 +412,7 @@ export default function DocumentsPage() {
       ) : (
         <div className="flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground gap-3">
           <FileBox className="h-10 w-10 opacity-20" />
-          <p className="italic text-sm">Vault Empty. Securely store your first document.</p>
+          <p className="italic text-sm">Vault is empty.</p>
         </div>
       )}
 
