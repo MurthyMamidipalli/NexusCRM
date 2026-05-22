@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 export default function SkillsPage() {
   const db = useFirestore()
@@ -25,9 +27,11 @@ export default function SkillsPage() {
   const [editingSkill, setEditingSkill] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
+  // Proficiency Level State
+  const [level, setLevel] = useState<string>("Medium")
+
   const skillsQuery = useMemo(() => {
     if (!db || !user) return null;
-    // We remove orderBy to avoid requiring a composite index
     return query(
       collection(db, collections.SKILLS), 
       where('ownerId', '==', user.uid)
@@ -36,7 +40,6 @@ export default function SkillsPage() {
 
   const { data: rawSkills, loading: skillsLoading, error } = useCollection(skillsQuery)
 
-  // Perform sorting in memory to be index-resilient
   const skills = useMemo(() => {
     if (!rawSkills) return []
     return [...rawSkills].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
@@ -51,6 +54,7 @@ export default function SkillsPage() {
     const data = {
       name: formData.get('name') as string,
       category: formData.get('category') as string,
+      level: level,
     }
 
     const mutation = editingSkill 
@@ -85,6 +89,15 @@ export default function SkillsPage() {
     toast({ title: 'Skill Removed' })
   }
 
+  const getLevelColor = (lvl: string) => {
+    switch (lvl) {
+      case 'High': return 'bg-green-500/10 text-green-500 border-green-500/20'
+      case 'Medium': return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+      case 'Low': return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+      default: return 'bg-muted text-muted-foreground'
+    }
+  }
+
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -97,36 +110,66 @@ export default function SkillsPage() {
           if (!open) setEditingSkill(null);
         }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingSkill(null)}>
+            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => {
+              setEditingSkill(null);
+              setLevel("Medium");
+            }}>
               <Plus className="h-4 w-4" />
               Add Skill
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="bg-[#121214] text-white border-none rounded-2xl p-8">
             <DialogHeader>
-              <DialogTitle>{editingSkill ? 'Edit Expertise' : 'Add New Expertise'}</DialogTitle>
+              <DialogTitle className="text-2xl font-bold font-headline">
+                {editingSkill ? 'Edit Expertise' : 'Add New Expertise'}
+              </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSaveSkill} className="space-y-4 py-4">
+            <form onSubmit={handleSaveSkill} className="space-y-6 py-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Skill Name</Label>
-                <Input id="name" name="name" defaultValue={editingSkill?.name || ''} placeholder="e.g. React.js, Sales Strategy" required />
+                <Label htmlFor="name" className="text-sm font-semibold">Skill Name</Label>
+                <Input 
+                  id="name" 
+                  name="name" 
+                  defaultValue={editingSkill?.name || ''} 
+                  placeholder="e.g. React.js, Sales Strategy" 
+                  required 
+                  className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <Select name="category" defaultValue={editingSkill?.category || "Technical"}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Technical">Technical</SelectItem>
-                    <SelectItem value="Soft Skills">Soft Skills</SelectItem>
-                    <SelectItem value="Tools">Tools</SelectItem>
-                    <SelectItem value="Languages">Languages</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="category" className="text-sm font-semibold">Category</Label>
+                  <Select name="category" defaultValue={editingSkill?.category || "Technical"}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl">
+                      <SelectValue placeholder="Select Category" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                      <SelectItem value="Technical">Technical</SelectItem>
+                      <SelectItem value="Soft Skills">Soft Skills</SelectItem>
+                      <SelectItem value="Tools">Tools</SelectItem>
+                      <SelectItem value="Languages">Languages</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="level" className="text-sm font-semibold">Proficiency Level</Label>
+                  <Select onValueChange={setLevel} defaultValue={editingSkill?.level || "Medium"}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl">
+                      <SelectValue placeholder="Select Level" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                      <SelectItem value="High">High</SelectItem>
+                      <SelectItem value="Medium">Medium</SelectItem>
+                      <SelectItem value="Low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+
               <DialogFooter>
-                <Button type="submit" disabled={loading}>
+                <Button type="submit" disabled={loading} className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none shadow-lg shadow-primary/20 w-full sm:w-auto">
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Skill
                 </Button>
               </DialogFooter>
@@ -161,7 +204,14 @@ export default function SkillsPage() {
                     </div>
                     <div>
                       <h3 className="font-headline font-bold">{skill.name}</h3>
-                      <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">{skill.category}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">{skill.category}</span>
+                        {skill.level && (
+                          <Badge variant="outline" className={cn("text-[9px] h-4 px-1.5 font-bold uppercase tracking-widest", getLevelColor(skill.level))}>
+                            {skill.level}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -171,6 +221,7 @@ export default function SkillsPage() {
                       className="h-8 w-8 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={() => {
                         setEditingSkill(skill);
+                        setLevel(skill.level || "Medium");
                         setIsDialogOpen(true);
                       }}
                     >
