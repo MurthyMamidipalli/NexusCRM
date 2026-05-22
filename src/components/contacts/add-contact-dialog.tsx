@@ -1,14 +1,14 @@
 
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useFirestore, useUser } from '@/firebase'
-import { createRecord, collections } from '@/lib/firestore-service'
+import { createRecord, updateRecord, collections } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Loader2, Building2, User, Phone, Mail } from 'lucide-react'
 import { errorEmitter } from '@/firebase/error-emitter'
@@ -17,13 +17,22 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/e
 interface AddContactDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  contact?: any // Optional contact for editing
 }
 
-export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) {
+export function AddContactDialog({ open, onOpenChange, contact }: AddContactDialogProps) {
   const [loading, setLoading] = useState(false)
   const [industry, setIndustry] = useState("Client")
   const db = useFirestore()
   const { user } = useUser()
+
+  useEffect(() => {
+    if (contact) {
+      setIndustry(contact.industry || "Client")
+    } else {
+      setIndustry("Client")
+    }
+  }, [contact, open])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -37,18 +46,25 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
       phone: formData.get('phone') as string,
       company: formData.get('company') as string,
       industry: industry,
-      since: new Date().getFullYear().toString(),
+      since: contact?.since || new Date().getFullYear().toString(),
       ownerId: user.uid,
     }
 
-    createRecord(db, collections.CONTACTS, data)
+    const mutation = contact 
+      ? updateRecord(db, collections.CONTACTS, contact.id, data)
+      : createRecord(db, collections.CONTACTS, data)
+
+    mutation
       .then(() => {
-        toast({ title: 'Contact Created', description: `${data.name} has been added to your network.` })
+        toast({ 
+          title: contact ? 'Contact Updated' : 'Contact Created', 
+          description: `${data.name} has been synchronized to your network.` 
+        })
       })
       .catch(async (error: any) => {
         const permissionError = new FirestorePermissionError({
-          path: collections.CONTACTS,
-          operation: 'create',
+          path: contact ? `${collections.CONTACTS}/${contact.id}` : collections.CONTACTS,
+          operation: contact ? 'update' : 'create',
           requestResourceData: data,
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
@@ -63,9 +79,11 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[450px] bg-[#121214] text-white border-none rounded-2xl p-8">
         <DialogHeader className="mb-6">
-          <DialogTitle className="font-headline text-3xl font-bold">Add Manual Contact</DialogTitle>
+          <DialogTitle className="font-headline text-3xl font-bold">
+            {contact ? 'Edit Contact' : 'Add Manual Contact'}
+          </DialogTitle>
           <DialogDescription className="text-gray-400">
-            Record a new professional relationship in your network.
+            {contact ? 'Update details for this professional connection.' : 'Record a new professional relationship in your network.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -76,6 +94,7 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
               <Input 
                 id="name" 
                 name="name" 
+                defaultValue={contact?.name || ''}
                 className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl" 
                 placeholder="Jane Cooper" 
                 required 
@@ -91,6 +110,7 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
                 id="email" 
                 name="email" 
                 type="email" 
+                defaultValue={contact?.email || ''}
                 className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl" 
                 placeholder="jane@example.com" 
                 required 
@@ -105,6 +125,7 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
               <Input 
                 id="phone" 
                 name="phone" 
+                defaultValue={contact?.phone || ''}
                 className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl" 
                 placeholder="+1 (555) 000-0000" 
               />
@@ -118,6 +139,7 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
               <Input 
                 id="company" 
                 name="company" 
+                defaultValue={contact?.company || ''}
                 className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl" 
                 placeholder="Company Name" 
               />
@@ -126,7 +148,7 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
 
           <div className="space-y-2">
             <Label htmlFor="industry" className="text-sm font-semibold text-white">Relationship / Category</Label>
-            <Select onValueChange={setIndustry} defaultValue={industry}>
+            <Select onValueChange={setIndustry} value={industry}>
               <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
@@ -155,7 +177,7 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
               className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none shadow-lg shadow-primary/20"
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Contact
+              {contact ? 'Update Contact' : 'Save Contact'}
             </Button>
           </DialogFooter>
         </form>

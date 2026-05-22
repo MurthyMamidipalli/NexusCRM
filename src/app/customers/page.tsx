@@ -5,7 +5,7 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Search, Filter, Download, UserCheck, Loader2, Building2, Mail, Phone, Trash2 } from 'lucide-react'
+import { Search, Filter, Download, UserCheck, Loader2, Building2, Mail, Phone, Trash2, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord } from '@/lib/firestore-service'
@@ -28,6 +28,7 @@ export default function ContactsPage() {
   const { user } = useUser()
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [selectedContact, setSelectedContact] = useState<any>(null)
+  const [editingContact, setEditingContact] = useState<any>(null)
   const [mounted, setMounted] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   
@@ -61,6 +62,12 @@ export default function ContactsPage() {
     toast({ title: 'Contact Removed', description: 'The record has been deleted from your network.' })
   }
 
+  const handleEdit = (contact: any, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingContact(contact)
+    setIsAddDialogOpen(true)
+  }
+
   const filteredContacts = useMemo(() => {
     if (!contacts) return []
     return contacts.filter((c: any) => 
@@ -84,7 +91,7 @@ export default function ContactsPage() {
             <Download className="h-4 w-4" />
             Export
           </Button>
-          <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white border-none">
+          <Button onClick={() => { setEditingContact(null); setIsAddDialogOpen(true); }} className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white border-none">
             <UserCheck className="h-4 w-4" />
             Add Contact
           </Button>
@@ -116,12 +123,20 @@ export default function ContactsPage() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           {filteredContacts.map((contact: any) => (
             <Card key={contact.id} className="group relative border-none bg-card/50 backdrop-blur-md shadow-lg hover:shadow-2xl transition-all duration-300">
-              <button 
-                onClick={(e) => handleDelete(contact.id, e)}
-                className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={(e) => handleEdit(contact, e)}
+                  className="p-2 text-muted-foreground hover:text-primary"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button 
+                  onClick={(e) => handleDelete(contact.id, e)}
+                  className="p-2 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
               <CardContent className="text-center p-6 pt-10">
                 <div className="flex flex-col items-center justify-center">
                   <h3 className="font-headline text-xl font-bold group-hover:text-primary transition-colors mb-2">{contact.name}</h3>
@@ -146,7 +161,14 @@ export default function ContactsPage() {
         </div>
       )}
 
-      <AddContactDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} />
+      <AddContactDialog 
+        open={isAddDialogOpen} 
+        onOpenChange={(open) => {
+          setIsAddDialogOpen(open)
+          if (!open) setEditingContact(null)
+        }} 
+        contact={editingContact}
+      />
 
       {/* View Contact Dialog */}
       <Dialog open={!!selectedContact} onOpenChange={(open) => !open && setSelectedContact(null)}>
