@@ -223,10 +223,24 @@ export default function ProfilePage() {
                 </div>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="secondaryEmail">Secondary Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="secondaryEmail" type="email" value={(profile as any)?.secondaryEmail || ''} onChange={(e) => updateField('secondaryEmail', e.target.value)} className="pl-10 focus:ring-primary" placeholder="secondary@example.com" />
+                </div>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="phone">Primary Phone</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input id="phone" value={(profile as any)?.phone || ''} onChange={(e) => updateField('phone', e.target.value)} className="pl-10 focus:ring-primary" placeholder="+1 (555) 000-0000" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="secondaryPhone">Secondary Phone</Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="secondaryPhone" value={(profile as any)?.secondaryPhone || ''} onChange={(e) => updateField('secondaryPhone', e.target.value)} className="pl-10 focus:ring-primary" placeholder="+1 (555) 000-0000" />
                 </div>
               </div>
             </div>
