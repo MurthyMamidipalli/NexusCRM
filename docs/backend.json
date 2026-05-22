@@ -6,6 +6,8 @@
       "description": "User's core identity, bio, and contact information.",
       "type": "object",
       "properties": {
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
         "fullName": { "type": "string" },
         "tagline": { "type": "string" },
         "bio": { "type": "string" },

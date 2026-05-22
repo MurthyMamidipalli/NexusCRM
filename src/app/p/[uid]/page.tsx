@@ -114,6 +114,12 @@ export default function PublicProfilePage() {
     )
   }
 
+  const displayFirstName = activeProfile.firstName || '';
+  const displayLastName = activeProfile.lastName || '';
+  const displayFullName = displayFirstName || displayLastName 
+    ? `${displayFirstName} ${displayLastName}`.trim()
+    : activeProfile.fullName || 'Professional';
+
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-white selection:bg-primary/30 pb-20">
       <div className="h-64 bg-gradient-to-br from-primary/20 via-accent/10 to-background border-b border-white/5" />
@@ -127,7 +133,7 @@ export default function PublicProfilePage() {
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 space-y-2 mb-2 text-center md:text-left">
-            <h1 className="text-4xl md:text-5xl font-bold font-headline tracking-tight">{activeProfile.fullName || 'Professional'}</h1>
+            <h1 className="text-4xl md:text-5xl font-bold font-headline tracking-tight">{displayFullName}</h1>
             <p className="text-xl text-primary font-semibold">{activeProfile.tagline || 'Talent Intelligence'}</p>
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 pt-4 text-sm text-muted-foreground font-medium uppercase tracking-widest">
               {activeProfile.location && (
@@ -240,7 +246,7 @@ export default function PublicProfilePage() {
 
       <footer className="container mx-auto px-6 max-w-5xl mt-24 pt-12 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
         <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.2em]">
-          &copy; {new Date().getFullYear()} {activeProfile.fullName || 'Nexus Hub'} | Powered by NexusCRM
+          &copy; {new Date().getFullYear()} {displayFullName || 'Nexus Hub'} | Powered by NexusCRM
         </p>
         <Button size="sm" variant="ghost" className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground hover:text-white" asChild>
           <a href="/login">Manage Your Hub</a>

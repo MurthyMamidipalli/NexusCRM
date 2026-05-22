@@ -90,6 +90,12 @@ export default function ProfilePage() {
     )
   }
 
+  const displayFirstName = (profile as any)?.firstName || '';
+  const displayLastName = (profile as any)?.lastName || '';
+  const displayHeaderName = displayFirstName || displayLastName 
+    ? `${displayFirstName} ${displayLastName}`.trim()
+    : (profile as any)?.fullName || user?.displayName || 'Set your name';
+
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -128,7 +134,7 @@ export default function ProfilePage() {
                 />
               </div>
               <div className="flex-1 space-y-1 mb-2">
-                <h2 className="text-2xl font-bold font-headline">{(profile as any)?.fullName || user?.displayName || 'Set your name'}</h2>
+                <h2 className="text-2xl font-bold font-headline">{displayHeaderName}</h2>
                 <p className="text-muted-foreground font-medium">{(profile as any)?.tagline || 'Your professional headline'}</p>
                 <div className="flex items-center gap-2 pt-2">
                   <Button size="sm" variant="outline" className="h-8 text-[11px] gap-1.5" onClick={() => fileInputRef.current?.click()}>
@@ -153,28 +159,39 @@ export default function ProfilePage() {
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
+                <Label htmlFor="firstName">First Name</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
-                    id="fullName" 
-                    value={(profile as any)?.fullName || ''} 
-                    onChange={(e) => updateField('fullName', e.target.value)}
+                    id="firstName" 
+                    value={(profile as any)?.firstName || ''} 
+                    onChange={(e) => updateField('firstName', e.target.value)}
                     className="pl-10 focus:ring-primary" 
-                    placeholder="John Doe" 
+                    placeholder="John" 
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="tagline">Professional Tagline</Label>
+                <Label htmlFor="lastName">Last Name</Label>
                 <Input 
-                  id="tagline" 
-                  value={(profile as any)?.tagline || ''} 
-                  onChange={(e) => updateField('tagline', e.target.value)}
-                  placeholder="Software Engineer | AI Specialist" 
-                  className="focus:ring-primary"
+                  id="lastName" 
+                  value={(profile as any)?.lastName || ''} 
+                  onChange={(e) => updateField('lastName', e.target.value)}
+                  className="focus:ring-primary" 
+                  placeholder="Doe" 
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tagline">Professional Tagline</Label>
+              <Input 
+                id="tagline" 
+                value={(profile as any)?.tagline || ''} 
+                onChange={(e) => updateField('tagline', e.target.value)}
+                placeholder="Software Engineer | AI Specialist" 
+                className="focus:ring-primary"
+              />
             </div>
 
             <div className="space-y-2">
