@@ -17,8 +17,7 @@ import {
   X,
   Search,
   Filter,
-  ShieldCheck,
-  AlertCircle
+  ShieldCheck
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -62,7 +61,7 @@ export default function DocumentsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  // High-performance state tracking
+  // Speed-optimized upload tracking
   const [activeUploadTask, setActiveUploadTask] = useState<UploadTask | null>(null)
   const [isUploadComplete, setIsUploadComplete] = useState(false)
   const [pendingFileUrl, setPendingFileUrl] = useState<string | null>(null)
@@ -104,6 +103,7 @@ export default function DocumentsPage() {
     })
   }, [rawDocuments, searchQuery, categoryFilter])
 
+  // IMMEDIATE UPLOAD ON SELECTION
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !user || !storage) return
@@ -120,7 +120,7 @@ export default function DocumentsPage() {
     const storagePath = `documents/${user.uid}/${Date.now()}_${file.name}`
     const storageRef = ref(storage, storagePath)
     
-    console.log("🚀 Starting Eager Upload:", file.name)
+    console.log("🚀 Starting Immediate Upload:", file.name)
     const uploadTask = uploadBytesResumable(storageRef, file, { contentType: file.type })
     setActiveUploadTask(uploadTask)
 
@@ -129,6 +129,7 @@ export default function DocumentsPage() {
       (snapshot) => {
         const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
         setUploadProgress(progress)
+        console.log(`Upload Progress: ${Math.round(progress)}%`)
       },
       (error) => {
         console.error("❌ Storage upload failed:", error)
@@ -142,7 +143,7 @@ export default function DocumentsPage() {
         setPendingFilePath(storagePath)
         setIsUploadComplete(true)
         setActiveUploadTask(null)
-        console.log("✅ File Secured in Storage")
+        console.log("✅ File Ready in Cloud")
       }
     )
   }
@@ -151,7 +152,6 @@ export default function DocumentsPage() {
     e.preventDefault()
     if (!user || !db) return
     
-    // For new uploads, we wait for the background task to finish if it hasn't already
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     
@@ -159,9 +159,9 @@ export default function DocumentsPage() {
       let finalUrl = pendingFileUrl
       let finalPath = pendingFilePath
 
-      // If user clicks save before upload finishes, wait for it
+      // Non-blocking wait: If upload isn't done yet, wait for the existing task
       if (!editingDoc && !isUploadComplete && activeUploadTask) {
-        console.log("⏳ Waiting for background upload to finalize...")
+        console.log("⏳ Awaiting background upload completion...")
         await activeUploadTask;
         const snapshot = activeUploadTask.snapshot;
         finalUrl = await getDownloadURL(snapshot.ref);
@@ -185,6 +185,7 @@ export default function DocumentsPage() {
         ? updateRecord(db, collections.DOCUMENTS, editingDoc.id, data)
         : createRecord(db, collections.DOCUMENTS, data, user.uid);
 
+      console.log("📝 Firestore sync started...")
       toast({ title: editingDoc ? 'Changes Saved' : 'Document Secured' })
       setIsDialogOpen(false)
       reset();
@@ -200,7 +201,7 @@ export default function DocumentsPage() {
       })
 
     } catch (err: any) {
-      console.error("❌ Save failed:", err)
+      console.error("❌ Save pipeline failed:", err)
       toast({ variant: 'destructive', title: 'Action Failed', description: err.message });
     } finally {
       setLoading(false)
@@ -232,7 +233,7 @@ export default function DocumentsPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight text-foreground">📁 Document Vault</h1>
-          <p className="text-muted-foreground">Ultra-fast secure storage for your critical professional records.</p>
+          <p className="text-muted-foreground">High-speed secure storage for your critical professional records.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if (!o) reset(); }}>
           <DialogTrigger asChild>
@@ -247,7 +248,7 @@ export default function DocumentsPage() {
                 {editingDoc ? 'Edit Document' : 'Quick Upload'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Direct cloud upload (Max 500MB). Records are owner-private.
+                Direct cloud sync (Max 500MB). Records are owner-private.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveDoc} className="space-y-6 pt-4">
@@ -292,7 +293,7 @@ export default function DocumentsPage() {
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-center">
                       <Upload className="text-gray-500 h-12 w-12 mb-2" />
-                      <span className="text-xs text-gray-500">Select File to Start Instant Sync</span>
+                      <span className="text-xs text-gray-500">Select File to Start Instant Upload</span>
                     </div>
                   )}
                 </div>
@@ -301,7 +302,7 @@ export default function DocumentsPage() {
               {(activeUploadTask || isUploadComplete) && !editingDoc && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                    <span>{isUploadComplete ? 'Secure' : 'Uploading...'}</span>
+                    <span>{isUploadComplete ? 'Upload Complete' : 'Transferring...'}</span>
                     <span>{Math.round(uploadProgress)}%</span>
                   </div>
                   <Progress value={uploadProgress} className="h-1 bg-gray-800" />

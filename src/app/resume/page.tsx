@@ -12,7 +12,6 @@ import {
   Plus, 
   Trash2, 
   Upload,
-  CheckCircle2,
   Link as LinkIcon,
   Globe,
   ExternalLink,
@@ -84,6 +83,7 @@ export default function ResumePage() {
       return true
     })
     setSelectedFiles(validFiles)
+    console.log(`📂 Selected ${validFiles.length} files for instant upload preparation.`)
   }
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -99,6 +99,8 @@ export default function ResumePage() {
       if (type === 'file') {
         if (selectedFiles.length === 0) { setLoading(false); return; }
         
+        console.log("🚀 Starting Bulk Upload to Resume Vault")
+        
         for (const file of selectedFiles) {
           const fileId = `${Date.now()}_${file.name}`
           const path = `resumes/${user.uid}/${fileId}`
@@ -112,14 +114,14 @@ export default function ResumePage() {
               setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
             },
             (error) => {
-              console.error(`Upload failed for ${file.name}:`, error)
+              console.error(`❌ Upload failed for ${file.name}:`, error)
             },
             async () => {
               const fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
               const data: any = {
                 name: selectedFiles.length > 1 ? `${baseName} - ${file.name}` : baseName,
                 type: 'file',
-                docType: docType, // Added document sub-type (Resume/CV)
+                docType: docType,
                 visibility,
                 isPublic: visibility === 'Public',
                 ownerId: user.uid,
@@ -164,7 +166,7 @@ export default function ResumePage() {
       setSelectedFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      console.error('Vault process failed:', err)
+      console.error('❌ Vault process failed:', err)
     } finally {
       setLoading(false)
     }
@@ -187,7 +189,7 @@ export default function ResumePage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">📜 Resume & Links Vault</h1>
-          <p className="text-muted-foreground">Manage your Resumes & CV'S and Links in a secure environment.</p>
+          <p className="text-muted-foreground">High-speed secure storage for your Resumes, CV'S and Professional Links.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => setIsDialogOpen(o)}>
           <DialogTrigger asChild>
@@ -201,7 +203,7 @@ export default function ResumePage() {
                 {activeTab === 'PDF' ? 'Upload Resumes & CV\'S' : 'Add Link'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Securely store files up to 500MB.
+                Securely store files up to 500MB with instant cloud sync.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSave} className="space-y-6">
