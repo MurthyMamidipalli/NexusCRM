@@ -45,7 +45,7 @@ const navItems = [
   { label: 'Documents', icon: Database, href: '/documents', emoji: '📁' },
   { label: 'Portfolios & Links', icon: LinkIcon, href: '/links', emoji: '🔗' },
   { label: 'Career Timeline', icon: Milestone, href: '/timeline', emoji: '📈' },
-  { label: 'Contact Me', icon: Phone, href: '/customers', emoji: '📞' },
+  { label: 'Contacts', icon: Phone, href: '/customers', emoji: '📞' },
   { label: 'Public Share', icon: Globe, href: '/share', emoji: '🌐' },
 ]
 
