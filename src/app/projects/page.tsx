@@ -42,6 +42,7 @@ export default function ProjectsPage() {
   const [editingProj, setEditingProj] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [activeTab, setActiveTab] = useState<string>('Project')
 
   useEffect(() => {
     setMounted(true)
@@ -64,7 +65,7 @@ export default function ProjectsPage() {
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
-    const category = formData.get('category') as string || 'Project'
+    const category = formData.get('category') as string || activeTab
     
     const data = {
       title: formData.get('title') as string,
@@ -139,13 +140,13 @@ export default function ProjectsPage() {
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90" onClick={() => setEditingProj(null)}>
               <Plus className="h-4 w-4" />
-              Add Project
+              Add {activeTab}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[700px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden">
             <DialogHeader className="p-8 pb-0">
               <DialogTitle className="text-2xl font-bold font-headline">
-                {editingProj ? 'Edit Project' : 'Add Project'}
+                {editingProj ? `Edit ${activeTab}` : `Add ${activeTab}`}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
                 Provide details, upload visuals, or attach technical documentation.
@@ -158,7 +159,7 @@ export default function ProjectsPage() {
                   id="title" 
                   name="title" 
                   defaultValue={editingProj?.title || ''}
-                  placeholder="e.g. My Awesome project" 
+                  placeholder={`e.g. My Awesome ${activeTab.toLowerCase()}`} 
                   required 
                   className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"
                 />
@@ -217,7 +218,7 @@ export default function ProjectsPage() {
               </div>
 
               {/* Hidden field for categorization logic */}
-              <input type="hidden" name="category" value={editingProj?.category || "Project"} />
+              <input type="hidden" name="category" value={editingProj?.category || activeTab} />
 
               <DialogFooter className="pt-4 gap-3">
                 <Button 
@@ -233,7 +234,7 @@ export default function ProjectsPage() {
                   disabled={loading} 
                   className="bg-[#7299f0] hover:bg-[#6387d9] text-white font-bold h-12 px-8 rounded-xl"
                 >
-                  Add to Vault
+                  {editingProj ? 'Update Item' : 'Add to Vault'}
                 </Button>
               </DialogFooter>
             </form>
@@ -241,7 +242,7 @@ export default function ProjectsPage() {
         </Dialog>
       </div>
 
-      <Tabs defaultValue="Project" className="space-y-8">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
         <TabsList className="bg-card/30 p-1 flex h-auto w-fit rounded-2xl border border-border/50">
           <TabsTrigger 
             value="Project" 
