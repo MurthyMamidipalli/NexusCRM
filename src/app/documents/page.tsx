@@ -23,9 +23,10 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Progress } from '@/components/ui/progress'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -57,6 +58,7 @@ export default function DocumentsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingDoc, setEditingDoc] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [previewDoc, setPreviewDoc] = useState<{ url: string; title: string } | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -114,6 +116,7 @@ export default function DocumentsPage() {
     e.preventDefault()
     if (!user || !db || !storage) return
     setLoading(true)
+    setUploadProgress(0)
 
     const formData = new FormData(e.currentTarget)
     const title = formData.get('title') as string
@@ -127,19 +130,30 @@ export default function DocumentsPage() {
       let fileSize = editingDoc?.fileSize || 0
 
       if (selectedFile) {
-        // Path: documents/{uid}/{filename}
         const storagePath = `documents/${user.uid}/${Date.now()}_${selectedFile.name}`
         const storageRef = ref(storage, storagePath)
         
-        console.log("Upload started for:", selectedFile.name);
-        const uploadResult = await uploadBytes(storageRef, selectedFile)
-        console.log("Upload successful");
+        const uploadTask = uploadBytesResumable(storageRef, selectedFile)
+
+        await new Promise((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+              setUploadProgress(progress)
+            },
+            (error) => {
+              console.error("Storage upload failed:", error);
+              reject(error);
+            },
+            () => resolve(null)
+          )
+        })
         
-        fileUrl = await getDownloadURL(uploadResult.ref)
+        fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
         filePath = storagePath
         fileType = selectedFile.type
         fileSize = selectedFile.size
-        console.log("Download URL generated");
       }
 
       const data = {
@@ -154,6 +168,7 @@ export default function DocumentsPage() {
         ownerId: user.uid
       }
 
+      // NON-BLOCKING: Save to Firestore instantly in background
       const mutation = editingDoc
         ? updateRecord(db, collections.DOCUMENTS, editingDoc.id, data)
         : createRecord(db, collections.DOCUMENTS, data, user.uid);
@@ -165,7 +180,7 @@ export default function DocumentsPage() {
       mutation.catch(async (err: any) => {
         const permissionError = new FirestorePermissionError({
           path: editingDoc ? `${collections.DOCUMENTS}/${editingDoc.id}` : collections.DOCUMENTS,
-          operation: editingDoc ? 'update' : 'create',
+          operation: 'write',
           requestResourceData: data,
           originalError: err
         } satisfies SecurityRuleContext);
@@ -173,8 +188,7 @@ export default function DocumentsPage() {
       })
 
     } catch (err: any) {
-      console.error("Storage/Sync failure:", err);
-      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
+      toast({ variant: 'destructive', title: 'Action Failed', description: err.message });
     } finally {
       setLoading(false)
     }
@@ -197,14 +211,15 @@ export default function DocumentsPage() {
   const reset = () => { 
     setEditingDoc(null); 
     setSelectedFile(null); 
+    setUploadProgress(0);
   }
 
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-headline text-4xl font-bold tracking-tight">🔐 Secure Vault</h1>
-          <p className="text-muted-foreground">Private storage for personal identification and critical assets.</p>
+          <h1 className="font-headline text-4xl font-bold tracking-tight text-foreground">📁 Document Vault</h1>
+          <p className="text-muted-foreground">Secure primary storage for personal identification and critical records.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if (!o) reset(); }}>
           <DialogTrigger asChild>
@@ -225,7 +240,7 @@ export default function DocumentsPage() {
             <form onSubmit={handleSaveDoc} className="space-y-6 pt-4">
               <div className="space-y-2">
                 <Label>Document Title</Label>
-                <Input name="title" defaultValue={editingDoc?.title || editingDoc?.name} required className="bg-[#1c1c1f] border-none rounded-xl h-12" placeholder="e.g. My Aadhaar Card" />
+                <Input name="title" defaultValue={editingDoc?.title} required className="bg-[#1c1c1f] border-none rounded-xl h-12" placeholder="e.g. My Aadhaar Card" />
               </div>
               
               <div className="space-y-2">
@@ -260,7 +275,7 @@ export default function DocumentsPage() {
                 ) : editingDoc?.fileUrl ? (
                   <div className="flex flex-col items-center gap-2">
                     <FileText className="text-primary/50 h-12 w-12" />
-                    <span className="text-xs font-bold text-gray-500">Update Stored File?</span>
+                    <span className="text-xs font-bold text-gray-400">Update Stored File?</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-center">
@@ -269,6 +284,16 @@ export default function DocumentsPage() {
                   </div>
                 )}
               </div>
+
+              {loading && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
+                    <span>Securing & Storing...</span>
+                    <span>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-1 bg-gray-800" />
+                </div>
+              )}
 
               <DialogFooter>
                 <Button type="submit" disabled={loading} className="w-full h-12 bg-primary hover:bg-primary/90 font-bold rounded-xl border-none">
@@ -335,7 +360,7 @@ export default function DocumentsPage() {
                   </div>
                 </div>
                 <div className="p-5">
-                  <h4 className="font-bold truncate text-sm">{doc.title || doc.name}</h4>
+                  <h4 className="font-bold truncate text-sm">{doc.title}</h4>
                   <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-1">{doc.category}</p>
                   
                   {doc.description && (
@@ -350,11 +375,11 @@ export default function DocumentsPage() {
                     </span>
                     <div className="flex gap-2">
                       <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" asChild>
-                        <a href={doc.fileUrl} download={doc.title || 'document'} target="_blank" rel="noopener noreferrer">
+                        <a href={doc.fileUrl} download={doc.title} target="_blank" rel="noopener noreferrer">
                           <Download className="h-4 w-4" />
                         </a>
                       </Button>
-                      <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setPreviewDoc({ url: doc.fileUrl, title: doc.title || doc.name })}>
+                      <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setPreviewDoc({ url: doc.fileUrl, title: doc.title })}>
                         <Eye className="h-4 w-4" />
                       </Button>
                     </div>
