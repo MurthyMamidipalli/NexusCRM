@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,7 +17,8 @@ import {
   LayoutGrid,
   List,
   Pencil,
-  Eye
+  Eye,
+  CheckCircle2
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -43,6 +44,11 @@ export default function DocumentsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [mounted, setMounted] = useState(false)
 
+  // File Upload State
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [fileData, setFileData] = useState<string>('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -52,11 +58,34 @@ export default function DocumentsPage() {
     return query(
       collection(db, collections.DOCUMENTS), 
       where('ownerId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      orderBy('updatedAt', 'desc')
     )
   }, [db, user])
 
   const { data: documents, loading: docsLoading } = useCollection(docsQuery)
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const maxSize = 1024 * 1024 * 1024 // 1GB
+    if (file.size > maxSize) {
+      toast({
+        variant: 'destructive',
+        title: 'File Too Large',
+        description: 'Document must be less than 1GB.'
+      })
+      return
+    }
+
+    setSelectedFile(file)
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setFileData(reader.result as string)
+      toast({ title: 'File Attached', description: `${file.name} is ready.` })
+    }
+    reader.readAsDataURL(file)
+  }
 
   const handleSaveDoc = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -64,13 +93,30 @@ export default function DocumentsPage() {
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
+    
+    // Determine file size string
+    let displaySize = editingDoc?.size || 'N/A'
+    if (selectedFile) {
+      const sizeInMB = selectedFile.size / (1024 * 1024)
+      displaySize = sizeInMB < 1 ? `${(selectedFile.size / 1024).toFixed(1)} KB` : `${sizeInMB.toFixed(1)} MB`
+    }
+
     const data = {
       name: formData.get('name') as string,
       category: formData.get('category') as string,
-      size: (formData.get('size') as string) || '1.2 MB',
-      status: (formData.get('status') as string) || 'Active',
-      url: editingDoc?.url || '#'
+      status: formData.get('status') as string || 'Active',
+      size: displaySize,
+      fileUrl: fileData || editingDoc?.fileUrl || '',
+      fileName: selectedFile?.name || editingDoc?.fileName || '',
+      ownerId: user.uid
     }
+
+    // Optimistic UI close
+    setIsDialogOpen(false)
+    setEditingDoc(null)
+    setSelectedFile(null)
+    setFileData('')
+    setLoading(false)
 
     const mutation = editingDoc 
       ? updateRecord(db, collections.DOCUMENTS, editingDoc.id, data)
@@ -85,10 +131,7 @@ export default function DocumentsPage() {
       errorEmitter.emit('permission-error', permissionError);
     });
 
-    toast({ title: editingDoc ? 'Document Updated' : 'Document Added to Vault' })
-    setIsDialogOpen(false)
-    setEditingDoc(null)
-    setLoading(false)
+    toast({ title: editingDoc ? 'Metadata Updated' : 'Document Added to Vault' })
   }
 
   const handleDelete = (id: string) => {
@@ -142,7 +185,11 @@ export default function DocumentsPage() {
           </div>
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
-            if (!open) setEditingDoc(null);
+            if (!open) {
+              setEditingDoc(null);
+              setSelectedFile(null);
+              setFileData('');
+            }
           }}>
             <DialogTrigger asChild>
               <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingDoc(null)}>
@@ -150,15 +197,16 @@ export default function DocumentsPage() {
                 Upload File
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[550px]">
               <DialogHeader>
-                <DialogTitle>{editingDoc ? 'Edit Metadata' : 'Upload to Vault'}</DialogTitle>
+                <DialogTitle>{editingDoc ? 'Edit Document Metadata' : 'Upload to Vault'}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSaveDoc} className="space-y-4 py-4">
+              <form onSubmit={handleSaveDoc} className="space-y-6 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Document Name</Label>
                   <Input id="name" name="name" defaultValue={editingDoc?.name || ''} placeholder="e.g. Annual Contract 2024" required />
                 </div>
+                
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="category">Category</Label>
@@ -171,6 +219,7 @@ export default function DocumentsPage() {
                         <SelectItem value="Invoices">Invoices</SelectItem>
                         <SelectItem value="Quotations">Quotations</SelectItem>
                         <SelectItem value="Legal">Legal</SelectItem>
+                        <SelectItem value="Personal">Personal</SelectItem>
                         <SelectItem value="Other">Other</SelectItem>
                       </SelectContent>
                     </Select>
@@ -190,13 +239,37 @@ export default function DocumentsPage() {
                     </Select>
                   </div>
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="size">File Size (Mock)</Label>
-                  <Input id="size" name="size" defaultValue={editingDoc?.size || ''} placeholder="e.g. 2.5 MB" />
+                  <Label>Document Attachment (Max 1GB)</Label>
+                  <div 
+                    className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-10 transition-all hover:border-primary/50 cursor-pointer bg-muted/30"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                    {selectedFile || editingDoc?.fileName ? (
+                      <div className="flex flex-col items-center">
+                        <CheckCircle2 className="h-10 w-10 text-primary mb-2" />
+                        <span className="text-sm font-bold text-foreground line-clamp-1 text-center px-4">
+                          {selectedFile?.name || editingDoc?.fileName}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-2">
+                          Replace Attachment
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <Upload className="h-10 w-10 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
+                        <span className="text-sm font-semibold">Click to select file</span>
+                        <span className="text-[10px] text-muted-foreground mt-1">PDF, DOCX, ZIP, etc. up to 1GB</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
                 <DialogFooter>
-                  <Button type="submit" disabled={loading} className="w-full">
-                    Save Record
+                  <Button type="submit" disabled={loading} className="w-full h-12 text-md font-bold">
+                    {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : editingDoc ? 'Update Record' : 'Add to Vault'}
                   </Button>
                 </DialogFooter>
               </form>
@@ -212,7 +285,7 @@ export default function DocumentsPage() {
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Quick Filters</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1">
-              {['All Documents', 'Contracts', 'Invoices', 'Quotations', 'Legal'].map(cat => (
+              {['All Documents', 'Contracts', 'Invoices', 'Quotations', 'Legal', 'Personal'].map(cat => (
                 <Button 
                   key={cat} 
                   variant="ghost" 
@@ -233,7 +306,7 @@ export default function DocumentsPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input 
-              className="pl-10 bg-card/50 border-border/50" 
+              className="pl-10 bg-card/50 border-border/50 h-11" 
               placeholder="Search by filename or metadata..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -256,7 +329,7 @@ export default function DocumentsPage() {
                             <FileText className="h-8 w-8 text-primary" />
                           </div>
                           <div className="overflow-hidden">
-                            <h4 className="text-sm font-bold truncate max-w-[150px]">{doc.name}</h4>
+                            <h4 className="text-sm font-bold truncate max-w-[150px]" title={doc.name}>{doc.name}</h4>
                             <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">
                               {doc.size || 'N/A'} • {doc.category || 'General'}
                             </p>
@@ -290,11 +363,35 @@ export default function DocumentsPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-6">
-                        <Button variant="outline" size="sm" className="flex-1 text-[11px] gap-1.5 h-8 font-bold">
-                          <Download className="h-3 w-3" /> Download
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1 text-[11px] gap-1.5 h-8 font-bold disabled:opacity-30"
+                          disabled={!doc.fileUrl}
+                          asChild={!!doc.fileUrl}
+                        >
+                          {doc.fileUrl ? (
+                            <a href={doc.fileUrl} download={doc.fileName || 'document'}>
+                              <Download className="h-3 w-3" /> Download
+                            </a>
+                          ) : (
+                            <span><Download className="h-3 w-3" /> Download</span>
+                          )}
                         </Button>
-                        <Button variant="outline" size="sm" className="flex-1 text-[11px] gap-1.5 h-8 font-bold">
-                          <Eye className="h-3 w-3" /> View
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1 text-[11px] gap-1.5 h-8 font-bold disabled:opacity-30"
+                          disabled={!doc.fileUrl}
+                          asChild={!!doc.fileUrl}
+                        >
+                          {doc.fileUrl ? (
+                            <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                              <Eye className="h-3 w-3" /> View
+                            </a>
+                          ) : (
+                            <span><Eye className="h-3 w-3" /> View</span>
+                          )}
                         </Button>
                       </div>
                     </CardContent>
@@ -316,24 +413,36 @@ export default function DocumentsPage() {
                   <TableBody>
                     {filteredDocs.map((doc: any) => (
                       <TableRow key={doc.id} className="hover:bg-muted/30 transition-colors">
-                        <TableCell className="font-bold flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-primary" />
-                          {doc.name}
+                        <TableCell className="font-bold">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-primary" />
+                            <span className="truncate max-w-[200px]">{doc.name}</span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-xs font-semibold">{doc.category}</TableCell>
-                        <TableCell className="text-[10px] font-mono">{doc.size || '1.2 MB'}</TableCell>
+                        <TableCell className="text-[10px] font-mono">{doc.size || 'N/A'}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={cn(
                             "text-[10px] h-5",
-                            doc.status === 'Signed' ? "text-green-500" : "text-primary"
+                            doc.status === 'Signed' ? "text-green-500 border-green-500/20" : "text-primary"
                           )}>{doc.status}</Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => { setEditingDoc(doc); setIsDialogOpen(true); }}>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-primary" 
+                              onClick={() => { setEditingDoc(doc); setIsDialogOpen(true); }}
+                            >
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(doc.id)}>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-destructive" 
+                              onClick={() => handleDelete(doc.id)}
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
