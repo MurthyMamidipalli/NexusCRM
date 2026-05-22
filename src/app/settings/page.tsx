@@ -36,7 +36,7 @@ export default function SettingsPage() {
     if (!profileDoc) return EMPTY_SETTINGS;
     return {
       notifications: profileDoc.notifications ?? true,
-      isPublic: profileDoc.isPublic ?? profileDoc.publicProfile ?? false,
+      isPublic: profileDoc.isPublic ?? false,
       compactMode: profileDoc.compactMode ?? false,
     };
   }, [profileDoc]);
@@ -125,10 +125,7 @@ export default function SettingsPage() {
                 </div>
                 <Switch 
                   checked={settings.isPublic} 
-                  onCheckedChange={(val) => {
-                    updateField('isPublic', val);
-                    updateField('publicProfile' as any, val);
-                  }} 
+                  onCheckedChange={(val) => updateField('isPublic', val)} 
                 />
               </div>
 

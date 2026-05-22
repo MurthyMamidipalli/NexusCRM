@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { useFirestore, useDoc, useCollection } from '@/firebase'
 import { doc, collection, query, where, orderBy } from 'firebase/firestore'
@@ -28,8 +28,27 @@ export default function PublicProfilePage() {
   const { data: experience } = useCollection(expQuery)
   const { data: projects } = useCollection(projectsQuery)
 
+  // DIAGNOSTIC LOGS
+  useEffect(() => {
+    console.group('🔍 Public Profile Diagnostic');
+    console.log('Target UID:', uid);
+    if (profileLoading) {
+      console.log('Status: Loading profile document...');
+    } else {
+      console.log('Profile Document Found:', !!profile);
+      if (profile) {
+        console.log('Full Profile Data:', profile);
+        console.log('isPublic Value:', (profile as any).isPublic);
+      }
+      if (profileError) {
+        console.error('Firestore Error:', profileError);
+      }
+    }
+    console.groupEnd();
+  }, [profile, profileLoading, profileError, uid]);
+
   // Explicitly check isPublic field
-  const isVisible = profile && profile.isPublic === true;
+  const isVisible = profile && (profile as any).isPublic === true;
   const isPrivate = profile && !isVisible;
   const isPermissionDenied = !!profileError;
 
