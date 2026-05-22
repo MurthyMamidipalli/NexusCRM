@@ -15,7 +15,7 @@ import { usePersistentDocument } from '@/hooks/use-persistence'
 import { toast } from '@/hooks/use-toast'
 
 const EMPTY_VISIBILITY = {
-  publicProfile: false
+  isPublic: false
 };
 
 export default function PublicSharePage() {
@@ -31,7 +31,7 @@ export default function PublicSharePage() {
   const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
 
   const initialData = useMemo(() => ({
-    publicProfile: profileDoc?.publicProfile ?? false
+    isPublic: profileDoc?.isPublic ?? profileDoc?.publicProfile ?? false
   }), [profileDoc]);
 
   const { data: settings, updateField, save } = usePersistentDocument(
@@ -88,20 +88,21 @@ export default function PublicSharePage() {
                   <p className="text-sm text-muted-foreground">Make your professional hub accessible via a unique URL.</p>
                 </div>
                 <Switch 
-                  checked={settings.publicProfile} 
+                  checked={settings.isPublic} 
                   onCheckedChange={(val) => {
-                    updateField('publicProfile', val);
-                    // Explicitly trigger an instant cloud save for visibility changes
+                    updateField('isPublic', val);
+                    // Also update legacy field for compatibility
+                    updateField('publicProfile' as any, val);
                     save();
                     toast({ 
                       title: val ? 'Hub Published' : 'Hub Private', 
-                      description: val ? 'Your profile is now live in the cloud.' : 'Public access has been revoked.' 
+                      description: val ? 'Your profile is now live.' : 'Public access revoked.' 
                     });
                   }} 
                 />
               </div>
 
-              {settings.publicProfile ? (
+              {settings.isPublic ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
                   <div className="p-5 rounded-xl bg-primary/10 border border-primary/20 flex gap-4">
                     <CheckCircle2 className="h-6 w-6 text-primary shrink-0 mt-0.5" />
@@ -151,7 +152,7 @@ export default function PublicSharePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm opacity-90 leading-relaxed">
-              When public access is enabled, your **Bio**, **Skills**, **Experience**, and **Projects** will be visible to anyone with access to the link. **Contacts** and **Private Documents** always remain secure and encrypted.
+              When public access is enabled, your **Bio**, **Skills**, **Experience**, and **Projects** will be visible to anyone with access to the link. **Contacts** and **Private Documents** always remain secure.
             </CardContent>
           </Card>
         </div>

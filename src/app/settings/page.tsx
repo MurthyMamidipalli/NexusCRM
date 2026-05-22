@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useEffect, useState } from 'react'
@@ -15,7 +16,7 @@ import { toast } from '@/hooks/use-toast'
 
 const EMPTY_SETTINGS = {
   notifications: true,
-  publicProfile: false,
+  isPublic: false,
   compactMode: false
 };
 
@@ -35,7 +36,7 @@ export default function SettingsPage() {
     if (!profileDoc) return EMPTY_SETTINGS;
     return {
       notifications: profileDoc.notifications ?? true,
-      publicProfile: profileDoc.publicProfile ?? false,
+      isPublic: profileDoc.isPublic ?? profileDoc.publicProfile ?? false,
       compactMode: profileDoc.compactMode ?? false,
     };
   }, [profileDoc]);
@@ -50,7 +51,7 @@ export default function SettingsPage() {
     save()
     toast({
       title: "Settings Saved",
-      description: "Your preferences have been synchronized to the cloud."
+      description: "Your preferences have been synchronized."
     })
   }
 
@@ -73,13 +74,11 @@ export default function SettingsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          {/* Account Section */}
           <Card className="border-none bg-card/50 backdrop-blur-md shadow-xl">
             <CardHeader>
               <CardTitle className="font-headline text-xl flex items-center gap-2">
                 <User className="h-5 w-5 text-primary" /> Account Information
               </CardTitle>
-              <CardDescription>Managed via Firebase Authentication</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -95,7 +94,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Preferences Section */}
           <Card className="border-none bg-card/50 backdrop-blur-md shadow-xl">
             <CardHeader>
               <CardTitle className="font-headline text-xl flex items-center gap-2">
@@ -109,7 +107,7 @@ export default function SettingsPage() {
                     <Bell className="h-4 w-4 text-primary" />
                     <Label className="font-bold cursor-pointer">In-app Notifications</Label>
                   </div>
-                  <p className="text-xs text-muted-foreground">Receive alerts for deal updates and tasks.</p>
+                  <p className="text-xs text-muted-foreground">Receive alerts for updates and tasks.</p>
                 </div>
                 <Switch 
                   checked={settings.notifications} 
@@ -123,11 +121,14 @@ export default function SettingsPage() {
                     <Eye className="h-4 w-4 text-primary" />
                     <Label className="font-bold cursor-pointer">Public Visibility</Label>
                   </div>
-                  <p className="text-xs text-muted-foreground">Allow others to view your shared professional data.</p>
+                  <p className="text-xs text-muted-foreground">Allow others to view your shared professional hub.</p>
                 </div>
                 <Switch 
-                  checked={settings.publicProfile} 
-                  onCheckedChange={(val) => updateField('publicProfile', val)} 
+                  checked={settings.isPublic} 
+                  onCheckedChange={(val) => {
+                    updateField('isPublic', val);
+                    updateField('publicProfile' as any, val);
+                  }} 
                 />
               </div>
 
@@ -166,12 +167,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="opacity-80">Version</span>
-                <span className="font-mono">v1.2.4-stable</span>
-              </div>
-              <div className="pt-4 border-t border-white/10">
-                <p className="text-xs opacity-70 leading-relaxed italic">
-                  NexusCRM uses end-to-end encryption for all private documents and contact intelligence.
-                </p>
+                <span className="font-mono">v1.2.5-stable</span>
               </div>
             </CardContent>
           </Card>

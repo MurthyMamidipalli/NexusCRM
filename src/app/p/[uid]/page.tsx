@@ -24,11 +24,16 @@ export default function PublicProfilePage() {
   const projectsQuery = useMemo(() => uid ? query(collection(db, collections.PROJECTS), where('ownerId', '==', uid), orderBy('updatedAt', 'desc')) : null, [db, uid])
 
   const { data: profile, loading: profileLoading, error: profileError } = useDoc(profileRef)
-  const { data: skills, loading: skillsLoading } = useCollection(skillsQuery)
-  const { data: experience, loading: expLoading } = useCollection(expQuery)
-  const { data: projects, loading: projectsLoading } = useCollection(projectsQuery)
+  const { data: skills } = useCollection(skillsQuery)
+  const { data: experience } = useCollection(expQuery)
+  const { data: projects } = useCollection(projectsQuery)
 
-  // Only show full-screen loader while the profile metadata is still fetching
+  // Determine visibility state
+  // Check both isPublic (new) and publicProfile (legacy) for robustness
+  const isVisible = profile && (profile.isPublic === true || profile.publicProfile === true);
+  const isPrivate = !isVisible;
+  const isPermissionDenied = !!profileError;
+
   if (profileLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0a0a0c]">
@@ -36,10 +41,6 @@ export default function PublicProfilePage() {
       </div>
     )
   }
-
-  // Handle case where profile doesn't exist, visibility is turned off, or a permission error occurred
-  const isPrivate = !profile || !profile.publicProfile;
-  const isPermissionDenied = !!profileError;
 
   if (isPrivate || isPermissionDenied) {
     return (
@@ -57,22 +58,12 @@ export default function PublicProfilePage() {
         <p className="text-muted-foreground max-w-md text-lg leading-relaxed">
           {isPermissionDenied 
             ? "This professional hub is protected by security rules. If you are the owner, please check your Public Share settings."
-            : "This professional hub is currently private or does not exist. Please contact the owner for access."}
+            : "This professional hub is currently private. Please contact the owner for access."}
         </p>
         <div className="mt-8 flex flex-col gap-4">
           <Button variant="outline" className="border-white/10 text-white h-12 px-8 rounded-xl font-bold" asChild>
-            <a href="/login">Manage Your Own Intelligence</a>
+            <a href="/login">Manage Your Own Hub</a>
           </Button>
-          <div className="space-y-1 mt-4">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest max-w-xs mx-auto">
-              Security Notice: Public access requires "Public Profile Access" enabled in Share settings.
-            </p>
-            {isPermissionDenied && (
-              <p className="text-[9px] text-yellow-500/50 uppercase font-mono">
-                Code: PERMISSION_DENIED (Workstation Identity Required)
-              </p>
-            )}
-          </div>
         </div>
       </div>
     )
@@ -80,7 +71,6 @@ export default function PublicProfilePage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-white selection:bg-primary/30 pb-20">
-      {/* Hero Header */}
       <div className="h-64 bg-gradient-to-br from-primary/20 via-accent/10 to-background border-b border-white/5" />
       
       <div className="container mx-auto px-4 md:px-6 max-w-5xl">
@@ -106,7 +96,6 @@ export default function PublicProfilePage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 mt-16">
-          {/* Left Column: Bio & Skills */}
           <div className="space-y-12 lg:col-span-1">
             <section className="space-y-4">
               <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground border-b border-white/5 pb-2">About</h2>
@@ -131,7 +120,6 @@ export default function PublicProfilePage() {
             </section>
           </div>
 
-          {/* Right Column: Experience & Projects */}
           <div className="lg:col-span-2 space-y-16">
             <section className="space-y-8">
               <div className="flex items-center gap-3 text-primary">
@@ -205,13 +193,12 @@ export default function PublicProfilePage() {
         </div>
       </div>
 
-      {/* Public Footer */}
       <footer className="container mx-auto px-6 max-w-5xl mt-24 pt-12 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
         <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.2em]">
           &copy; {new Date().getFullYear()} {profile.fullName || 'Nexus Hub'} | Powered by NexusCRM
         </p>
         <Button size="sm" variant="ghost" className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground hover:text-white" asChild>
-          <a href="/login">Manage Your Intelligence</a>
+          <a href="/login">Manage Your Hub</a>
         </Button>
       </footer>
     </div>

@@ -19,7 +19,7 @@
         "address": { "type": "string" },
         "avatarUrl": { "type": "string" },
         "ownerId": { "type": "string" },
-        "publicProfile": { "type": "boolean", "description": "CRITICAL: Determines if this profile is publicly accessible to unauthenticated visitors." },
+        "isPublic": { "type": "boolean", "description": "CRITICAL: Determines if this profile is publicly accessible to unauthenticated visitors." },
         "currentJob": {
           "type": "object",
           "properties": {
@@ -162,7 +162,7 @@
     "providers": ["password", "google"]
   },
   "firestore": {
-    "/profiles/{uid}": { "schema": "#/entities/Profile", "description": "User profile data. READ access should be public if publicProfile is true." },
+    "/profiles/{uid}": { "schema": "#/entities/Profile", "description": "User profile data. READ access should be public if isPublic is true." },
     "/skills/{skillId}": { "schema": "#/entities/Skill", "description": "User skills. READ access is public for any visitor viewing a public profile hub." },
     "/experience/{expId}": { "schema": "#/entities/Experience", "description": "Work history. READ access is public for any visitor viewing a public profile hub." },
     "/education/{eduId}": { "schema": "#/entities/Education", "description": "Education history. READ access is public for any visitor viewing a public profile hub." },
