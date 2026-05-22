@@ -1,11 +1,12 @@
+
 "use client"
 
 import React, { useMemo, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useFirestore, useDoc, useCollection } from '@/firebase'
-import { doc, collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore'
+import { doc, collection, query, where, orderBy } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
-import { Loader2, User, Mail, MapPin, Globe, Briefcase, Rocket, Lock, ShieldAlert } from 'lucide-react'
+import { Loader2, User, Mail, MapPin, Globe, Briefcase, Rocket, Lock } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -16,14 +17,14 @@ export default function PublicProfilePage() {
   const uid = params.uid as string
   const db = useFirestore()
   
-  // 1. Primary Profile Query: Direct reference using the URL UID (Auth UID)
+  // 1. Primary Profile Query: Silent lookup to avoid permission toasts for visitors
   const profileRef = useMemo(() => uid && db ? doc(db, collections.PROFILES, uid) : null, [db, uid])
-  const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
+  const { data: profileDoc, loading: profileLoading } = useDoc(profileRef, { silent: true })
 
   // Determine visibility safely
   const isVisible = profileDoc && profileDoc.isPublic === true
 
-  // 2. Sub-resource Queries: ONLY run these if the profile is confirmed as PUBLIC to avoid permission errors
+  // 2. Sub-resource Queries: ONLY run these if the profile is confirmed as PUBLIC
   const skillsQuery = useMemo(() => 
     isVisible && uid && db ? query(collection(db, collections.SKILLS), where('ownerId', '==', uid), orderBy('name', 'asc')) : null, 
     [db, uid, isVisible]
@@ -37,23 +38,22 @@ export default function PublicProfilePage() {
     [db, uid, isVisible]
   )
 
-  const { data: skills } = useCollection(skillsQuery)
-  const { data: experience } = useCollection(expQuery)
-  const { data: projects } = useCollection(projectsQuery)
+  const { data: skills } = useCollection(skillsQuery, { silent: true })
+  const { data: experience } = useCollection(expQuery, { silent: true })
+  const { data: projects } = useCollection(projectsQuery, { silent: true })
 
-  // Loading State
   if (profileLoading) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0c]">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="mt-4 text-xs text-muted-foreground uppercase tracking-widest font-bold animate-pulse">
-          Syncing Professional Intelligence...
+          Connecting to Nexus Hub...
         </p>
       </div>
     )
   }
 
-  // Handle Privacy / Denied states
+  // Handle Privacy state
   if (!isVisible) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0c] text-white p-6 text-center">
@@ -64,7 +64,7 @@ export default function PublicProfilePage() {
         <p className="text-muted-foreground max-w-md text-lg leading-relaxed">
           This professional hub is currently private. If this is your profile, enable 'Public Profile Access' in your dashboard to share it.
         </p>
-        <div className="mt-8 flex gap-4">
+        <div className="mt-8">
           <Button variant="outline" className="border-white/10 text-white h-12 px-8 rounded-xl font-bold" asChild>
             <a href="/login">Sign In to Dashboard</a>
           </Button>
