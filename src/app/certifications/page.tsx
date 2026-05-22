@@ -44,6 +44,8 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function CertificationsPage() {
   const db = useFirestore()
@@ -53,7 +55,8 @@ export default function CertificationsPage() {
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   
-  // File upload state
+  // Form State
+  const [category, setCategory] = useState<string>("Course Certificate")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [documentData, setDocumentData] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -77,7 +80,7 @@ export default function CertificationsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // 1GB check (1024 * 1024 * 1024 bytes)
+    // 1GB check (1024 * 1024 * 1024 bytes) for UI requirement
     const maxSize = 1024 * 1024 * 1024
     if (file.size > maxSize) {
       toast({
@@ -92,61 +95,86 @@ export default function CertificationsPage() {
     const reader = new FileReader()
     reader.onloadend = () => {
       setDocumentData(reader.result as string)
-      toast({ title: 'File Attached', description: `${file.name} is ready for upload.` })
+      toast({ title: 'File Attached', description: `${file.name} is ready.` })
     }
     reader.readAsDataURL(file)
   }
 
-  const handleSaveCert = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveCert = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user || !db) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
-    const data = {
-      title: formData.get('title'),
-      issuer: formData.get('issuer'),
-      date: formData.get('date'),
-      credentialId: formData.get('credentialId'),
-      category: formData.get('category') || 'Course Certificate',
-      externalLink: formData.get('externalLink'),
-      documentUrl: documentData || editingCert?.documentUrl || '',
-      fileName: selectedFile?.name || editingCert?.fileName || ''
-    }
-
-    try {
-      if (editingCert) {
-        await updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
-        toast({ title: 'Record Updated' })
-      } else {
-        await createRecord(db, collections.CERTIFICATIONS, data, user.uid)
-        toast({ title: 'Record Added to Vault' })
-      }
-      setIsDialogOpen(false)
-      setEditingCert(null)
-      setSelectedFile(null)
-      setDocumentData('')
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Save Error', description: error.message })
-    } finally {
+    
+    // Firestore has a 1MB document limit. Base64 encoding adds overhead (~33%).
+    // We check if the payload is safe for this prototype.
+    if (documentData && documentData.length > 1000000) {
+      toast({
+        variant: 'destructive',
+        title: 'Prototype Limit',
+        description: 'Individual document string exceeds 1MB Firestore limit. Please use a smaller file for this demo.'
+      })
       setLoading(false)
+      return
     }
+
+    const data = {
+      title: formData.get('title') as string,
+      issuer: formData.get('issuer') as string,
+      date: formData.get('date') as string,
+      credentialId: formData.get('credentialId') as string,
+      category: category,
+      externalLink: formData.get('externalLink') as string,
+      documentUrl: documentData || editingCert?.documentUrl || '',
+      fileName: selectedFile?.name || editingCert?.fileName || '',
+      ownerId: user.uid
+    }
+
+    const mutation = editingCert 
+      ? updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
+      : createRecord(db, collections.CERTIFICATIONS, data, user.uid)
+
+    mutation
+      .then(() => {
+        toast({ title: editingCert ? 'Record Updated' : 'Record Added to Vault' })
+        setIsDialogOpen(false)
+        setEditingCert(null)
+        setSelectedFile(null)
+        setDocumentData('')
+      })
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
+          operation: editingCert ? 'update' : 'create',
+          requestResourceData: data,
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!db) return
-    try {
-      await deleteRecord(db, collections.CERTIFICATIONS, id)
-      toast({ title: 'Record Removed' })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Delete Error', description: error.message })
-    }
+    deleteRecord(db, collections.CERTIFICATIONS, id)
+      .then(() => {
+        toast({ title: 'Record Removed' })
+      })
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.CERTIFICATIONS}/${id}`,
+          operation: 'delete',
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
   }
 
-  const filterCerts = (category: string | null) => {
+  const filterCerts = (cat: string | null) => {
     if (!certifications) return []
-    if (!category) return certifications
-    return certifications.filter((c: any) => c.category === category)
+    if (!cat) return certifications
+    return certifications.filter((c: any) => c.category === cat)
   }
 
   if (!mounted || certLoading) {
@@ -172,6 +200,7 @@ export default function CertificationsPage() {
             setEditingCert(null);
             setSelectedFile(null);
             setDocumentData('');
+            setCategory("Course Certificate");
           }
         }}>
           <DialogTrigger asChild>
@@ -193,7 +222,10 @@ export default function CertificationsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="category">Record Type</Label>
-                  <Select name="category" defaultValue={editingCert?.category || "Course Certificate"}>
+                  <Select 
+                    defaultValue={editingCert?.category || "Course Certificate"}
+                    onValueChange={setCategory}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select Category" />
                     </SelectTrigger>
@@ -244,7 +276,7 @@ export default function CertificationsPage() {
                   {selectedFile || editingCert?.fileName ? (
                     <div className="flex flex-col items-center">
                       <CheckCircle2 className="h-8 w-8 text-primary mb-2" />
-                      <span className="text-sm font-bold text-foreground line-clamp-1">
+                      <span className="text-sm font-bold text-foreground line-clamp-1 text-center px-2">
                         {selectedFile?.name || editingCert?.fileName}
                       </span>
                       <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-1">
@@ -255,7 +287,7 @@ export default function CertificationsPage() {
                     <div className="flex flex-col items-center">
                       <Upload className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
                       <span className="text-sm font-semibold">Click to upload document</span>
-                      <span className="text-[10px] text-muted-foreground mt-1">PDF, JPG, PNG up to 1GB</span>
+                      <span className="text-[10px] text-muted-foreground mt-1 text-center">PDF, JPG, PNG up to 1GB</span>
                     </div>
                   )}
                 </div>
@@ -264,7 +296,7 @@ export default function CertificationsPage() {
               <DialogFooter>
                 <Button type="submit" disabled={loading} className="w-full">
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save to Vault
+                  Save Record
                 </Button>
               </DialogFooter>
             </form>
@@ -281,16 +313,16 @@ export default function CertificationsPage() {
         </TabsList>
 
         <TabsContent value="all" className="mt-0">
-          <CertGrid items={filterCerts(null)} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); }} />
+          <CertGrid items={filterCerts(null)} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
         </TabsContent>
         <TabsContent value="study" className="mt-0">
-          <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); }} />
+          <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
         </TabsContent>
         <TabsContent value="course" className="mt-0">
-          <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); }} />
+          <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
         </TabsContent>
         <TabsContent value="grades" className="mt-0">
-          <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); }} />
+          <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
         </TabsContent>
       </Tabs>
     </CRMLayout>
