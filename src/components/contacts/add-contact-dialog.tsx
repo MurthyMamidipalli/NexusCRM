@@ -34,7 +34,7 @@ export function AddContactDialog({ open, onOpenChange, contact }: AddContactDial
     }
   }, [contact, open])
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user || !db) return
 
@@ -52,15 +52,20 @@ export function AddContactDialog({ open, onOpenChange, contact }: AddContactDial
 
     const mutation = contact 
       ? updateRecord(db, collections.CONTACTS, contact.id, data)
-      : createRecord(db, collections.CONTACTS, data)
+      : createRecord(db, collections.CONTACTS, data, user.uid)
 
+    // Snappy UI: Show toast and close immediately
+    toast({ 
+      title: contact ? 'Contact Updated' : 'Contact Created', 
+      description: `${data.name} has been synchronized to your network.` 
+    })
+    
+    // Close dialog and reset local loading state immediately
+    onOpenChange(false)
+    setLoading(false)
+
+    // Handle background synchronization
     mutation
-      .then(() => {
-        toast({ 
-          title: contact ? 'Contact Updated' : 'Contact Created', 
-          description: `${data.name} has been synchronized to your network.` 
-        })
-      })
       .catch(async (error: any) => {
         const permissionError = new FirestorePermissionError({
           path: contact ? `${collections.CONTACTS}/${contact.id}` : collections.CONTACTS,
@@ -68,10 +73,6 @@ export function AddContactDialog({ open, onOpenChange, contact }: AddContactDial
           requestResourceData: data,
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
-      })
-      .finally(() => {
-        setLoading(false)
-        onOpenChange(false)
       })
   }
 
