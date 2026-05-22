@@ -126,6 +126,7 @@ export default function PrivateDocumentsPage() {
       }
       setSelectedFile(file)
       if (!docName) setDocName(file.name.split('.')[0])
+      console.log('File selected:', file.name, 'Size:', file.size, 'Type:', file.type)
     }
   }
 
@@ -138,51 +139,79 @@ export default function PrivateDocumentsPage() {
     }
 
     setLoading(true)
+    console.log('--- STARTING SECURE UPLOAD/SAVE FLOW ---')
 
     try {
       let fileUrl = editingDoc?.fileUrl || ''
       let filePath = editingDoc?.filePath || ''
+      let fileType = editingDoc?.fileType || ''
+      let fileSize = editingDoc?.fileSize || 0
 
       if (selectedFile) {
-        const path = `private_vault/${user.uid}/${Date.now()}_${selectedFile.name}`
-        const storageRef = ref(storage, path)
+        // Updated Storage Path: privateDocuments/{uid}/{filename}
+        const storagePath = `privateDocuments/${user.uid}/${Date.now()}_${selectedFile.name}`
+        console.log('Upload started. Path:', storagePath)
+        
+        const storageRef = ref(storage, storagePath)
         const uploadResult = await uploadBytes(storageRef, selectedFile)
+        console.log('Upload successful. Result metadata:', uploadResult.metadata)
+
         fileUrl = await getDownloadURL(uploadResult.ref)
-        filePath = path
+        console.log('Download URL generated:', fileUrl)
+
+        filePath = storagePath
+        fileType = selectedFile.type
+        fileSize = selectedFile.size
       }
 
       const data = {
+        ownerId: user.uid,
         documentName: docName,
         category: selectedCategory,
         description: description,
+        fileUrl: fileUrl,
+        filePath: filePath,
+        fileType: fileType,
+        fileSize: fileSize,
         issueDate: issueDate,
         expiryDate: expiryDate,
         tags: [selectedTag],
-        fileUrl: fileUrl,
-        filePath: filePath,
-        ownerId: user.uid
       }
 
       if (editingDoc) {
+        console.log('Updating Firestore document:', editingDoc.id)
         await updateRecord(db, collections.PRIVATE_DOCUMENTS, editingDoc.id, data)
+        console.log('Firestore document updated successfully.')
         toast({ title: 'Metadata Updated' })
       } else {
+        console.log('Creating new Firestore document in collection: privateDocuments')
         await createRecord(db, collections.PRIVATE_DOCUMENTS, data, user.uid)
+        console.log('Firestore document created successfully.')
         toast({ title: 'Document Secured' })
       }
       
       setIsDialogOpen(false)
       resetForm()
     } catch (err: any) {
+      console.error('FATAL ERROR in Private Documents Flow:', err)
+      
       const permissionError = new FirestorePermissionError({
         path: editingDoc ? `${collections.PRIVATE_DOCUMENTS}/${editingDoc.id}` : collections.PRIVATE_DOCUMENTS,
         operation: editingDoc ? 'update' : 'create',
         requestResourceData: { documentName: docName, category: selectedCategory },
         originalError: err
       } satisfies SecurityRuleContext);
+      
       errorEmitter.emit('permission-error', permissionError);
+      
+      toast({ 
+        variant: 'destructive', 
+        title: 'Vault Error', 
+        description: err.message || 'Failed to complete the secure upload. Please check logs.' 
+      })
     } finally {
       setLoading(false)
+      console.log('--- ENDING SECURE UPLOAD/SAVE FLOW ---')
     }
   }
 
@@ -214,13 +243,16 @@ export default function PrivateDocumentsPage() {
     if (!window.confirm('Permanently delete this document from the secure vault?')) return
     
     try {
+      console.log('Deleting document:', doc.id, 'at path:', doc.filePath)
       if (doc.filePath) {
         const storageRef = ref(storage, doc.filePath)
-        await deleteObject(storageRef).catch(console.warn)
+        await deleteObject(storageRef).catch(e => console.warn('Storage deletion failed or file already gone:', e))
       }
       await deleteRecord(db, collections.PRIVATE_DOCUMENTS, doc.id)
+      console.log('Document deleted from Firestore.')
       toast({ title: 'Document Removed' })
     } catch (err: any) {
+      console.error('Deletion error:', err)
       const permissionError = new FirestorePermissionError({
         path: `${collections.PRIVATE_DOCUMENTS}/${doc.id}`,
         operation: 'delete',
@@ -317,11 +349,13 @@ export default function PrivateDocumentsPage() {
                   <div className="flex flex-col items-center gap-2 text-center">
                     <ShieldCheck className="text-primary h-12 w-12" />
                     <span className="text-sm font-bold text-primary truncate max-w-[300px]">{selectedFile.name}</span>
+                    <span className="text-[10px] text-gray-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</span>
                   </div>
                 ) : editingDoc?.fileUrl ? (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <FileText className="text-primary/40 h-12 w-12" />
                     <span className="text-xs text-gray-500">Update file? (Optional)</span>
+                    <span className="text-[10px] text-gray-600">Current file stored in vault</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-center">
@@ -334,7 +368,7 @@ export default function PrivateDocumentsPage() {
               <DialogFooter className="pb-4">
                 <Button type="submit" disabled={loading || (!editingDoc && !selectedFile) || !docName} className="w-full h-12 bg-primary hover:bg-primary/90 font-bold rounded-xl border-none">
                   {loading ? <RefreshCw className="animate-spin h-4 w-4 mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-                  {loading ? (editingDoc ? 'Updating...' : 'Encrypting & Storing...') : (editingDoc ? 'Save Changes' : 'Securely Upload Document')}
+                  {loading ? (editingDoc ? 'Updating Metadata...' : 'Encrypting & Uploading...') : (editingDoc ? 'Save Changes' : 'Securely Upload Document')}
                 </Button>
               </DialogFooter>
             </form>
