@@ -1,11 +1,10 @@
-
 "use client"
 
 import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, GraduationCap, Loader2, Trash2, Calendar, BookOpen, Award, Pencil, AlertCircle } from 'lucide-react'
+import { Plus, GraduationCap, Loader2, Trash2, Calendar, BookOpen, Award, Pencil, AlertCircle, Fingerprint } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
@@ -55,6 +54,7 @@ export default function EducationPage() {
       institution: formData.get('institution') as string,
       degree: formData.get('degree') as string,
       fieldOfStudy: formData.get('fieldOfStudy') as string,
+      idNumber: formData.get('idNumber') as string,
       startDate: formData.get('startDate') as string,
       endDate: formData.get('endDate') as string,
       cgpa: formData.get('cgpa') as string,
@@ -158,6 +158,14 @@ export default function EducationPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="idNumber">ID Number / Enrollment No.</Label>
+                <div className="relative">
+                  <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="idNumber" name="idNumber" className="pl-10" defaultValue={editingEdu?.idNumber || ''} placeholder="e.g. STU-123456" />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="startDate">Start Date</Label>
@@ -240,6 +248,11 @@ export default function EducationPage() {
                           <Calendar className="h-3.5 w-3.5" />
                           <span>{edu.startDate} — {edu.endDate || 'Present'}</span>
                         </div>
+                        {edu.idNumber && (
+                          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted text-[10px] font-bold uppercase tracking-widest">
+                            <Fingerprint className="h-3 w-3" /> ID: {edu.idNumber}
+                          </div>
+                        )}
                         {(edu.cgpa || edu.percentage) && (
                           <div className="flex items-center gap-4">
                             {edu.cgpa && (

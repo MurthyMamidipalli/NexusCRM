@@ -66,6 +66,7 @@
         "degree": { "type": "string" },
         "institution": { "type": "string" },
         "fieldOfStudy": { "type": "string" },
+        "idNumber": { "type": "string", "description": "Student ID or enrollment number." },
         "startDate": { "type": "string", "format": "date" },
         "endDate": { "type": "string", "format": "date" },
         "cgpa": { "type": "string" },
