@@ -6,7 +6,7 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Milestone, Briefcase, GraduationCap, Loader2 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -20,8 +20,7 @@ export default function TimelinePage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.EXPERIENCE), 
-      where('ownerId', '==', user.uid),
-      orderBy('startDate', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
@@ -29,8 +28,7 @@ export default function TimelinePage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.EDUCATION), 
-      where('ownerId', '==', user.uid),
-      orderBy('startDate', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
   

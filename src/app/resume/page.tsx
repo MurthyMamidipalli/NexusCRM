@@ -21,7 +21,7 @@ import {
   X
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -56,12 +56,21 @@ export default function ResumePage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.RESUMES), 
-      where('ownerId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: resumes, loading: resumeLoading } = useCollection(resumeQuery)
+  const { data: rawResumes, loading: resumeLoading } = useCollection(resumeQuery)
+
+  // In-memory sorting for index resilience
+  const resumes = useMemo(() => {
+    if (!rawResumes) return []
+    return [...rawResumes].sort((a: any, b: any) => {
+      const timeA = a.createdAt?.seconds || 0;
+      const timeB = b.createdAt?.seconds || 0;
+      return timeB - timeA;
+    })
+  }, [rawResumes])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -264,7 +273,7 @@ export default function ResumePage() {
 
         <TabsContent value="PDF" className="mt-0">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredItems('file').map((resume: any) => (
+            {resumes.filter((r: any) => r.type === 'file').map((resume: any) => (
               <Card key={resume.id} className="relative group border-none bg-[#0f1115] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden">
                 <CardContent className="p-8">
                   <button 
@@ -304,7 +313,7 @@ export default function ResumePage() {
 
         <TabsContent value="Link" className="mt-0">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredItems('link').map((resume: any) => (
+            {resumes.filter((r: any) => r.type === 'link').map((resume: any) => (
               <Card key={resume.id} className="relative group border-none bg-[#0f1115] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden">
                 <CardContent className="p-8">
                   <button 

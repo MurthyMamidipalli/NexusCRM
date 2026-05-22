@@ -21,7 +21,7 @@ import {
   CheckCircle2
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { 
@@ -68,12 +68,21 @@ export default function CertificationsPage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.CERTIFICATIONS), 
-      where('ownerId', '==', user.uid),
-      orderBy('date', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: certifications, loading: certLoading } = useCollection(certQuery)
+  const { data: rawCertifications, loading: certLoading } = useCollection(certQuery)
+
+  // In-memory sorting for index resilience
+  const certifications = useMemo(() => {
+    if (!rawCertifications) return []
+    return [...rawCertifications].sort((a: any, b: any) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    })
+  }, [rawCertifications])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

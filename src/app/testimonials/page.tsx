@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Quote, Loader2, Trash2, User, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -30,12 +30,21 @@ export default function TestimonialsPage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.TESTIMONIALS), 
-      where('ownerId', '==', user.uid),
-      orderBy('date', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: testimonials, loading: testLoading } = useCollection(testQuery)
+  const { data: rawTestimonials, loading: testLoading } = useCollection(testQuery)
+
+  // In-memory sorting for index resilience
+  const testimonials = useMemo(() => {
+    if (!rawTestimonials) return []
+    return [...rawTestimonials].sort((a: any, b: any) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    })
+  }, [rawTestimonials])
 
   useEffect(() => {
     setMounted(true)
