@@ -1,25 +1,66 @@
 
 "use client"
 
-import React, { useState } from 'react'
+import React, { useMemo, useEffect, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Globe, Copy, Share2, Loader2, Eye, ShieldCheck, Lock } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { useUser } from '@/firebase'
+import { useUser, useFirestore, useDoc } from '@/firebase'
+import { doc } from 'firebase/firestore'
+import { collections } from '@/lib/firestore-service'
+import { usePersistentDocument } from '@/hooks/use-persistence'
 import { toast } from '@/hooks/use-toast'
 
+const EMPTY_VISIBILITY = {
+  publicProfile: false
+};
+
 export default function PublicSharePage() {
-  const { user } = useUser()
-  const [isPublic, setIsPublic] = useState(false)
+  const { user, loading: userLoading } = useUser()
+  const db = useFirestore()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
+  const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
+
+  const initialData = useMemo(() => ({
+    publicProfile: profileDoc?.publicProfile ?? false
+  }), [profileDoc]);
+
+  const { data: settings, updateField, save } = usePersistentDocument(
+    collections.PROFILES,
+    user?.uid,
+    initialData
+  )
 
   const publicUrl = user ? `${typeof window !== 'undefined' ? window.location.origin : ''}/p/${user.uid}` : ''
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(publicUrl)
     toast({ title: 'Link Copied', description: 'Your public profile link is now in your clipboard.' })
+  }
+
+  const handlePreview = () => {
+    if (publicUrl) {
+      window.open(publicUrl, '_blank')
+    }
+  }
+
+  if (!mounted || userLoading || profileLoading) {
+    return (
+      <CRMLayout>
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </CRMLayout>
+    )
   }
 
   return (
@@ -43,10 +84,16 @@ export default function PublicSharePage() {
                   <h4 className="font-bold">Public Profile Access</h4>
                   <p className="text-sm text-muted-foreground">Make your professional hub accessible via a unique URL.</p>
                 </div>
-                <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+                <Switch 
+                  checked={settings.publicProfile} 
+                  onCheckedChange={(val) => {
+                    updateField('publicProfile', val);
+                    toast({ title: val ? 'Hub Published' : 'Hub Private', description: val ? 'Your profile is now live.' : 'Public access has been revoked.' });
+                  }} 
+                />
               </div>
 
-              {isPublic ? (
+              {settings.publicProfile ? (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                   <Label>Your unique Hub Link</Label>
                   <div className="flex gap-2">
@@ -57,7 +104,7 @@ export default function PublicSharePage() {
                       <Copy className="h-4 w-4" /> Copy
                     </Button>
                   </div>
-                  <Button variant="outline" className="w-full gap-2">
+                  <Button onClick={handlePreview} variant="outline" className="w-full gap-2">
                     <Eye className="h-4 w-4" /> Preview Public Hub
                   </Button>
                 </div>
