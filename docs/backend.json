@@ -19,6 +19,7 @@
         "address": { "type": "string" },
         "avatarUrl": { "type": "string" },
         "ownerId": { "type": "string" },
+        "publicProfile": { "type": "boolean", "description": "Whether the profile is visible to the public." },
         "currentJob": {
           "type": "object",
           "properties": {

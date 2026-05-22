@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import { useFirestore, useDoc, useCollection } from '@/firebase'
 import { doc, collection, query, where, orderBy } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
-import { Loader2, User, Mail, MapPin, Globe, Briefcase, GraduationCap, Rocket, Award, Lock, AlertCircle } from 'lucide-react'
+import { Loader2, User, Mail, MapPin, Globe, Briefcase, Rocket, Lock } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +17,7 @@ export default function PublicProfilePage() {
   const uid = params.uid as string
   const db = useFirestore()
 
-  // Queries - These will work even if the user is unauthenticated, provided security rules allow public read
+  // Queries
   const profileRef = useMemo(() => uid ? doc(db, collections.PROFILES, uid) : null, [db, uid])
   const skillsQuery = useMemo(() => uid ? query(collection(db, collections.SKILLS), where('ownerId', '==', uid), orderBy('name', 'asc')) : null, [db, uid])
   const expQuery = useMemo(() => uid ? query(collection(db, collections.EXPERIENCE), where('ownerId', '==', uid), orderBy('startDate', 'desc')) : null, [db, uid])
@@ -28,7 +28,7 @@ export default function PublicProfilePage() {
   const { data: experience, loading: expLoading } = useCollection(expQuery)
   const { data: projects, loading: projectsLoading } = useCollection(projectsQuery)
 
-  if (profileLoading || skillsLoading || expLoading || projectsLoading) {
+  if (profileLoading || (uid && !profile && !profileError)) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0a0a0c]">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -43,16 +43,16 @@ export default function PublicProfilePage() {
         <div className="p-6 rounded-full bg-muted/10 mb-6">
           <Lock className="h-12 w-12 text-muted-foreground" />
         </div>
-        <h1 className="text-3xl font-bold font-headline mb-2">Private Hub</h1>
-        <p className="text-muted-foreground max-w-md">
-          This professional intelligence hub is either private, does not exist, or your access is restricted by workstation security.
+        <h1 className="text-4xl font-bold font-headline mb-4">Private Portfolio</h1>
+        <p className="text-muted-foreground max-w-md text-lg">
+          This professional hub is currently private or does not exist. Please contact the owner for access.
         </p>
         <div className="mt-8 flex flex-col gap-4">
-          <Button variant="outline" className="border-white/10 text-white" asChild>
-            <a href="/login">Manage My Hub</a>
+          <Button variant="outline" className="border-white/10 text-white h-12 px-8 rounded-xl font-bold" asChild>
+            <a href="/login">Create Your Own Hub</a>
           </Button>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest max-w-xs">
-            Note: Workstation URLs require you to be signed into your developer account to view.
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest max-w-xs mt-4">
+            Note: In development mode, links are restricted by workstation security (401 errors).
           </p>
         </div>
       </div>
