@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useMemo } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -9,38 +9,27 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { User, Mail, Phone, MapPin, Loader2, CheckCircle2 } from 'lucide-react'
 import { useUser, useFirestore, useDoc } from '@/firebase'
-import { doc, setDoc } from 'firebase/firestore'
+import { doc } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
-import { toast } from '@/hooks/use-toast'
+import { usePersistentDocument } from '@/hooks/use-persistence'
 
 export default function ProfilePage() {
   const { user } = useUser()
   const db = useFirestore()
-  const [savingField, setSavingField] = useState<string | null>(null)
 
   const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
-  const { data: profile, loading: profileLoading } = useDoc(profileRef)
+  const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
 
-  const handleAutoSave = useCallback(async (field: string, value: string) => {
-    if (!user || !db || profile?.[field] === value) return
-
-    setSavingField(field)
-    try {
-      await setDoc(doc(db, collections.PROFILES, user.uid), { 
-        [field]: value,
-        updatedAt: new Date().toISOString()
-      }, { merge: true })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Auto-save failed', description: error.message })
-    } finally {
-      setSavingField(null)
-    }
-  }, [user, db, profile])
+  const { data: profile, updateField } = usePersistentDocument(
+    collections.PROFILES,
+    user?.uid,
+    profileDoc || {}
+  )
 
   if (profileLoading) {
     return (
       <CRMLayout>
-        <div className="flex h-64 items-center justify-center">
+        <div className="flex h-[60vh] items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       </CRMLayout>
@@ -49,17 +38,9 @@ export default function ProfilePage() {
 
   return (
     <CRMLayout>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="font-headline text-4xl font-bold tracking-tight">👤 Personal Profile</h1>
-          <p className="text-muted-foreground">Changes are saved automatically as you type.</p>
-        </div>
-        {savingField && (
-          <div className="flex items-center gap-2 text-xs text-primary animate-pulse">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Saving changes...
-          </div>
-        )}
+      <div className="mb-8">
+        <h1 className="font-headline text-4xl font-bold tracking-tight">👤 Personal Profile</h1>
+        <p className="text-muted-foreground">Changes are persistent across all your sessions.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -76,8 +57,8 @@ export default function ProfilePage() {
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
                       id="fullName" 
-                      defaultValue={profile?.fullName || ''} 
-                      onBlur={(e) => handleAutoSave('fullName', e.target.value)}
+                      value={profile?.fullName || ''} 
+                      onChange={(e) => updateField('fullName', e.target.value)}
                       className="pl-10 focus:ring-primary" 
                       placeholder="John Doe" 
                     />
@@ -90,8 +71,8 @@ export default function ProfilePage() {
                     <Input 
                       id="email" 
                       type="email" 
-                      defaultValue={profile?.email || user?.email || ''} 
-                      onBlur={(e) => handleAutoSave('email', e.target.value)}
+                      value={profile?.email || ''} 
+                      onChange={(e) => updateField('email', e.target.value)}
                       className="pl-10 focus:ring-primary" 
                       placeholder="john@example.com" 
                     />
@@ -103,8 +84,8 @@ export default function ProfilePage() {
                 <Label htmlFor="tagline">Professional Tagline</Label>
                 <Input 
                   id="tagline" 
-                  defaultValue={profile?.tagline || ''} 
-                  onBlur={(e) => handleAutoSave('tagline', e.target.value)}
+                  value={profile?.tagline || ''} 
+                  onChange={(e) => updateField('tagline', e.target.value)}
                   placeholder="Enterprise Sales Strategist | Growth Specialist" 
                   className="focus:ring-primary"
                 />
@@ -115,8 +96,8 @@ export default function ProfilePage() {
                 <Textarea 
                   id="bio" 
                   className="min-h-[150px] focus:ring-primary" 
-                  defaultValue={profile?.bio || ''} 
-                  onBlur={(e) => handleAutoSave('bio', e.target.value)}
+                  value={profile?.bio || ''} 
+                  onChange={(e) => updateField('bio', e.target.value)}
                   placeholder="Tell your story..." 
                 />
               </div>
@@ -128,8 +109,8 @@ export default function ProfilePage() {
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
                       id="phone" 
-                      defaultValue={profile?.phone || ''} 
-                      onBlur={(e) => handleAutoSave('phone', e.target.value)}
+                      value={profile?.phone || ''} 
+                      onChange={(e) => updateField('phone', e.target.value)}
                       className="pl-10 focus:ring-primary" 
                       placeholder="+1 (555) 000-0000" 
                     />
@@ -141,8 +122,8 @@ export default function ProfilePage() {
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
                       id="location" 
-                      defaultValue={profile?.location || ''} 
-                      onBlur={(e) => handleAutoSave('location', e.target.value)}
+                      value={profile?.location || ''} 
+                      onChange={(e) => updateField('location', e.target.value)}
                       className="pl-10 focus:ring-primary" 
                       placeholder="London, UK" 
                     />
@@ -158,12 +139,12 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="font-headline text-lg flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5" /> 
-                Live Sync Active
+                Persistent Storage
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm opacity-90 leading-relaxed">
-                Your data is securely synchronized with NexusCRM cloud. You can refresh or switch devices anytime; your progress is always safe.
+                Your data is stored in the cloud with local-first persistence. It remains available even after refreshes, system restarts, or logout/login cycles.
               </p>
             </CardContent>
           </Card>
@@ -180,7 +161,6 @@ export default function ProfilePage() {
               <div className="h-2 w-full bg-white/20 rounded-full overflow-hidden">
                 <div className="h-full bg-white w-[85%]" />
               </div>
-              <p className="text-[10px] mt-4 opacity-80 italic">Add your Certifications and Experience to reach 100%.</p>
             </CardContent>
           </Card>
         </div>
