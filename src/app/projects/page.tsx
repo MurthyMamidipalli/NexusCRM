@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,11 +16,11 @@ import {
   Paperclip, 
   FolderCode, 
   Box,
-  Layers,
   Pencil,
-  X,
+  FileText,
+  CheckCircle2,
   Upload,
-  Link as LinkIcon
+  X
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
@@ -31,9 +31,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
+
+const MAX_FILE_SIZE = 1048576; // 1MB
 
 export default function ProjectsPage() {
   const db = useFirestore()
@@ -43,6 +44,16 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('Project')
+
+  // File Upload State
+  const [imageFile, setImageFile] = useState<string>('')
+  const [docFile, setDocFile] = useState<string>('')
+  const [docName, setDocName] = useState<string>('')
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const docInputRef = useRef<HTMLInputElement>(null)
+
+  // Preview State
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -59,6 +70,32 @@ export default function ProjectsPage() {
 
   const { data: projects, loading: projectsLoading } = useCollection(projectsQuery)
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'pdf') => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        variant: 'destructive',
+        title: 'File Too Large',
+        description: 'Direct database storage is limited to 1MB. Please compress the file.'
+      })
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      if (type === 'image') {
+        setImageFile(reader.result as string)
+      } else {
+        setDocFile(reader.result as string)
+        setDocName(file.name)
+      }
+      toast({ title: 'File Ready', description: `${file.name} is attached.` })
+    }
+    reader.readAsDataURL(file)
+  }
+
   const handleSaveProject = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user || !db) return
@@ -73,7 +110,9 @@ export default function ProjectsPage() {
       url: formData.get('url') as string,
       date: formData.get('date') as string,
       category: category,
-      status: 'Active',
+      imageUrl: imageFile || editingProj?.imageUrl || '',
+      documentUrl: docFile || editingProj?.documentUrl || '',
+      documentName: docName || editingProj?.documentName || '',
       updatedAt: new Date().toISOString()
     }
 
@@ -81,19 +120,30 @@ export default function ProjectsPage() {
       ? updateRecord(db, collections.PROJECTS, editingProj.id, data)
       : createRecord(db, collections.PROJECTS, data, user.uid)
 
-    mutation.catch(async (err) => {
-      const permissionError = new FirestorePermissionError({
-        path: editingProj ? `${collections.PROJECTS}/${editingProj.id}` : collections.PROJECTS,
-        operation: editingProj ? 'update' : 'create',
-        requestResourceData: data,
-      } satisfies SecurityRuleContext);
-      errorEmitter.emit('permission-error', permissionError);
-    })
+    mutation
+      .then(() => {
+        toast({ title: editingProj ? 'Record Updated' : 'Record Added' })
+        setIsDialogOpen(false)
+        resetForm()
+      })
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: editingProj ? `${collections.PROJECTS}/${editingProj.id}` : collections.PROJECTS,
+          operation: editingProj ? 'update' : 'create',
+          requestResourceData: data,
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }
 
-    toast({ title: editingProj ? 'Record Updated' : 'Record Added' })
-    setIsDialogOpen(false)
+  const resetForm = () => {
     setEditingProj(null)
-    setLoading(false)
+    setImageFile('')
+    setDocFile('')
+    setDocName('')
   }
 
   const handleDelete = (id: string) => {
@@ -135,10 +185,10 @@ export default function ProjectsPage() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
-          if (!open) setEditingProj(null);
+          if (!open) resetForm();
         }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90" onClick={() => setEditingProj(null)}>
+            <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90" onClick={resetForm}>
               <Plus className="h-4 w-4" />
               Add {activeTab}
             </Button>
@@ -203,21 +253,46 @@ export default function ProjectsPage() {
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Visual Cover</Label>
-                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 hover:bg-[#1c1c1f] transition-all cursor-pointer group">
-                    <ImageIcon className="h-8 w-8 text-gray-500 mb-2 group-hover:text-primary" />
-                    <span className="text-xs text-gray-400 font-medium">Upload Visual</span>
+                  <input type="file" className="hidden" ref={imageInputRef} accept="image/*" onChange={(e) => handleFileChange(e, 'image')} />
+                  <div 
+                    className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 hover:bg-[#1c1c1f] transition-all cursor-pointer group"
+                    onClick={() => imageInputRef.current?.click()}
+                  >
+                    {imageFile || editingProj?.imageUrl ? (
+                      <div className="flex flex-col items-center">
+                        <CheckCircle2 className="h-8 w-8 text-primary mb-2" />
+                        <span className="text-xs text-primary font-bold">Image Attached</span>
+                      </div>
+                    ) : (
+                      <>
+                        <ImageIcon className="h-8 w-8 text-gray-500 mb-2 group-hover:text-primary" />
+                        <span className="text-xs text-gray-400 font-medium">Upload Visual</span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Documentation (PDF)</Label>
-                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 hover:bg-[#1c1c1f] transition-all cursor-pointer group">
-                    <Paperclip className="h-8 w-8 text-gray-500 mb-2 group-hover:text-primary" />
-                    <span className="text-xs text-gray-400 font-medium">Attach PDF</span>
+                  <input type="file" className="hidden" ref={docInputRef} accept=".pdf" onChange={(e) => handleFileChange(e, 'pdf')} />
+                  <div 
+                    className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 hover:bg-[#1c1c1f] transition-all cursor-pointer group"
+                    onClick={() => docInputRef.current?.click()}
+                  >
+                    {docFile || editingProj?.documentUrl ? (
+                      <div className="flex flex-col items-center">
+                        <FileText className="h-8 w-8 text-primary mb-2" />
+                        <span className="text-xs text-white font-bold truncate max-w-[120px]">{docName || editingProj?.documentName || 'PDF Attached'}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Paperclip className="h-8 w-8 text-gray-500 mb-2 group-hover:text-primary" />
+                        <span className="text-xs text-gray-400 font-medium">Attach PDF</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Hidden field for categorization logic */}
               <input type="hidden" name="category" value={editingProj?.category || activeTab} />
 
               <DialogFooter className="pt-4 gap-3">
@@ -234,6 +309,7 @@ export default function ProjectsPage() {
                   disabled={loading} 
                   className="bg-[#7299f0] hover:bg-[#6387d9] text-white font-bold h-12 px-8 rounded-xl"
                 >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   {editingProj ? 'Update Item' : 'Add to Vault'}
                 </Button>
               </DialogFooter>
@@ -259,17 +335,61 @@ export default function ProjectsPage() {
         </TabsList>
 
         <TabsContent value="Project" className="mt-0">
-          <ProjectGrid items={filteredItems('Project')} onDelete={handleDelete} onEdit={(p) => { setEditingProj(p); setIsDialogOpen(true); }} />
+          <ProjectGrid 
+            items={filteredItems('Project')} 
+            onDelete={handleDelete} 
+            onEdit={(p) => { setEditingProj(p); setIsDialogOpen(true); }}
+            onPreview={(url, name) => setPreviewDoc({ url, name })}
+          />
         </TabsContent>
         <TabsContent value="Product" className="mt-0">
-          <ProjectGrid items={filteredItems('Product')} onDelete={handleDelete} onEdit={(p) => { setEditingProj(p); setIsDialogOpen(true); }} />
+          <ProjectGrid 
+            items={filteredItems('Product')} 
+            onDelete={handleDelete} 
+            onEdit={(p) => { setEditingProj(p); setIsDialogOpen(true); }}
+            onPreview={(url, name) => setPreviewDoc({ url, name })}
+          />
         </TabsContent>
       </Tabs>
+
+      {/* Professional File Previewer Dialog */}
+      <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
+        <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col">
+          <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
+            <div className="flex items-center gap-3">
+              <FileText className="h-5 w-5 text-primary" />
+              <h3 className="font-bold text-sm truncate max-w-[200px] md:max-w-md">{previewDoc?.name}</h3>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setPreviewDoc(null)} className="h-8 w-8 hover:bg-white/5">
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          <div className="flex-1 bg-black/40">
+            {previewDoc?.url && (
+              <iframe 
+                src={previewDoc.url} 
+                className="w-full h-full border-none"
+                title={previewDoc.name}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </CRMLayout>
   )
 }
 
-function ProjectGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id: string) => void, onEdit: (item: any) => void }) {
+function ProjectGrid({ 
+  items, 
+  onDelete, 
+  onEdit, 
+  onPreview 
+}: { 
+  items: any[], 
+  onDelete: (id: string) => void, 
+  onEdit: (item: any) => void,
+  onPreview: (url: string, name: string) => void
+}) {
   if (items.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border/50 bg-card/10 text-muted-foreground italic">
@@ -283,8 +403,12 @@ function ProjectGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id:
       {items.map((proj: any) => (
         <Card key={proj.id} className="group overflow-hidden border-none bg-card/40 backdrop-blur-md shadow-lg hover:shadow-2xl transition-all duration-300">
           <CardContent className="p-0">
-            <div className="h-36 bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center border-b border-border/30 relative">
-              <Rocket className="h-10 w-10 text-primary opacity-20 group-hover:scale-110 transition-transform" />
+            <div className="h-48 bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center border-b border-border/30 relative">
+              {proj.imageUrl ? (
+                <img src={proj.imageUrl} alt={proj.title} className="w-full h-full object-cover" />
+              ) : (
+                <Rocket className="h-10 w-10 text-primary opacity-20 group-hover:scale-110 transition-transform" />
+              )}
               {proj.date && (
                 <div className="absolute top-4 right-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-background/80 backdrop-blur-sm px-2.5 py-1 rounded-md border border-border/50">
                   {proj.date}
@@ -317,7 +441,7 @@ function ProjectGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id:
                 </div>
               </div>
               
-              <div className="mt-6 pt-4 border-t border-border/20 flex items-center justify-between">
+              <div className="mt-6 pt-4 border-t border-border/20 flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                   {proj.url && (
                     <Button variant="outline" size="sm" className="gap-2 text-[11px] h-8 font-bold border-border/50 bg-card/50 rounded-lg" asChild>
@@ -326,9 +450,16 @@ function ProjectGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id:
                       </a>
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" className="gap-2 text-[11px] text-muted-foreground h-8 font-bold rounded-lg">
-                    <ExternalLink className="h-3.5 w-3.5" /> Details
-                  </Button>
+                  {proj.documentUrl && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="gap-2 text-[11px] h-8 font-bold border-border/50 bg-card/50 rounded-lg"
+                      onClick={() => onPreview(proj.documentUrl, proj.documentName || 'Documentation')}
+                    >
+                      <FileText className="h-3.5 w-3.5 text-accent" /> Documentation
+                    </Button>
+                  )}
                 </div>
                 <div className="text-[10px] font-bold uppercase text-muted-foreground/50 tracking-widest">
                   {proj.category}
