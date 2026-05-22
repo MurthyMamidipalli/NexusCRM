@@ -18,7 +18,6 @@ import {
   FileCheck,
   FolderLock,
   Lock,
-  CheckCircle2,
   ShieldCheck
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
@@ -35,12 +34,12 @@ import { Badge } from '@/components/ui/badge'
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
-interface UploadedFileInfo {
-  url: string;
-  path: string;
-  name: string;
-  size: number;
-  type: string;
+interface PendingUpload {
+  file: File;
+  progress: number;
+  url?: string;
+  path?: string;
+  done: boolean;
 }
 
 export default function DocumentVaultPage() {
@@ -53,10 +52,9 @@ export default function DocumentVaultPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [loading, setLoading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({})
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFileInfo[]>([])
-  const [pendingFilesCount, setPendingFilesCount] = useState(0)
-  const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
+  
+  // Track uploads immediately on selection
+  const [pendingUploads, setPendingUploads] = useState<{ [key: string]: PendingUpload }>({})
   
   // Form States
   const [visibility, setVisibility] = useState('Private')
@@ -93,18 +91,16 @@ export default function DocumentVaultPage() {
       })
   }, [rawDocs, searchTerm, categoryFilter])
 
-  // EAGER UPLOAD: Starts immediately on selection
+  // INSTANT UPLOAD: Starts on selection
   const handleFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (!files.length || !user || !storage) return
 
-    setPendingFilesCount(prev => prev + files.length)
     console.log(`🚀 Starting high-speed eager upload for ${files.length} files...`)
 
     files.forEach((file) => {
       if (file.size > MAX_FILE_SIZE) {
         toast({ variant: 'destructive', title: 'File Too Large', description: `${file.name} exceeds 500MB.` })
-        setPendingFilesCount(prev => Math.max(0, prev - 1))
         return
       }
 
@@ -113,29 +109,37 @@ export default function DocumentVaultPage() {
       const storageRef = ref(storage, path)
       const uploadTask = uploadBytesResumable(storageRef, file)
 
+      // Initialize pending state
+      setPendingUploads(prev => ({
+        ...prev,
+        [file.name]: { file, progress: 0, done: false }
+      }))
+
       uploadTask.on(
         'state_changed',
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / (snapshot.totalBytes || 1)) * 100
-          setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
-          console.log(`📊 Uploading ${file.name}: ${Math.round(progress)}%`)
+          setPendingUploads(prev => ({
+            ...prev,
+            [file.name]: { ...prev[file.name], progress }
+          }))
         },
         (error) => {
           console.error(`❌ Upload failed for ${file.name}:`, error)
-          setPendingFilesCount(prev => Math.max(0, prev - 1))
           toast({ variant: 'destructive', title: 'Upload Failed', description: error.message })
+          setPendingUploads(prev => {
+            const newState = { ...prev }
+            delete newState[file.name]
+            return newState
+          })
         },
         async () => {
-          const fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
-          setUploadedFiles(prev => [...prev, {
-            url: fileUrl,
-            path: path,
-            name: file.name,
-            size: file.size,
-            type: file.type
-          }])
-          setPendingFilesCount(prev => Math.max(0, prev - 1))
-          console.log(`✅ ${file.name} secured in cloud.`)
+          const url = await getDownloadURL(uploadTask.snapshot.ref)
+          setPendingUploads(prev => ({
+            ...prev,
+            [file.name]: { ...prev[file.name], url, path, progress: 100, done: true }
+          }))
+          console.log(`✅ ${file.name} ready for record entry.`)
         }
       )
     })
@@ -143,46 +147,71 @@ export default function DocumentVaultPage() {
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db || uploadedFiles.length === 0) return
+    if (!user || !db) return
+
+    const uploads = Object.values(pendingUploads)
+    if (uploads.length === 0) {
+      toast({ variant: 'destructive', title: 'No Files', description: 'Please select a document first.' })
+      return
+    }
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const docTitle = formData.get('title') as string
     const docDescription = formData.get('description') as string
 
-    try {
-      const savePromises = uploadedFiles.map((file) => {
-        const data = {
-          title: uploadedFiles.length > 1 ? `${file.name}` : docTitle || file.name,
-          category: category || 'Other',
-          description: docDescription || '',
-          fileUrl: file.url,
-          filePath: file.path,
-          fileType: file.type,
-          fileSize: file.size,
-          status: status.toLowerCase(),
-          isPublic: visibility === 'Public',
-          ownerId: user.uid
-        }
-        return createRecord(db, collections.DOCUMENTS, data, user.uid)
-      })
+    // NON-BLOCKING BACKGROUND SYNC
+    // We close the dialog immediately and handle the Firestore writes as files finish
+    toast({ title: 'Vault Sync Started', description: 'Records are being secured in your private vault.' })
+    setIsDialogOpen(false)
 
-      await Promise.all(savePromises)
-      
-      toast({ title: 'Vault Updated', description: 'Records successfully secured.' })
-      setIsDialogOpen(false)
-      resetForm()
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Save Error', description: error.message })
-    } finally {
-      setLoading(false)
+    uploads.forEach((upload) => {
+      // If upload is already done, save immediately
+      if (upload.done && upload.url) {
+        saveMetadata(upload, docTitle, docDescription)
+      } else {
+        // If still uploading, we wait for it to finish in the background
+        // The listener is still active in state, but since we closed the dialog,
+        // we'll handle the completion logic by checking periodically or using the existing task handle
+        // For simplicity in this flow, we notify the user that we are finalizing.
+        const checkInterval = setInterval(() => {
+          setPendingUploads(curr => {
+            const currentUpload = curr[upload.file.name]
+            if (currentUpload?.done && currentUpload.url) {
+              saveMetadata(currentUpload, docTitle, docDescription)
+              clearInterval(checkInterval)
+              const nextPending = { ...curr }
+              delete nextPending[upload.file.name]
+              return nextPending
+            }
+            return curr
+          })
+        }, 500)
+      }
+    })
+
+    resetForm()
+  }
+
+  const saveMetadata = (upload: PendingUpload, baseTitle: string, desc: string) => {
+    if (!user || !db) return
+    const data = {
+      title: Object.keys(pendingUploads).length > 1 ? upload.file.name : baseTitle || upload.file.name,
+      category: category || 'Other',
+      description: desc || '',
+      fileUrl: upload.url,
+      filePath: upload.path,
+      fileType: upload.file.type,
+      fileSize: upload.file.size,
+      status: status.toLowerCase(),
+      isPublic: visibility === 'Public',
+      ownerId: user.uid
     }
+    createRecord(db, collections.DOCUMENTS, data, user.uid).catch(console.error)
   }
 
   const resetForm = () => {
-    setUploadedFiles([])
-    setUploadProgress({})
-    setPendingFilesCount(0)
+    setPendingUploads({})
     setCategory('')
     setStatus('Active')
     setVisibility('Private')
@@ -202,8 +231,8 @@ export default function DocumentVaultPage() {
     }
   }
 
-  const totalProgress = Object.values(uploadProgress).length > 0
-    ? Object.values(uploadProgress).reduce((a, b) => a + b, 0) / (Object.values(uploadProgress).length || 1)
+  const overallProgress = Object.values(pendingUploads).length > 0
+    ? Object.values(pendingUploads).reduce((a, b) => a + b.progress, 0) / Object.values(pendingUploads).length
     : 0
 
   if (!mounted) return null
@@ -215,7 +244,7 @@ export default function DocumentVaultPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight flex items-center gap-3">
             📂 Document Vault <Lock className="h-6 w-6 text-primary/40" />
           </h1>
-          <p className="text-muted-foreground">Manage your identification and sensitive records in total privacy.</p>
+          <p className="text-muted-foreground">Manage identification and records with high-speed private sync.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if(!o) resetForm(); }}>
           <DialogTrigger asChild>
@@ -227,7 +256,7 @@ export default function DocumentVaultPage() {
             <DialogHeader className="p-8 pb-4">
               <DialogTitle className="text-3xl font-bold font-headline">Upload to Vault</DialogTitle>
               <DialogDescription className="text-gray-400 text-sm mt-2">
-                Max 500MB per file. Items marked Private remain in the vault.
+                Files start uploading immediately. Support for records up to 500MB.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleFinalSave} className="p-8 pt-0 space-y-6">
@@ -236,7 +265,7 @@ export default function DocumentVaultPage() {
                 <Input 
                   name="title" 
                   className="bg-[#1c1c1f] border-2 border-transparent focus:border-[#10b981] transition-all h-14 rounded-2xl text-white placeholder:text-gray-600" 
-                  placeholder="e.g. Portfolio PDF" 
+                  placeholder="e.g. Identity Record" 
                   required
                 />
               </div>
@@ -293,35 +322,35 @@ export default function DocumentVaultPage() {
                   multiple 
                   onChange={handleFileSelection} 
                 />
-                {uploadedFiles.length > 0 || pendingFilesCount > 0 ? (
+                {Object.keys(pendingUploads).length > 0 ? (
                   <div className="text-[#10b981] text-center">
                     <FileCheck className="mx-auto mb-2 h-12 w-12" />
                     <span className="text-sm font-bold">
-                      {pendingFilesCount > 0 ? `Uploading ${pendingFilesCount} files...` : `${uploadedFiles.length} Files Ready`}
+                      {Object.keys(pendingUploads).length} Files Selected
                     </span>
                   </div>
                 ) : (
                   <div className="text-center">
                     <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
-                    <p className="text-sm text-gray-500 font-medium">Click to Select Files (Max 500MB)</p>
+                    <p className="text-sm text-gray-500 font-medium">Select Files (Max 500MB)</p>
                   </div>
                 )}
               </div>
 
-              {(pendingFilesCount > 0 || (uploadedFiles.length > 0 && totalProgress < 100)) && (
+              {Object.keys(pendingUploads).length > 0 && (
                 <div className="space-y-3">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-[#10b981]">
                     <span>Uploading...</span>
-                    <span>{Math.round(totalProgress)}%</span>
+                    <span>{Math.round(overallProgress)}%</span>
                   </div>
-                  <Progress value={totalProgress} className="h-1 bg-gray-800" />
+                  <Progress value={overallProgress} className="h-1 bg-gray-800" />
                 </div>
               )}
 
               <Button 
                 type="submit" 
-                disabled={loading || uploadedFiles.length === 0 || pendingFilesCount > 0} 
-                className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
+                disabled={loading || Object.keys(pendingUploads).length === 0} 
+                className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
               >
                 {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : 'Save Record'}
               </Button>
@@ -334,7 +363,7 @@ export default function DocumentVaultPage() {
         <div className="md:col-span-2 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
-            placeholder="Search vault records..." 
+            placeholder="Search records..." 
             className="pl-10 bg-card/50 border-none h-11 rounded-xl"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -371,7 +400,7 @@ export default function DocumentVaultPage() {
                     <FileText className="h-8 w-8" />
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-[#10b981]" onClick={() => setPreviewDoc({ url: doc.fileUrl, name: doc.title })}>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-[#10b981]" onClick={() => window.open(doc.fileUrl, '_blank')}>
                       <Eye className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDelete(doc)}>
@@ -384,9 +413,6 @@ export default function DocumentVaultPage() {
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="bg-[#10b981]/5 text-[#10b981] border-[#10b981]/20 text-[9px] uppercase font-bold tracking-widest px-2 py-0.5">
                       {doc.category}
-                    </Badge>
-                    <Badge variant="outline" className="text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 opacity-50">
-                      {doc.status}
                     </Badge>
                     {doc.isPublic ? <Badge className="bg-emerald-500 text-white text-[8px]">PUBLIC</Badge> : <Badge className="bg-orange-500/10 text-orange-400 text-[8px] border-orange-400/20">PRIVATE</Badge>}
                   </div>
@@ -411,34 +437,11 @@ export default function DocumentVaultPage() {
         <div className="flex h-64 flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-border/50 bg-card/30 text-muted-foreground gap-4">
           <FolderLock className="h-12 w-12 opacity-10" />
           <div className="text-center">
-            <p className="font-bold">Private Vault Empty</p>
-            <p className="text-xs italic">Secure identification documents will appear here.</p>
+            <p className="font-bold">Vault Empty</p>
+            <p className="text-xs italic">Secure records will appear here.</p>
           </div>
         </div>
       )}
-
-      <Dialog open={!!previewDoc} onOpenChange={(o) => !o && setPreviewDoc(null)}>
-        <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col">
-          <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="text-[#10b981] h-5 w-5" />
-              <DialogTitle className="truncate font-bold text-sm max-w-md">{previewDoc?.name}</DialogTitle>
-            </div>
-            <Button variant="ghost" size="icon" onClick={() => setPreviewDoc(null)} className="h-8 w-8 hover:bg-white/10">
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-          <div className="flex-1 bg-black/40">
-            {previewDoc?.url && (
-              <iframe 
-                src={previewDoc.url} 
-                className="w-full h-full border-none" 
-                title={previewDoc.name} 
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </CRMLayout>
   )
 }

@@ -32,10 +32,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { errorEmitter } from '@/firebase/error-emitter'
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+
+interface PendingResumeUpload {
+  file: File;
+  progress: number;
+  url?: string;
+  path?: string;
+  done: boolean;
+}
 
 export default function ResumePage() {
   const db = useFirestore()
@@ -43,12 +49,14 @@ export default function ResumePage() {
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({})
   const [mounted, setMounted] = useState(false)
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [activeTab, setActiveTab] = useState('PDF')
   const [visibility, setVisibility] = useState<string>("Private")
   const [docType, setDocType] = useState<string>("Resume")
+  
+  // High-speed pending uploads
+  const [pendingUploads, setPendingUploads] = useState<{ [key: string]: PendingResumeUpload }>({})
+  
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null)
 
@@ -73,116 +81,128 @@ export default function ResumePage() {
     })
   }, [rawResumes])
 
+  // INSTANT UPLOAD: Starts on selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    const validFiles = files.filter(file => {
-      if (file.size > MAX_FILE_SIZE) {
-        console.warn(`File ${file.name} ignored: exceeds 500MB limit.`)
-        return false
-      }
-      return true
+    if (!files.length || !user || !storage) return
+
+    files.forEach((file) => {
+      if (file.size > MAX_FILE_SIZE) return
+
+      const fileId = `${Date.now()}_${file.name}`
+      const path = `resumes/${user.uid}/${fileId}`
+      const storageRef = ref(storage, path)
+      const uploadTask = uploadBytesResumable(storageRef, file)
+
+      setPendingUploads(prev => ({
+        ...prev,
+        [file.name]: { file, progress: 0, done: false }
+      }))
+
+      uploadTask.on(
+        'state_changed',
+        (snap) => {
+          const progress = (snap.bytesTransferred / snap.totalBytes) * 100
+          setPendingUploads(prev => ({
+            ...prev,
+            [file.name]: { ...prev[file.name], progress }
+          }))
+        },
+        console.error,
+        async () => {
+          const url = await getDownloadURL(uploadTask.snapshot.ref)
+          setPendingUploads(prev => ({
+            ...prev,
+            [file.name]: { ...prev[file.name], url, path, done: true, progress: 100 }
+          }))
+        }
+      )
     })
-    setSelectedFiles(validFiles)
-    console.log(`📂 Selected ${validFiles.length} files for instant upload preparation.`)
   }
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db || !storage) return
+    if (!user || !db) return
     
-    setLoading(true)
     const formData = new FormData(e.currentTarget)
-    const type = activeTab === 'PDF' ? 'file' : 'link'
     const baseName = formData.get('name') as string
 
-    try {
-      if (type === 'file') {
-        if (selectedFiles.length === 0) { setLoading(false); return; }
-        
-        console.log("🚀 Starting Bulk Upload to Resume Vault")
-        
-        for (const file of selectedFiles) {
-          const fileId = `${Date.now()}_${file.name}`
-          const path = `resumes/${user.uid}/${fileId}`
-          const storageRef = ref(storage, path)
-          const uploadTask = uploadBytesResumable(storageRef, file)
+    // NON-BLOCKING UI CLOSURE
+    toast({ title: 'Syncing to Vault', description: 'Your records are being secured in the background.' })
+    setIsDialogOpen(false)
 
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-              setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
-            },
-            (error) => {
-              console.error(`❌ Upload failed for ${file.name}:`, error)
-            },
-            async () => {
-              const fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
-              const data: any = {
-                name: selectedFiles.length > 1 ? `${baseName} - ${file.name}` : baseName,
-                type: 'file',
-                docType: docType,
-                visibility,
-                isPublic: visibility === 'Public',
-                ownerId: user.uid,
-                fileUrl,
-                fileName: file.name,
-                filePath: path,
-                fileSize: file.size,
-                fileType: file.type,
-                url: null
+    if (activeTab === 'PDF') {
+      const uploads = Object.values(pendingUploads)
+      uploads.forEach((upload) => {
+        if (upload.done && upload.url) {
+          saveResumeRecord(upload, baseName)
+        } else {
+          // Background wait
+          const itv = setInterval(() => {
+            setPendingUploads(curr => {
+              const current = curr[upload.file.name]
+              if (current?.done && current.url) {
+                saveResumeRecord(current, baseName)
+                clearInterval(itv)
+                const next = { ...curr }
+                delete next[upload.file.name]
+                return next
               }
-
-              createRecord(db, collections.RESUMES, data, user.uid).catch(err => {
-                const permissionError = new FirestorePermissionError({
-                  path: collections.RESUMES,
-                  operation: 'create',
-                  requestResourceData: data,
-                  originalError: err
-                } satisfies SecurityRuleContext);
-                errorEmitter.emit('permission-error', permissionError);
-              })
-            }
-          )
+              return curr
+            })
+          }, 500)
         }
-      } else {
-        const data: any = {
-          name: baseName,
-          type: 'link',
-          visibility,
-          isPublic: visibility === 'Public',
-          ownerId: user.uid,
-          fileUrl: null,
-          fileName: null,
-          filePath: null,
-          url: formData.get('url') as string
-        }
-
-        createRecord(db, collections.RESUMES, data, user.uid)
+      })
+    } else {
+      const data: any = {
+        name: baseName,
+        type: 'link',
+        visibility,
+        isPublic: visibility === 'Public',
+        ownerId: user.uid,
+        url: formData.get('url') as string
       }
-
-      toast({ title: 'Syncing to Vault', description: 'Your records are being secured in the background.' })
-      setIsDialogOpen(false)
-      setSelectedFiles([])
-      setUploadProgress({})
-    } catch (err: any) {
-      console.error('❌ Vault process failed:', err)
-    } finally {
-      setLoading(false)
+      createRecord(db, collections.RESUMES, data, user.uid).catch(console.error)
     }
+
+    resetForm()
+  }
+
+  const saveResumeRecord = (upload: PendingResumeUpload, baseName: string) => {
+    if (!user || !db) return
+    const data: any = {
+      name: Object.keys(pendingUploads).length > 1 ? `${baseName} - ${upload.file.name}` : baseName,
+      type: 'file',
+      docType: docType,
+      visibility,
+      isPublic: visibility === 'Public',
+      ownerId: user.uid,
+      fileUrl: upload.url,
+      fileName: upload.file.name,
+      filePath: upload.path,
+      fileSize: upload.file.size,
+      fileType: upload.file.type
+    }
+    createRecord(db, collections.RESUMES, data, user.uid).catch(console.error)
+  }
+
+  const resetForm = () => {
+    setPendingUploads({})
+    setLoading(false)
   }
 
   const handleDelete = async (resume: any) => {
     if (!db || !storage) return
     deleteRecord(db, collections.RESUMES, resume.id).catch(console.error)
     if (resume.filePath) {
-      const storageRef = ref(storage, resume.filePath)
-      deleteObject(storageRef).catch(console.warn)
+      deleteObject(ref(storage, resume.filePath)).catch(console.warn)
     }
     toast({ title: 'Removed' })
   }
 
-  const totalProgress = Object.values(uploadProgress).reduce((acc, curr) => acc + curr, 0) / (selectedFiles.length || 1)
+  const overallProgress = Object.values(pendingUploads).length > 0
+    ? Object.values(pendingUploads).reduce((a, b) => a + b.progress, 0) / Object.values(pendingUploads).length
+    : 0
 
   return (
     <CRMLayout>
@@ -252,13 +272,10 @@ export default function ResumePage() {
                     multiple 
                     onChange={handleFileChange} 
                   />
-                  {selectedFiles.length > 0 ? (
+                  {Object.keys(pendingUploads).length > 0 ? (
                     <div className="text-primary text-center">
                       <Files className="mx-auto mb-2 h-10 w-10" />
-                      <span className="text-xs font-bold">{selectedFiles.length} Files Selected</span>
-                      <p className="text-[10px] text-muted-foreground mt-1 truncate max-w-[200px]">
-                        {selectedFiles.map(f => f.name).join(', ')}
-                      </p>
+                      <span className="text-xs font-bold">{Object.keys(pendingUploads).length} Files Selected</span>
                     </div>
                   ) : (
                     <div className="text-center">
@@ -274,18 +291,18 @@ export default function ResumePage() {
                 </div>
               )}
               
-              {loading && activeTab === 'PDF' && selectedFiles.length > 0 && (
+              {activeTab === 'PDF' && Object.keys(pendingUploads).length > 0 && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
                     <span>Securing Vault...</span>
-                    <span>{Math.round(totalProgress)}%</span>
+                    <span>{Math.round(overallProgress)}%</span>
                   </div>
-                  <Progress value={totalProgress} className="h-1 bg-gray-800" />
+                  <Progress value={overallProgress} className="h-1 bg-gray-800" />
                 </div>
               )}
 
               <DialogFooter>
-                <Button type="submit" disabled={loading} className="w-full bg-primary h-12 rounded-xl font-bold">
+                <Button type="submit" disabled={loading || (activeTab === 'PDF' && Object.keys(pendingUploads).length === 0)} className="w-full bg-primary h-12 rounded-xl font-bold">
                   {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : 'Secure in Vault'}
                 </Button>
               </DialogFooter>
@@ -308,10 +325,15 @@ export default function ResumePage() {
             {resumes.filter(r => r.type === 'file').map(r => (
               <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onPreview={setPreviewFile} />
             ))}
-            {resumes.filter(r => r.type === 'file').length === 0 && (
+            {resumes.filter(r => r.type === 'file').length === 0 && !resumeLoading && (
               <div className="col-span-full flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground">
                 <FileText className="h-10 w-10 opacity-20 mb-4" />
                 <p className="italic">Resumes folder is empty.</p>
+              </div>
+            )}
+            {resumeLoading && (
+              <div className="col-span-full flex h-64 items-center justify-center">
+                <Loader2 className="animate-spin text-primary h-10 w-10" />
               </div>
             )}
           </div>
@@ -321,7 +343,7 @@ export default function ResumePage() {
             {resumes.filter(r => r.type === 'link').map(r => (
               <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onPreview={setPreviewFile} />
             ))}
-            {resumes.filter(r => r.type === 'link').length === 0 && (
+            {resumes.filter(r => r.type === 'link').length === 0 && !resumeLoading && (
               <div className="col-span-full flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground">
                 <LinkIcon className="h-10 w-10 opacity-20 mb-4" />
                 <p className="italic">Links folder is empty.</p>
