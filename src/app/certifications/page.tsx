@@ -18,7 +18,8 @@ import {
   X,
   FileSpreadsheet,
   Globe,
-  Lock
+  Lock,
+  AlertCircle
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -33,7 +34,9 @@ import { Badge } from '@/components/ui/badge'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
-const MAX_FILE_SIZE = 1048576; // 1MB
+// Firestore has a 1MB document limit. Base64 encoding adds ~37% overhead.
+// Setting limit to 700KB to ensure metadata + Base64 fits within 1MB.
+const MAX_FILE_SIZE = 700000; 
 
 export default function CertificationsPage() {
   const db = useFirestore()
@@ -50,7 +53,7 @@ export default function CertificationsPage() {
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Explicitly sync category with tab context when opening dialog
+  // Sync category with tab context when opening dialog
   useEffect(() => {
     if (isDialogOpen && !editingCert) {
       if (activeTab === "grades") setCategory("Grade Sheet");
@@ -76,7 +79,12 @@ export default function CertificationsPage() {
     if (!file) return
     
     if (file.size > MAX_FILE_SIZE) {
-      toast({ variant: 'destructive', title: 'File Too Large', description: 'Maximum size for direct upload is 1MB.' })
+      toast({ 
+        variant: 'destructive', 
+        title: 'File Too Large', 
+        description: 'Maximum size for database storage is 700KB due to cloud limits.' 
+      })
+      e.target.value = ''; // Reset input
       return
     }
 
@@ -103,19 +111,22 @@ export default function CertificationsPage() {
       ownerId: user.uid
     }
 
-    // Snappy UI: Optimistic immediate feedback
-    toast({ title: editingCert ? 'Credential Updated' : 'Record Created' })
-    setIsDialogOpen(false)
+    // Close and reset immediately for a snappy feel
     const wasEditing = !!editingCert;
     const currentId = editingCert?.id;
+    
+    toast({ title: wasEditing ? 'Updating Credential...' : 'Saving Record...' })
+    setIsDialogOpen(false)
     resetForm()
     setLoading(false)
 
     try {
       if (wasEditing) {
         await updateRecord(db, collections.CERTIFICATIONS, currentId, data)
+        toast({ title: 'Credential Updated' })
       } else {
         await createRecord(db, collections.CERTIFICATIONS, data, user.uid)
+        toast({ title: 'New Record Created' })
       }
     } catch (serverError: any) {
       const permissionError = new FirestorePermissionError({
@@ -125,6 +136,12 @@ export default function CertificationsPage() {
         originalError: serverError
       } satisfies SecurityRuleContext);
       errorEmitter.emit('permission-error', permissionError);
+      
+      toast({ 
+        variant: 'destructive', 
+        title: 'Cloud Save Failed', 
+        description: 'The record could not be synchronized. Check file size or permissions.' 
+      })
     }
   }
 
@@ -240,9 +257,9 @@ export default function CertificationsPage() {
                     <span className="text-xs font-bold text-gray-400">Current Document Stored</span>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center gap-2">
-                    <Upload className="h-10 w-10 text-gray-500" />
-                    <span className="text-xs text-gray-500">Upload PDF or Image</span>
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <Upload className="h-10 w-10 text-gray-500 mb-2" />
+                    <span className="text-xs text-gray-500">Upload PDF or Image (Max 700KB)</span>
                   </div>
                 )}
               </div>
@@ -342,8 +359,9 @@ export default function CertificationsPage() {
 function CertGrid({ items, onDelete, onEdit, onPreview }: any) {
   if (items.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center border-2 border-dashed border-border/50 rounded-3xl italic text-muted-foreground">
-        No records found in this category.
+      <div className="flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground gap-4">
+        <AlertCircle className="h-8 w-8 opacity-20" />
+        <p className="italic">No records found in this category.</p>
       </div>
     )
   }
