@@ -24,11 +24,13 @@ export function usePersistentDocument<T>(
   const dataRef = useRef<T>(initialData);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Sync with incoming remote data, but avoid overwriting local changes if possible
   useEffect(() => {
-    if (initialData) {
+    if (initialData && Object.keys(initialData as any).length > 0) {
       setLocalData((prev) => {
         const prevString = JSON.stringify(prev);
         const nextString = JSON.stringify(initialData);
+        // Only update local state if remote data has actually changed and we aren't currently editing
         if (prevString === nextString) return prev;
         return initialData;
       });
@@ -37,6 +39,7 @@ export function usePersistentDocument<T>(
   }, [initialData]);
 
   const saveToFirestore = useCallback((dataToSave: any) => {
+    // SECURITY GUARD: Ensure we have a user and a target ID before attempting a cloud write
     if (!db || !user || !docId) return;
 
     setStatus('saving');
@@ -70,6 +73,7 @@ export function usePersistentDocument<T>(
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
+    // Debounce save operation to reduce database writes and costs
     timeoutRef.current = setTimeout(() => {
       saveToFirestore(updated);
       timeoutRef.current = null;

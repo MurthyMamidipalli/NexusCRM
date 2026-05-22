@@ -10,13 +10,23 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Calendar, Plus, Clock, Loader2, ClipboardList } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, updateRecord } from '@/lib/firestore-service'
 
 export default function TasksPage() {
   const db = useFirestore()
-  const tasksQuery = useMemo(() => query(collection(db, collections.TASKS), orderBy('dueDate', 'asc')), [db])
+  const { user } = useUser()
+
+  const tasksQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.TASKS), 
+      where('ownerId', '==', user.uid),
+      orderBy('dueDate', 'asc')
+    )
+  }, [db, user])
+
   const { data: tasks, loading } = useCollection(tasksQuery)
 
   const handleToggleTask = async (taskId: string, currentStatus: string) => {

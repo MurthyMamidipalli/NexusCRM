@@ -8,7 +8,7 @@ import { Plus, Calendar as CalendarIcon, Clock, Users, MapPin, Loader2, MoreVert
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AddMeetingDialog } from '@/components/meetings/add-meeting-dialog'
 import { format } from 'date-fns'
@@ -19,9 +19,10 @@ export default function MeetingsPage() {
   const { user } = useUser()
 
   const meetingsQuery = useMemo(() => {
-    if (!user) return null
+    if (!db || !user) return null
     return query(
       collection(db, collections.MEETINGS),
+      where('ownerId', '==', user.uid),
       orderBy('date', 'asc')
     )
   }, [db, user])

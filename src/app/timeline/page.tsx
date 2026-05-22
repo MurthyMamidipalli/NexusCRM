@@ -3,20 +3,36 @@
 
 import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { Milestone, Briefcase, GraduationCap, Trophy, Rocket, Loader2 } from 'lucide-react'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { Card, CardContent } from '@/components/ui/card'
+import { Milestone, Briefcase, GraduationCap, Loader2 } from 'lucide-react'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 
 export default function TimelinePage() {
   const db = useFirestore()
+  const { user } = useUser()
   const [mounted, setMounted] = useState(false)
 
-  const expQuery = useMemo(() => query(collection(db, collections.EXPERIENCE), orderBy('startDate', 'desc')), [db])
-  const eduQuery = useMemo(() => query(collection(db, collections.EDUCATION), orderBy('startDate', 'desc')), [db])
+  const expQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.EXPERIENCE), 
+      where('ownerId', '==', user.uid),
+      orderBy('startDate', 'desc')
+    )
+  }, [db, user])
+
+  const eduQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.EDUCATION), 
+      where('ownerId', '==', user.uid),
+      orderBy('startDate', 'desc')
+    )
+  }, [db, user])
   
   const { data: experience, loading: expLoading } = useCollection(expQuery)
   const { data: education, loading: eduLoading } = useCollection(eduQuery)
@@ -74,7 +90,7 @@ export default function TimelinePage() {
         
         {timelineItems.length > 0 ? (
           <div className="space-y-12">
-            {timelineItems.map((item, idx) => (
+            {timelineItems.map((item) => (
               <div key={item.id} className="relative pl-24 group">
                 <div className="absolute left-6 top-0 flex h-7 w-7 items-center justify-center rounded-full bg-card border-2 border-primary z-10 group-hover:scale-110 transition-transform">
                   <item.icon className={cn("h-3.5 w-3.5", item.color)} />

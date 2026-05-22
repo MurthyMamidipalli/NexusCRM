@@ -6,11 +6,11 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Plus, MoreVertical, DollarSign, Calendar, Loader2, Target } from 'lucide-react'
+import { Plus, MoreVertical, DollarSign, Calendar, Loader2 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 
 const pipelineStages = [
@@ -23,7 +23,17 @@ const pipelineStages = [
 
 export default function PipelinePage() {
   const db = useFirestore()
-  const leadsQuery = useMemo(() => query(collection(db, collections.LEADS), orderBy('createdAt', 'desc')), [db])
+  const { user } = useUser()
+
+  const leadsQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.LEADS), 
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    )
+  }, [db, user])
+
   const { data: leads, loading } = useCollection(leadsQuery)
 
   const stageData = useMemo(() => {

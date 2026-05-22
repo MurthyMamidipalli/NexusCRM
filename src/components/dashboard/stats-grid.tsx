@@ -5,16 +5,24 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { TrendingUp, Users, Target, Activity, DollarSign, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, where } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 
 export function StatsGrid() {
   const db = useFirestore()
+  const { user } = useUser()
   const [mounted, setMounted] = useState(false)
   
-  const leadsQuery = useMemo(() => (db ? collection(db, collections.LEADS) : null), [db])
-  const contactsQuery = useMemo(() => (db ? collection(db, collections.CONTACTS) : null), [db])
+  const leadsQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(collection(db, collections.LEADS), where('ownerId', '==', user.uid))
+  }, [db, user])
+
+  const contactsQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(collection(db, collections.CONTACTS), where('ownerId', '==', user.uid))
+  }, [db, user])
   
   const { data: leads, loading: leadsLoading } = useCollection(leadsQuery)
   const { data: contacts, loading: contactsLoading } = useCollection(contactsQuery)
