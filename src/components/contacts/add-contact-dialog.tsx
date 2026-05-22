@@ -32,6 +32,8 @@ export function AddContactDialog({ open, onOpenChange, contact }: AddContactDial
     } else {
       setIndustry("Client")
     }
+    // Explicitly reset loading state whenever the dialog visibility or target contact changes
+    setLoading(false)
   }, [contact, open])
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -54,17 +56,17 @@ export function AddContactDialog({ open, onOpenChange, contact }: AddContactDial
       ? updateRecord(db, collections.CONTACTS, contact.id, data)
       : createRecord(db, collections.CONTACTS, data, user.uid)
 
-    // Snappy UI: Show toast and close immediately
+    // Snappy UI: Show toast and trigger close immediately
     toast({ 
       title: contact ? 'Contact Updated' : 'Contact Created', 
       description: `${data.name} has been synchronized to your network.` 
     })
     
-    // Close dialog and reset local loading state immediately
+    // Close dialog and reset local loading state immediately for a responsive feel
     onOpenChange(false)
     setLoading(false)
 
-    // Handle background synchronization
+    // Handle background synchronization and surface any permission errors asynchronously
     mutation
       .catch(async (error: any) => {
         const permissionError = new FirestorePermissionError({
@@ -175,7 +177,7 @@ export function AddContactDialog({ open, onOpenChange, contact }: AddContactDial
             <Button 
               type="submit" 
               disabled={loading} 
-              className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none shadow-lg shadow-primary/20"
+              className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none shadow-lg shadow-primary/20 min-w-[140px]"
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {contact ? 'Update Contact' : 'Save Contact'}
