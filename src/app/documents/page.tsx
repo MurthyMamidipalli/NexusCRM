@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
@@ -10,11 +9,8 @@ import {
   Upload, 
   Download, 
   Trash2, 
-  Search,
   Loader2,
   FileBox,
-  LayoutGrid,
-  List,
   Pencil,
   Eye,
   CheckCircle2,
@@ -41,9 +37,7 @@ export default function DocumentsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingDoc, setEditingDoc] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All Documents')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [mounted, setMounted] = useState(false)
 
   // Preview State
@@ -152,11 +146,10 @@ export default function DocumentsPage() {
   const filteredDocs = useMemo(() => {
     if (!documents) return []
     return documents.filter((doc: any) => {
-      const matchesSearch = doc.name?.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesCategory = categoryFilter === 'All Documents' || doc.category === categoryFilter
-      return matchesSearch && matchesCategory
+      return matchesCategory
     })
-  }, [documents, searchQuery, categoryFilter])
+  }, [documents, categoryFilter])
 
   const categories = useMemo(() => {
     if (!documents) return []
@@ -248,16 +241,7 @@ export default function DocumentsPage() {
       </div>
 
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col sm:flex-row items-center gap-4 bg-card/30 p-4 rounded-2xl border border-border/50 backdrop-blur-md shadow-sm">
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input 
-              className="pl-10 bg-background/50 border-border/50 h-11 focus:ring-primary/20" 
-              placeholder="Search documents..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+        <div className="flex flex-col sm:flex-row items-center justify-end gap-4 bg-card/30 p-4 rounded-2xl border border-border/50 backdrop-blur-md shadow-sm">
           <div className="w-full sm:w-64">
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="h-11 bg-background/50 border-border/50">

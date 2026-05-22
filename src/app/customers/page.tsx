@@ -1,15 +1,13 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Search, Filter, Download, UserCheck, Loader2, Building2, Mail, Phone, Trash2, Pencil } from 'lucide-react'
+import { Filter, Download, UserCheck, Loader2, Building2, Mail, Phone, Trash2, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord } from '@/lib/firestore-service'
-import { Input } from '@/components/ui/input'
 import { AddContactDialog } from '@/components/contacts/add-contact-dialog'
 import { 
   Dialog, 
@@ -30,7 +28,6 @@ export default function ContactsPage() {
   const [selectedContact, setSelectedContact] = useState<any>(null)
   const [editingContact, setEditingContact] = useState<any>(null)
   const [mounted, setMounted] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   
   const contactsQuery = useMemo(() => {
     if (!db || !user) return null
@@ -68,15 +65,6 @@ export default function ContactsPage() {
     setIsAddDialogOpen(true)
   }
 
-  const filteredContacts = useMemo(() => {
-    if (!contacts) return []
-    return contacts.filter((c: any) => 
-      c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.company?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  }, [contacts, searchQuery])
-
   if (!mounted) return null
 
   return (
@@ -98,16 +86,7 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input 
-            className="pl-10 bg-card/50 border-border/50 focus:ring-primary/50" 
-            placeholder="Search contacts..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-2">
             <Filter className="h-4 w-4" /> Filter
@@ -119,9 +98,9 @@ export default function ContactsPage() {
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      ) : filteredContacts && filteredContacts.length > 0 ? (
+      ) : contacts && contacts.length > 0 ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {filteredContacts.map((contact: any) => (
+          {contacts.map((contact: any) => (
             <Card key={contact.id} className="group relative border-none bg-card/50 backdrop-blur-md shadow-lg hover:shadow-2xl transition-all duration-300">
               <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button 

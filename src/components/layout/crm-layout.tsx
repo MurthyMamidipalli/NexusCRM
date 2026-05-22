@@ -1,11 +1,10 @@
-
 "use client"
 
 import React, { useState, useEffect } from 'react'
 import { CRMSidebar } from './crm-sidebar'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search, Bell, User, Loader2, Cloud, CloudOff, RefreshCw, AlertCircle, Menu } from 'lucide-react'
+import { Bell, User, Loader2, Cloud, CloudOff, RefreshCw, AlertCircle, Menu } from 'lucide-react'
 import { useUser } from '@/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { usePersistenceStatus } from '@/components/providers/persistence-provider'
@@ -98,13 +97,6 @@ export function CRMLayout({ children }: CRMLayoutProps) {
               <h2 className="text-sm font-bold font-headline truncate hidden sm:block">
                 {currentPageTitle}
               </h2>
-              <div className="relative w-full max-w-[200px] md:max-w-sm hidden md:block">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input 
-                  className="h-9 pl-9 pr-10 bg-muted/30 border-none focus-visible:ring-primary/20" 
-                  placeholder="Search..." 
-                />
-              </div>
               <PersistenceIndicator />
             </div>
 
