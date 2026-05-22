@@ -6,8 +6,8 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Loader2, Trash2, Calendar, ShieldCheck, Folder, ExternalLink, FileText, Link as LinkIcon, FileSpreadsheet } from 'lucide-react'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
@@ -18,14 +18,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 export default function CertificationsPage() {
   const db = useFirestore()
+  const { user } = useUser()
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const certQuery = useMemo(() => query(collection(db, collections.CERTIFICATIONS), orderBy('createdAt', 'desc')), [db])
+  const certQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.CERTIFICATIONS), 
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    )
+  }, [db, user])
+
   const { data: certifications, loading: certLoading } = useCollection(certQuery)
 
   const handleAddCert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!user) return
+
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
@@ -39,7 +50,7 @@ export default function CertificationsPage() {
     }
 
     try {
-      await createRecord(db, collections.CERTIFICATIONS, data)
+      await createRecord(db, collections.CERTIFICATIONS, data, user.uid)
       toast({ title: 'Record Added' })
       setIsAddOpen(false)
     } catch (error: any) {

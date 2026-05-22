@@ -6,8 +6,8 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Target, Loader2, Trash2, Calendar, Trophy } from 'lucide-react'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
@@ -17,11 +17,20 @@ import { Textarea } from '@/components/ui/textarea'
 
 export default function AchievementsPage() {
   const db = useFirestore()
+  const { user } = useUser()
   const [mounted, setMounted] = useState(false)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const achQuery = useMemo(() => query(collection(db, collections.ACHIEVEMENTS), orderBy('date', 'desc')), [db])
+  const achQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.ACHIEVEMENTS), 
+      where('ownerId', '==', user.uid),
+      orderBy('date', 'desc')
+    )
+  }, [db, user])
+
   const { data: achievements, loading: achLoading } = useCollection(achQuery)
 
   useEffect(() => {
@@ -30,6 +39,8 @@ export default function AchievementsPage() {
 
   const handleAddAch = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!user) return
+
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
@@ -40,7 +51,7 @@ export default function AchievementsPage() {
     }
 
     try {
-      await createRecord(db, collections.ACHIEVEMENTS, data)
+      await createRecord(db, collections.ACHIEVEMENTS, data, user.uid)
       toast({ title: 'Achievement Recorded' })
       setIsAddOpen(false)
     } catch (error: any) {

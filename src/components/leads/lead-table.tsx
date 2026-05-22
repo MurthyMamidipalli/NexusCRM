@@ -21,14 +21,24 @@ import { Button } from '@/components/ui/button'
 import { MoreHorizontal, Mail, Phone, Trash2, Loader2, Briefcase, ExternalLink } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 
 export function LeadTable() {
   const db = useFirestore()
-  const leadsQuery = useMemo(() => query(collection(db, collections.LEADS), orderBy('createdAt', 'desc')), [db])
+  const { user } = useUser()
+
+  const leadsQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.LEADS), 
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    )
+  }, [db, user])
+
   const { data: leads, loading } = useCollection(leadsQuery)
 
   const getStatusColor = (status: string) => {

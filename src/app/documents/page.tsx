@@ -20,8 +20,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
@@ -30,15 +30,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 export default function DocumentsPage() {
   const db = useFirestore()
+  const { user } = useUser()
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const docsQuery = useMemo(() => query(collection(db, collections.DOCUMENTS), orderBy('createdAt', 'desc')), [db])
+  const docsQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.DOCUMENTS), 
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    )
+  }, [db, user])
+
   const { data: documents, loading: docsLoading } = useCollection(docsQuery)
 
   const handleAddDoc = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!user) return
+
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
@@ -50,7 +61,7 @@ export default function DocumentsPage() {
     }
 
     try {
-      await createRecord(db, collections.DOCUMENTS, data)
+      await createRecord(db, collections.DOCUMENTS, data, user.uid)
       toast({ title: 'Document Added' })
       setIsAddOpen(false)
     } catch (error: any) {

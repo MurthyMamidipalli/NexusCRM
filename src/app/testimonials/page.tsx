@@ -6,8 +6,8 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Quote, Loader2, Trash2, User } from 'lucide-react'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
@@ -18,11 +18,20 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 export default function TestimonialsPage() {
   const db = useFirestore()
+  const { user } = useUser()
   const [mounted, setMounted] = useState(false)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const testQuery = useMemo(() => query(collection(db, collections.TESTIMONIALS), orderBy('date', 'desc')), [db])
+  const testQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.TESTIMONIALS), 
+      where('ownerId', '==', user.uid),
+      orderBy('date', 'desc')
+    )
+  }, [db, user])
+
   const { data: testimonials, loading: testLoading } = useCollection(testQuery)
 
   useEffect(() => {
@@ -31,6 +40,8 @@ export default function TestimonialsPage() {
 
   const handleAddTest = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!user) return
+
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
@@ -42,7 +53,7 @@ export default function TestimonialsPage() {
     }
 
     try {
-      await createRecord(db, collections.TESTIMONIALS, data)
+      await createRecord(db, collections.TESTIMONIALS, data, user.uid)
       toast({ title: 'Endorsement Added' })
       setIsAddOpen(false)
     } catch (error: any) {

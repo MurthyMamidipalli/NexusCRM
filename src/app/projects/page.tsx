@@ -18,8 +18,8 @@ import {
   Box,
   Layers
 } from 'lucide-react'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -31,14 +31,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 export default function ProjectsPage() {
   const db = useFirestore()
+  const { user } = useUser()
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const projectsQuery = useMemo(() => query(collection(db, collections.PROJECTS), orderBy('createdAt', 'desc')), [db])
+  const projectsQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.PROJECTS), 
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    )
+  }, [db, user])
+
   const { data: projects, loading: projectsLoading } = useCollection(projectsQuery)
 
   const handleAddProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!user) return
+
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
@@ -53,7 +64,7 @@ export default function ProjectsPage() {
     }
 
     try {
-      await createRecord(db, collections.PROJECTS, data)
+      await createRecord(db, collections.PROJECTS, data, user.uid)
       toast({ title: 'Record Added to Vault' })
       setIsAddOpen(false)
     } catch (error: any) {
@@ -113,7 +124,7 @@ export default function ProjectsPage() {
             <form onSubmit={handleAddProject} className="space-y-6 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="category" className="text-sm font-semibold">Classification</Label>
+                  <Label htmlFor="category" className="text-sm font-semibold text-white">Classification</Label>
                   <Select name="category" defaultValue="Project">
                     <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12">
                       <SelectValue placeholder="Select Category" />
@@ -125,7 +136,7 @@ export default function ProjectsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="title" className="text-sm font-semibold">Title</Label>
+                  <Label htmlFor="title" className="text-sm font-semibold text-white">Title</Label>
                   <Input 
                     id="title" 
                     name="title" 
@@ -138,7 +149,7 @@ export default function ProjectsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="date" className="text-sm font-semibold">Launch Date</Label>
+                  <Label htmlFor="date" className="text-sm font-semibold text-white">Launch Date</Label>
                   <Input 
                     id="date" 
                     name="date" 
@@ -147,7 +158,7 @@ export default function ProjectsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="url" className="text-sm font-semibold">Live URL</Label>
+                  <Label htmlFor="url" className="text-sm font-semibold text-white">Live URL</Label>
                   <Input 
                     id="url" 
                     name="url" 
@@ -158,7 +169,7 @@ export default function ProjectsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-sm font-semibold">Detailed Description</Label>
+                <Label htmlFor="description" className="text-sm font-semibold text-white">Detailed Description</Label>
                 <Textarea 
                   id="description" 
                   name="description" 
@@ -170,14 +181,14 @@ export default function ProjectsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Visual Identity</Label>
+                  <Label className="text-sm font-semibold text-white">Visual Identity</Label>
                   <div className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-700 bg-[#1c1c1f] p-6 transition-all hover:border-primary/50 cursor-pointer text-center">
                     <ImageIcon className="mb-2 h-5 w-5 text-gray-400 group-hover:text-primary" />
                     <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 group-hover:text-gray-200">Upload Visual</span>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Technical Docs</Label>
+                  <Label className="text-sm font-semibold text-white">Technical Docs</Label>
                   <div className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-700 bg-[#1c1c1f] p-6 transition-all hover:border-primary/50 cursor-pointer text-center">
                     <Paperclip className="mb-2 h-5 w-5 text-gray-400 group-hover:text-primary" />
                     <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 group-hover:text-gray-200">Attach PDF</span>

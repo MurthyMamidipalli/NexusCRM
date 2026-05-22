@@ -6,8 +6,8 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Link as LinkIcon, Loader2, Trash2, Globe, Github, Linkedin, Twitter, ExternalLink } from 'lucide-react'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
@@ -16,11 +16,20 @@ import { Label } from '@/components/ui/label'
 
 export default function LinksPage() {
   const db = useFirestore()
+  const { user } = useUser()
   const [mounted, setMounted] = useState(false)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const linksQuery = useMemo(() => query(collection(db, collections.LINKS), orderBy('createdAt', 'desc')), [db])
+  const linksQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.LINKS), 
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    )
+  }, [db, user])
+
   const { data: links, loading: linksLoading } = useCollection(linksQuery)
 
   useEffect(() => {
@@ -29,6 +38,8 @@ export default function LinksPage() {
 
   const handleAddLink = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!user) return
+
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
@@ -39,7 +50,7 @@ export default function LinksPage() {
     }
 
     try {
-      await createRecord(db, collections.LINKS, data)
+      await createRecord(db, collections.LINKS, data, user.uid)
       toast({ title: 'Link Saved' })
       setIsAddOpen(false)
     } catch (error: any) {
