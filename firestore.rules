@@ -2,35 +2,33 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper: Basic Authentication
-    function auth() {
+    // Helper: Is the user authenticated?
+    function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Helper: Ownership check
-    function isOwner(data) {
-      return auth() && data != null && data.ownerId == request.auth.uid;
-    }
-
-    // Profiles: Anyone can view a specific profile, only owner can write.
+    // Profiles: Anyone can read a profile (public check handled in-app), only owner can write.
     match /profiles/{uid} {
       allow get: if true;
-      allow list, write: if auth() && request.auth.uid == uid;
+      allow list, write: if isAuthenticated() && request.auth.uid == uid;
     }
 
-    // Generic rule for all top-level user-owned collections
+    // Generic rule for all user-owned records (Leads, Skills, Certifications, etc.)
     match /{collection}/{id} {
-      // READ: Allow if user owns the record OR if it is explicitly marked as Public
-      allow read: if (auth() && (resource == null || resource.data.ownerId == request.auth.uid)) || (resource != null && resource.data.isPublic == true);
+      // READ: Allow if owner OR if item is marked public
+      allow read: if (isAuthenticated() && (resource == null || resource.data.ownerId == request.auth.uid)) 
+                  || (resource != null && resource.data.isPublic == true);
       
-      // WRITE: Allow if the user is authenticated and is setting themselves as the owner
-      allow create: if auth() && request.resource.data.ownerId == request.auth.uid;
-      allow update, delete: if isOwner(resource.data);
+      // CREATE: Must be authenticated and setting themselves as owner
+      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+      
+      // UPDATE/DELETE: Must be the owner
+      allow update, delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
     }
     
-    // Drafts (Internal helper collection)
+    // Internal Drafts handling
     match /drafts/{id} {
-      allow read, write: if auth() && id.startsWith('lead-draft-' + request.auth.uid);
+      allow read, write: if isAuthenticated() && (resource == null || resource.data.ownerId == request.auth.uid);
     }
   }
 }

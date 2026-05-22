@@ -50,6 +50,15 @@ export default function CertificationsPage() {
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Ensure category matches tab when opening dialog
+  useEffect(() => {
+    if (isDialogOpen && !editingCert) {
+      if (activeTab === "grades") setCategory("Grade Sheet");
+      else if (activeTab === "study") setCategory("Study Certificate");
+      else setCategory("Course Certificate");
+    }
+  }, [isDialogOpen, activeTab, editingCert]);
+
   const certQuery = useMemo(() => {
     if (!db || !user) return null
     return query(collection(db, collections.CERTIFICATIONS), where('ownerId', '==', user.uid))
@@ -76,7 +85,7 @@ export default function CertificationsPage() {
     reader.readAsDataURL(file)
   }
 
-  const handleSaveCert = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveCert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user || !db) return
     setLoading(true)
@@ -91,19 +100,21 @@ export default function CertificationsPage() {
       isPublic: visibility === 'Public',
       externalLink: formData.get('externalLink') as string,
       documentUrl: documentData || editingCert?.documentUrl || '',
+      ownerId: user.uid
     }
 
-    const mutation = editingCert 
-      ? updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data) 
-      : createRecord(db, collections.CERTIFICATIONS, data, user.uid)
-
-    // Snappy UI: Optimistic immediate update
-    toast({ title: editingCert ? 'Credential Updated' : 'Record Created' })
-    setIsDialogOpen(false)
-    resetForm()
-    setLoading(false)
-
-    mutation.catch(async (serverError: any) => {
+    try {
+      if (editingCert) {
+        await updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
+      } else {
+        await createRecord(db, collections.CERTIFICATIONS, data, user.uid)
+      }
+      
+      toast({ title: editingCert ? 'Credential Updated' : 'Record Created' })
+      setIsDialogOpen(false)
+      resetForm()
+    } catch (serverError: any) {
+      console.error('Save Error:', serverError);
       const permissionError = new FirestorePermissionError({
         path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
         operation: editingCert ? 'update' : 'create',
@@ -111,17 +122,15 @@ export default function CertificationsPage() {
         originalError: serverError
       } satisfies SecurityRuleContext);
       errorEmitter.emit('permission-error', permissionError);
-    })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const resetForm = () => {
     setEditingCert(null)
     setDocumentData('')
     setVisibility("Private")
-    // Intelligent defaulting based on tab
-    if (activeTab === "grades") setCategory("Grade Sheet");
-    else if (activeTab === "study") setCategory("Study Certificate");
-    else setCategory("Course Certificate");
   }
 
   const handleDelete = (id: string) => {
