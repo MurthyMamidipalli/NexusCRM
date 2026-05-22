@@ -18,7 +18,8 @@ import {
   FileSpreadsheet,
   Pencil,
   Upload,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
@@ -45,6 +46,17 @@ import {
 } from '@/components/ui/select'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 export default function CertificationsPage() {
   const db = useFirestore()
@@ -79,7 +91,6 @@ export default function CertificationsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // 1GB check (1024 * 1024 * 1024 bytes)
     const maxSize = 1024 * 1024 * 1024
     if (file.size > maxSize) {
       toast({
@@ -118,7 +129,6 @@ export default function CertificationsPage() {
       ownerId: user.uid
     }
 
-    // Initiate mutation immediately and close UI (Optimistic UI)
     const mutation = editingCert 
       ? updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
       : createRecord(db, collections.CERTIFICATIONS, data, user.uid)
@@ -133,7 +143,6 @@ export default function CertificationsPage() {
         errorEmitter.emit('permission-error', permissionError);
       });
 
-    // Don't wait for cloud confirmation - the local cache is updated immediately
     toast({ 
       title: editingCert ? 'Record Updated' : 'Record Added', 
       description: 'Changes synchronized to your local vault.' 
@@ -156,6 +165,24 @@ export default function CertificationsPage() {
         errorEmitter.emit('permission-error', permissionError);
       })
     toast({ title: 'Record Removed' })
+  }
+
+  const handleDeleteAll = () => {
+    if (!certifications || !db) return
+    const count = certifications.length
+    if (count === 0) return
+    
+    certifications.forEach((cert: any) => {
+      deleteRecord(db, collections.CERTIFICATIONS, cert.id)
+        .catch(async (err) => {
+          const permissionError = new FirestorePermissionError({
+            path: `${collections.CERTIFICATIONS}/${cert.id}`,
+            operation: 'delete',
+          } satisfies SecurityRuleContext);
+          errorEmitter.emit('permission-error', permissionError);
+        })
+    })
+    toast({ title: `Removed ${count} records`, description: "Your certification vault has been cleared." })
   }
 
   const filterCerts = (cat: string | null) => {
@@ -181,114 +208,144 @@ export default function CertificationsPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">🏆 Credentials & Grade Sheets</h1>
           <p className="text-muted-foreground">Secure document vault for academic records and certifications.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) {
-            setEditingCert(null);
-            setSelectedFile(null);
-            setDocumentData('');
-            setCategory("Course Certificate");
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingCert(null)}>
-              <Plus className="h-4 w-4" />
-              Add Record
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[550px]">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-bold font-headline">
-                {editingCert ? 'Edit Credential' : 'Add New Credential'}
-              </DialogTitle>
-              <DialogDescription>
-                Upload documents (max 1GB) and enter verification details.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSaveCert} className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category">Record Type</Label>
-                  <Select 
-                    defaultValue={editingCert?.category || "Course Certificate"}
-                    onValueChange={setCategory}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Study Certificate">Study Certificate</SelectItem>
-                      <SelectItem value="Course Certificate">Course Certificate</SelectItem>
-                      <SelectItem value="Grade Sheet">Grade Sheet</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="title">Title / Course Name</Label>
-                  <Input id="title" name="title" defaultValue={editingCert?.title || ''} placeholder="AWS Solutions Architect" required />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="issuer">Issuing Organization</Label>
-                <Input id="issuer" name="issuer" defaultValue={editingCert?.issuer || ''} placeholder="University or Provider Name" required />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date">Completion Date</Label>
-                  <Input id="date" name="date" type="date" defaultValue={editingCert?.date || ''} required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="credentialId">Credential ID / ID</Label>
-                  <Input id="credentialId" name="credentialId" defaultValue={editingCert?.credentialId || ''} placeholder="ABC-123" />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="externalLink">Verification Link</Label>
-                <div className="relative">
-                  <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="externalLink" name="externalLink" className="pl-10" defaultValue={editingCert?.externalLink || ''} placeholder="https://verify.cert.com" />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Document Upload (Max 1GB)</Label>
-                <div 
-                  className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 transition-all hover:border-primary/50 cursor-pointer bg-muted/30"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                  {selectedFile || editingCert?.fileName ? (
-                    <div className="flex flex-col items-center">
-                      <CheckCircle2 className="h-8 w-8 text-primary mb-2" />
-                      <span className="text-sm font-bold text-foreground line-clamp-1 text-center px-2">
-                        {selectedFile?.name || editingCert?.fileName}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-1">
-                        Replace Document
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center">
-                      <Upload className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
-                      <span className="text-sm font-semibold">Click to upload document</span>
-                      <span className="text-[10px] text-muted-foreground mt-1 text-center">PDF, JPG, PNG up to 1GB</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button type="submit" disabled={loading} className="w-full">
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Record
+        <div className="flex items-center gap-2">
+          {certifications && certifications.length > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="gap-2 text-destructive border-destructive/20 hover:bg-destructive/10">
+                  <Trash2 className="h-4 w-4" />
+                  Clear All
                 </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    Purge Certification Vault?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all {certifications.length} records. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive text-white hover:bg-destructive/90">
+                    Purge All Records
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              setEditingCert(null);
+              setSelectedFile(null);
+              setDocumentData('');
+              setCategory("Course Certificate");
+            }
+          }}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingCert(null)}>
+                <Plus className="h-4 w-4" />
+                Add Record
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[550px]">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-bold font-headline">
+                  {editingCert ? 'Edit Credential' : 'Add New Credential'}
+                </DialogTitle>
+                <DialogDescription>
+                  Upload documents (max 1GB) and enter verification details.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSaveCert} className="space-y-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Record Type</Label>
+                    <Select 
+                      defaultValue={editingCert?.category || "Course Certificate"}
+                      onValueChange={setCategory}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Study Certificate">Study Certificate</SelectItem>
+                        <SelectItem value="Course Certificate">Course Certificate</SelectItem>
+                        <SelectItem value="Grade Sheet">Grade Sheet</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Title / Course Name</Label>
+                    <Input id="title" name="title" defaultValue={editingCert?.title || ''} placeholder="AWS Solutions Architect" required />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="issuer">Issuing Organization</Label>
+                  <Input id="issuer" name="issuer" defaultValue={editingCert?.issuer || ''} placeholder="University or Provider Name" required />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="date">Completion Date</Label>
+                    <Input id="date" name="date" type="date" defaultValue={editingCert?.date || ''} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="credentialId">Credential ID / ID</Label>
+                    <Input id="credentialId" name="credentialId" defaultValue={editingCert?.credentialId || ''} placeholder="ABC-123" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="externalLink">Verification Link</Label>
+                  <div className="relative">
+                    <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="externalLink" name="externalLink" className="pl-10" defaultValue={editingCert?.externalLink || ''} placeholder="https://verify.cert.com" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Document Upload (Max 1GB)</Label>
+                  <div 
+                    className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 transition-all hover:border-primary/50 cursor-pointer bg-muted/30"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                    {selectedFile || editingCert?.fileName ? (
+                      <div className="flex flex-col items-center">
+                        <CheckCircle2 className="h-8 w-8 text-primary mb-2" />
+                        <span className="text-sm font-bold text-foreground line-clamp-1 text-center px-2">
+                          {selectedFile?.name || editingCert?.fileName}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-1">
+                          Replace Document
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <Upload className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
+                        <span className="text-sm font-semibold">Click to upload document</span>
+                        <span className="text-[10px] text-muted-foreground mt-1 text-center">PDF, JPG, PNG up to 1GB</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button type="submit" disabled={loading} className="w-full">
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Record
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Tabs defaultValue="all" className="space-y-8">
