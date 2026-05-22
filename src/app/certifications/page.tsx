@@ -1,41 +1,105 @@
 
 "use client"
 
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useRef, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Loader2, Trash2, Calendar, ShieldCheck, Folder, ExternalLink, FileText, Link as LinkIcon, FileSpreadsheet } from 'lucide-react'
+import { 
+  Plus, 
+  Loader2, 
+  Trash2, 
+  Calendar, 
+  ShieldCheck, 
+  Folder, 
+  ExternalLink, 
+  FileText, 
+  Link as LinkIcon, 
+  FileSpreadsheet,
+  Pencil,
+  Upload,
+  CheckCircle2,
+  AlertCircle
+} from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
-import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
+import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter, 
+  DialogTrigger,
+  DialogDescription 
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select'
 
 export default function CertificationsPage() {
   const db = useFirestore()
   const { user } = useUser()
-  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingCert, setEditingCert] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  
+  // File upload state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [documentData, setDocumentData] = useState<string>('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const certQuery = useMemo(() => {
     if (!db || !user) return null
     return query(
       collection(db, collections.CERTIFICATIONS), 
       where('ownerId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      orderBy('date', 'desc')
     )
   }, [db, user])
 
   const { data: certifications, loading: certLoading } = useCollection(certQuery)
 
-  const handleAddCert = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // 1GB check (1024 * 1024 * 1024 bytes)
+    const maxSize = 1024 * 1024 * 1024
+    if (file.size > maxSize) {
+      toast({
+        variant: 'destructive',
+        title: 'File Too Large',
+        description: 'Document must be less than 1GB.'
+      })
+      return
+    }
+
+    setSelectedFile(file)
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setDocumentData(reader.result as string)
+      toast({ title: 'File Attached', description: `${file.name} is ready for upload.` })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSaveCert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !db) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
@@ -46,26 +110,36 @@ export default function CertificationsPage() {
       credentialId: formData.get('credentialId'),
       category: formData.get('category') || 'Course Certificate',
       externalLink: formData.get('externalLink'),
-      documentUrl: formData.get('documentUrl'),
+      documentUrl: documentData || editingCert?.documentUrl || '',
+      fileName: selectedFile?.name || editingCert?.fileName || ''
     }
 
     try {
-      await createRecord(db, collections.CERTIFICATIONS, data, user.uid)
-      toast({ title: 'Record Added' })
-      setIsAddOpen(false)
+      if (editingCert) {
+        await updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
+        toast({ title: 'Record Updated' })
+      } else {
+        await createRecord(db, collections.CERTIFICATIONS, data, user.uid)
+        toast({ title: 'Record Added to Vault' })
+      }
+      setIsDialogOpen(false)
+      setEditingCert(null)
+      setSelectedFile(null)
+      setDocumentData('')
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
+      toast({ variant: 'destructive', title: 'Save Error', description: error.message })
     } finally {
       setLoading(false)
     }
   }
 
   const handleDelete = async (id: string) => {
+    if (!db) return
     try {
       await deleteRecord(db, collections.CERTIFICATIONS, id)
       toast({ title: 'Record Removed' })
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
+      toast({ variant: 'destructive', title: 'Delete Error', description: error.message })
     }
   }
 
@@ -75,7 +149,7 @@ export default function CertificationsPage() {
     return certifications.filter((c: any) => c.category === category)
   }
 
-  if (certLoading) {
+  if (!mounted || certLoading) {
     return (
       <CRMLayout>
         <div className="flex h-64 items-center justify-center">
@@ -90,69 +164,107 @@ export default function CertificationsPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">🏆 Credentials & Grade Sheets</h1>
-          <p className="text-muted-foreground">Manage your Study, Course certificates and academic Grade Sheets.</p>
+          <p className="text-muted-foreground">Secure document vault for academic records and certifications.</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) {
+            setEditingCert(null);
+            setSelectedFile(null);
+            setDocumentData('');
+          }
+        }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20">
+            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingCert(null)}>
               <Plus className="h-4 w-4" />
               Add Record
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[550px]">
             <DialogHeader>
-              <DialogTitle>Add New Credential</DialogTitle>
+              <DialogTitle className="text-2xl font-bold font-headline">
+                {editingCert ? 'Edit Credential' : 'Add New Credential'}
+              </DialogTitle>
+              <DialogDescription>
+                Upload documents (max 1GB) and enter verification details.
+              </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleAddCert} className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="category">Type (Folder)</Label>
-                <Select name="category" defaultValue="Course Certificate">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Study Certificate">Study Certificate</SelectItem>
-                    <SelectItem value="Course Certificate">Course Certificate</SelectItem>
-                    <SelectItem value="Grade Sheet">Grade Sheet</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="title">Title / Course Name</Label>
-                <Input id="title" name="title" placeholder="AWS Certified Cloud Practitioner" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="issuer">Issuing Organization / Institution</Label>
-                <Input id="issuer" name="issuer" placeholder="Amazon Web Services or University Name" required />
-              </div>
+            <form onSubmit={handleSaveCert} className="space-y-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="date">Date</Label>
-                  <Input id="date" name="date" type="date" required />
+                  <Label htmlFor="category">Record Type</Label>
+                  <Select name="category" defaultValue={editingCert?.category || "Course Certificate"}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Study Certificate">Study Certificate</SelectItem>
+                      <SelectItem value="Course Certificate">Course Certificate</SelectItem>
+                      <SelectItem value="Grade Sheet">Grade Sheet</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="credentialId">Credential ID / Roll No.</Label>
-                  <Input id="credentialId" name="credentialId" placeholder="e.g. ABC-123-XYZ" />
+                  <Label htmlFor="title">Title / Course Name</Label>
+                  <Input id="title" name="title" defaultValue={editingCert?.title || ''} placeholder="AWS Solutions Architect" required />
                 </div>
               </div>
+              
               <div className="space-y-2">
-                <Label htmlFor="externalLink">Verification Link (URL)</Label>
+                <Label htmlFor="issuer">Issuing Organization</Label>
+                <Input id="issuer" name="issuer" defaultValue={editingCert?.issuer || ''} placeholder="University or Provider Name" required />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="date">Completion Date</Label>
+                  <Input id="date" name="date" type="date" defaultValue={editingCert?.date || ''} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="credentialId">Credential ID / ID</Label>
+                  <Input id="credentialId" name="credentialId" defaultValue={editingCert?.credentialId || ''} placeholder="ABC-123" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="externalLink">Verification Link</Label>
                 <div className="relative">
                   <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="externalLink" name="externalLink" className="pl-10" placeholder="https://..." />
+                  <Input id="externalLink" name="externalLink" className="pl-10" defaultValue={editingCert?.externalLink || ''} placeholder="https://verify.cert.com" />
                 </div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="documentUrl">Document Path / Vault Reference</Label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="documentUrl" name="documentUrl" className="pl-10" placeholder="Path to document in your vault" />
+                <Label>Document Upload (Max 1GB)</Label>
+                <div 
+                  className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 transition-all hover:border-primary/50 cursor-pointer bg-muted/30"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                  {selectedFile || editingCert?.fileName ? (
+                    <div className="flex flex-col items-center">
+                      <CheckCircle2 className="h-8 w-8 text-primary mb-2" />
+                      <span className="text-sm font-bold text-foreground line-clamp-1">
+                        {selectedFile?.name || editingCert?.fileName}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-1">
+                        Replace Document
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center">
+                      <Upload className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
+                      <span className="text-sm font-semibold">Click to upload document</span>
+                      <span className="text-[10px] text-muted-foreground mt-1">PDF, JPG, PNG up to 1GB</span>
+                    </div>
+                  )}
                 </div>
               </div>
+
               <DialogFooter>
-                <Button type="submit" disabled={loading}>
+                <Button type="submit" disabled={loading} className="w-full">
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Record
+                  Save to Vault
                 </Button>
               </DialogFooter>
             </form>
@@ -169,27 +281,27 @@ export default function CertificationsPage() {
         </TabsList>
 
         <TabsContent value="all" className="mt-0">
-          <CertGrid items={filterCerts(null)} onDelete={handleDelete} />
+          <CertGrid items={filterCerts(null)} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); }} />
         </TabsContent>
         <TabsContent value="study" className="mt-0">
-          <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} />
+          <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); }} />
         </TabsContent>
         <TabsContent value="course" className="mt-0">
-          <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} />
+          <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); }} />
         </TabsContent>
         <TabsContent value="grades" className="mt-0">
-          <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} />
+          <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); }} />
         </TabsContent>
       </Tabs>
     </CRMLayout>
   )
 }
 
-function CertGrid({ items, onDelete }: { items: any[], onDelete: (id: string) => void }) {
+function CertGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id: string) => void, onEdit: (cert: any) => void }) {
   if (items.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30 text-muted-foreground italic">
-        This folder is empty.
+        No records found in this folder.
       </div>
     )
   }
@@ -203,12 +315,28 @@ function CertGrid({ items, onDelete }: { items: any[], onDelete: (id: string) =>
               <div className="p-3 rounded-2xl bg-primary/10 text-primary">
                 {cert.category === 'Grade Sheet' ? <FileSpreadsheet className="h-6 w-6" /> : <ShieldCheck className="h-6 w-6" />}
               </div>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => onDelete(cert.id)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-muted-foreground hover:text-primary" 
+                  onClick={() => onEdit(cert)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive" 
+                  onClick={() => onDelete(cert.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+            
             <div className="mt-4 space-y-1">
-              <h3 className="font-headline font-bold text-lg">{cert.title}</h3>
+              <h3 className="font-headline font-bold text-lg leading-tight">{cert.title}</h3>
               <p className="text-sm font-semibold text-primary">{cert.issuer}</p>
               <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest pt-1 flex items-center gap-1">
                 <Folder className="h-3 w-3" />
@@ -232,7 +360,7 @@ function CertGrid({ items, onDelete }: { items: any[], onDelete: (id: string) =>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="text-[11px] gap-1.5 h-8 disabled:opacity-30" 
+                className="text-[11px] gap-1.5 h-8 font-bold" 
                 disabled={!cert.externalLink}
                 asChild={!!cert.externalLink}
               >
@@ -249,10 +377,19 @@ function CertGrid({ items, onDelete }: { items: any[], onDelete: (id: string) =>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="text-[11px] gap-1.5 h-8 disabled:opacity-30" 
+                className="text-[11px] gap-1.5 h-8 font-bold disabled:opacity-30" 
                 disabled={!cert.documentUrl}
+                asChild={!!cert.documentUrl}
               >
-                <FileText className="h-3 w-3" /> Document
+                {cert.documentUrl ? (
+                  <a href={cert.documentUrl} download={cert.fileName || 'certificate'}>
+                    <FileText className="h-3 w-3" /> Document
+                  </a>
+                ) : (
+                  <span>
+                    <FileText className="h-3 w-3" /> Document
+                  </span>
+                )}
               </Button>
             </div>
           </CardContent>
