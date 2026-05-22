@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect } from 'react'
@@ -80,8 +79,6 @@ export default function CareerPage() {
     }
 
     updateField('currentJob' as any, updatedJob)
-    // We explicitly wait for the state to be updated by using updatedJob if needed,
-    // but our new hook ref-based logic handles this.
     save()
     setIsDialogOpen(false)
     toast({ title: 'Professional Position Updated' })
@@ -91,16 +88,6 @@ export default function CareerPage() {
     updateField('currentJob' as any, null)
     save()
     toast({ title: 'Position Removed' })
-  }
-
-  if (!mounted || profileLoading) {
-    return (
-      <CRMLayout>
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </CRMLayout>
-    )
   }
 
   return (
@@ -246,7 +233,11 @@ export default function CareerPage() {
       </div>
 
       <div className="max-w-4xl">
-        {currentJob.company ? (
+        {!mounted || profileLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : currentJob.company ? (
           <Card className="border-none bg-card/50 backdrop-blur-md shadow-xl group overflow-hidden">
             <div className="h-24 bg-gradient-to-r from-[#7299f0]/20 to-accent/10" />
             <CardContent className="p-8 relative">

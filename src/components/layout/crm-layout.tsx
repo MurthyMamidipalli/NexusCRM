@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { CRMSidebar } from './crm-sidebar'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Bell, User, Loader2, Cloud, CloudOff, RefreshCw, AlertCircle, Menu } from 'lucide-react'
+import { Bell, User, Loader2, Cloud, CloudOff, RefreshCw } from 'lucide-react'
 import { useUser } from '@/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { usePersistenceStatus } from '@/components/providers/persistence-provider'
@@ -76,14 +75,6 @@ export function CRMLayout({ children }: CRMLayoutProps) {
     setMounted(true)
   }, [])
 
-  if (!mounted) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
-  }
-
   const currentPageTitle = routeTitles[pathname] || 'Intelligence Hub'
 
   return (
@@ -91,7 +82,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
       <div className="flex h-screen w-full overflow-hidden bg-background">
         <CRMSidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <header className="flex h-16 items-center justify-between border-b bg-card px-4 md:px-6">
+          <header className="flex h-16 items-center justify-between border-b bg-card px-4 md:px-6 shrink-0">
             <div className="flex items-center gap-4 flex-1">
               <SidebarTrigger className="md:hidden" />
               <h2 className="text-sm font-bold font-headline truncate hidden sm:block">
@@ -106,8 +97,8 @@ export function CRMLayout({ children }: CRMLayoutProps) {
                 <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-primary border-2 border-card" />
               </Button>
               <div className="flex items-center gap-3 pl-2 border-l border-border/50">
-                {loading ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                {loading || !mounted ? (
+                  <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
                 ) : (
                   <>
                     <div className="flex flex-col items-end hidden sm:flex">
@@ -119,7 +110,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
                       </span>
                     </div>
                     <Avatar className="h-8 w-8 md:h-9 md:w-9 border-2 border-primary/10">
-                      <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/40/40`} />
+                      <AvatarImage src={user?.photoURL || `https://picsum.photos/seed/${user?.uid}/40/40`} />
                       <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
                     </Avatar>
                   </>

@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useRef, useEffect } from 'react'
@@ -74,7 +73,6 @@ export default function CertificationsPage() {
 
   const { data: rawCertifications, loading: certLoading } = useCollection(certQuery)
 
-  // In-memory sorting for index resilience
   const certifications = useMemo(() => {
     if (!rawCertifications) return []
     return [...rawCertifications].sort((a: any, b: any) => {
@@ -88,17 +86,6 @@ export default function CertificationsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const maxSize = 1024 * 1024 * 1024
-    if (file.size > maxSize) {
-      toast({
-        variant: 'destructive',
-        title: 'File Too Large',
-        description: 'Document must be less than 1GB.'
-      })
-      return
-    }
-
-    setSelectedFile(file)
     const reader = new FileReader()
     reader.onloadend = () => {
       setDocumentData(reader.result as string)
@@ -130,24 +117,18 @@ export default function CertificationsPage() {
       ? updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
       : createRecord(db, collections.CERTIFICATIONS, data, user.uid)
 
-    mutation
-      .catch(async (err) => {
-        const permissionError = new FirestorePermissionError({
-          path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
-          operation: editingCert ? 'update' : 'create',
-          requestResourceData: data,
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      });
+    mutation.catch(async (err) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
+        operation: editingCert ? 'update' : 'create',
+        requestResourceData: data,
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    });
 
-    toast({ 
-      title: editingCert ? 'Record Updated' : 'Record Added', 
-      description: 'Changes synchronized to your local vault.' 
-    })
+    toast({ title: editingCert ? 'Record Updated' : 'Record Added' })
     setIsDialogOpen(false)
     setEditingCert(null)
-    setSelectedFile(null)
-    setDocumentData('')
     setLoading(false)
   }
 
@@ -169,16 +150,6 @@ export default function CertificationsPage() {
     return certifications.filter((c: any) => c.category === cat)
   }
 
-  if (!mounted || certLoading) {
-    return (
-      <CRMLayout>
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </CRMLayout>
-    )
-  }
-
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -193,7 +164,6 @@ export default function CertificationsPage() {
               setEditingCert(null);
               setSelectedFile(null);
               setDocumentData('');
-              setCategory("Course Certificate");
             }
           }}>
             <DialogTrigger asChild>
@@ -208,20 +178,15 @@ export default function CertificationsPage() {
                   {editingCert ? 'Edit Credential' : 'Add New Credential'}
                 </DialogTitle>
                 <DialogDescription>
-                  Upload documents (max 1GB) and enter verification details.
+                  Upload documents and enter verification details.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSaveCert} className="space-y-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="category">Record Type</Label>
-                    <Select 
-                      defaultValue={editingCert?.category || "Course Certificate"}
-                      onValueChange={setCategory}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Category" />
-                      </SelectTrigger>
+                    <Select defaultValue={editingCert?.category || "Course Certificate"} onValueChange={setCategory}>
+                      <SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Study Certificate">Study Certificate</SelectItem>
                         <SelectItem value="Course Certificate">Course Certificate</SelectItem>
@@ -260,7 +225,7 @@ export default function CertificationsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Document Upload (Max 1GB)</Label>
+                  <Label>Document Upload</Label>
                   <div 
                     className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 transition-all hover:border-primary/50 cursor-pointer bg-muted/30"
                     onClick={() => fileInputRef.current?.click()}
@@ -272,15 +237,11 @@ export default function CertificationsPage() {
                         <span className="text-sm font-bold text-foreground line-clamp-1 text-center px-2">
                           {selectedFile?.name || editingCert?.fileName}
                         </span>
-                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-1">
-                          Replace Document
-                        </span>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center">
                         <Upload className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
                         <span className="text-sm font-semibold">Click to upload document</span>
-                        <span className="text-[10px] text-muted-foreground mt-1 text-center">PDF, JPG, PNG up to 1GB</span>
                       </div>
                     )}
                   </div>
@@ -298,23 +259,29 @@ export default function CertificationsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="study" className="space-y-8">
-        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto">
-          <TabsTrigger value="study" className="gap-2"><Folder className="h-3 w-3" /> Study Certificates</TabsTrigger>
-          <TabsTrigger value="course" className="gap-2"><Folder className="h-3 w-3" /> Course Certificates</TabsTrigger>
-          <TabsTrigger value="grades" className="gap-2"><FileSpreadsheet className="h-3 w-3" /> Grade Sheets</TabsTrigger>
-        </TabsList>
+      {!mounted || certLoading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <Tabs defaultValue="study" className="space-y-8">
+          <TabsList className="bg-muted/50 p-1 flex-wrap h-auto">
+            <TabsTrigger value="study" className="gap-2"><Folder className="h-3 w-3" /> Study Certificates</TabsTrigger>
+            <TabsTrigger value="course" className="gap-2"><Folder className="h-3 w-3" /> Course Certificates</TabsTrigger>
+            <TabsTrigger value="grades" className="gap-2"><FileSpreadsheet className="h-3 w-3" /> Grade Sheets</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="study" className="mt-0">
-          <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
-        </TabsContent>
-        <TabsContent value="course" className="mt-0">
-          <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
-        </TabsContent>
-        <TabsContent value="grades" className="mt-0">
-          <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="study" className="mt-0">
+            <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
+          </TabsContent>
+          <TabsContent value="course" className="mt-0">
+            <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
+          </TabsContent>
+          <TabsContent value="grades" className="mt-0">
+            <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
+          </TabsContent>
+        </Tabs>
+      )}
     </CRMLayout>
   )
 }
@@ -338,32 +305,14 @@ function CertGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id: st
                 {cert.category === 'Grade Sheet' ? <FileSpreadsheet className="h-6 w-6" /> : <ShieldCheck className="h-6 w-6" />}
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 text-muted-foreground hover:text-primary" 
-                  onClick={() => onEdit(cert)}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive" 
-                  onClick={() => onDelete(cert.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => onEdit(cert)}><Pencil className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => onDelete(cert.id)}><Trash2 className="h-4 w-4" /></Button>
               </div>
             </div>
             
             <div className="mt-4 space-y-1">
               <h3 className="font-headline font-bold text-lg leading-tight">{cert.title}</h3>
               <p className="text-sm font-semibold text-primary">{cert.issuer}</p>
-              <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest pt-1 flex items-center gap-1">
-                <Folder className="h-3 w-3" />
-                {cert.category}
-              </div>
             </div>
             
             <div className="mt-6 flex flex-col gap-2">
@@ -379,38 +328,18 @@ function CertGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id: st
             </div>
 
             <div className="mt-6 pt-4 border-t border-border/50 grid grid-cols-2 gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-[11px] gap-1.5 h-8 font-bold" 
-                disabled={!cert.externalLink}
-                asChild={!!cert.externalLink}
-              >
+              <Button variant="outline" size="sm" className="text-[11px] gap-1.5 h-8 font-bold" disabled={!cert.externalLink} asChild={!!cert.externalLink}>
                 {cert.externalLink ? (
-                  <a href={cert.externalLink} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-3 w-3" /> Verify
-                  </a>
+                  <a href={cert.externalLink} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3 w-3" /> Verify</a>
                 ) : (
-                  <span>
-                    <ExternalLink className="h-3 w-3" /> Verify
-                  </span>
+                  <span><ExternalLink className="h-3 w-3" /> Verify</span>
                 )}
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-[11px] gap-1.5 h-8 font-bold disabled:opacity-30" 
-                disabled={!cert.documentUrl}
-                asChild={!!cert.documentUrl}
-              >
+              <Button variant="outline" size="sm" className="text-[11px] gap-1.5 h-8 font-bold disabled:opacity-30" disabled={!cert.documentUrl} asChild={!!cert.documentUrl}>
                 {cert.documentUrl ? (
-                  <a href={cert.documentUrl} download={cert.fileName || 'certificate'}>
-                    <FileText className="h-3 w-3" /> Document
-                  </a>
+                  <a href={cert.documentUrl} download={cert.fileName || 'certificate'}><FileText className="h-3 w-3" /> Document</a>
                 ) : (
-                  <span>
-                    <FileText className="h-3 w-3" /> Document
-                  </span>
+                  <span><FileText className="h-3 w-3" /> Document</span>
                 )}
               </Button>
             </div>

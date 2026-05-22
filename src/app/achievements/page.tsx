@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect } from 'react'
@@ -99,16 +98,6 @@ export default function AchievementsPage() {
     toast({ title: 'Record Removed' })
   }
 
-  if (!mounted || achLoading) {
-    return (
-      <CRMLayout>
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </CRMLayout>
-    )
-  }
-
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -158,7 +147,11 @@ export default function AchievementsPage() {
         </Dialog>
       </div>
 
-      {achievements && achievements.length > 0 ? (
+      {!mounted || achLoading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : achievements && achievements.length > 0 ? (
         <div className="grid grid-cols-1 gap-6">
           {achievements.map((ach: any) => (
             <Card key={ach.id} className="group border-none bg-card/50 backdrop-blur-md shadow-md">
