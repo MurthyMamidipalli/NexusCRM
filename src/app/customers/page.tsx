@@ -5,24 +5,29 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Search, Filter, Download, UserCheck, Loader2, Building2, Mail, ExternalLink } from 'lucide-react'
+import { Search, Filter, Download, UserCheck, Loader2, Building2, Mail, ExternalLink, Phone } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 import { Input } from '@/components/ui/input'
 import { AddContactDialog } from '@/components/contacts/add-contact-dialog'
 
 export default function ContactsPage() {
   const db = useFirestore()
+  const { user } = useUser()
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   
   const contactsQuery = useMemo(() => {
-    if (!db) return null
-    return query(collection(db, collections.CONTACTS), orderBy('createdAt', 'desc'))
-  }, [db])
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.CONTACTS), 
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    )
+  }, [db, user])
   
   const { data: contacts, loading } = useCollection(contactsQuery)
 
@@ -82,9 +87,23 @@ export default function ContactsPage() {
               </CardHeader>
               <CardContent>
                 <h3 className="font-headline text-lg font-bold group-hover:text-primary transition-colors">{contact.name}</h3>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4">
-                  <Building2 className="h-3 w-3" />
-                  {contact.company || 'Private'}
+                <div className="space-y-1 mb-4">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Building2 className="h-3 w-3" />
+                    {contact.company || 'Private'}
+                  </div>
+                  {contact.phone && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Phone className="h-3 w-3" />
+                      {contact.phone}
+                    </div>
+                  )}
+                  {contact.email && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Mail className="h-3 w-3" />
+                      {contact.email}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/50">

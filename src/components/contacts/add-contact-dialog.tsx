@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useFirestore, useUser } from '@/firebase'
 import { createRecord, collections } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Loader2, Building2, User } from 'lucide-react'
+import { Loader2, Building2, User, Phone, Mail } from 'lucide-react'
 
 interface AddContactDialogProps {
   open: boolean
@@ -31,55 +31,97 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
     const data = {
       name: formData.get('name'),
       email: formData.get('email'),
+      phone: formData.get('phone'),
       company: formData.get('company'),
       industry: formData.get('industry'),
       since: new Date().getFullYear().toString(),
       ownerId: user.uid,
     }
 
-    try {
-      await createRecord(db, collections.CUSTOMERS, data)
-      toast({ title: 'Contact Created', description: `${data.name} has been added to your network.` })
-      onOpenChange(false)
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    } finally {
-      setLoading(false)
-    }
+    // Optimistic UI update
+    onOpenChange(false)
+    
+    createRecord(db, collections.CUSTOMERS, data)
+      .then(() => {
+        toast({ title: 'Contact Created', description: `${data.name} has been added to your network.` })
+      })
+      .catch((error: any) => {
+        toast({ variant: 'destructive', title: 'Error', description: error.message })
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle className="font-headline text-2xl">Add Manual Contact</DialogTitle>
+      <DialogContent className="sm:max-w-[450px] bg-[#121214] text-white border-none rounded-2xl p-8">
+        <DialogHeader className="mb-6">
+          <DialogTitle className="font-headline text-3xl font-bold">Add Manual Contact</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="name">Full Name</Label>
+            <Label htmlFor="name" className="text-sm font-semibold text-white">Full Name</Label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input id="name" name="name" className="pl-10" placeholder="Jane Cooper" required />
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input 
+                id="name" 
+                name="name" 
+                className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl" 
+                placeholder="Jane Cooper" 
+                required 
+              />
             </div>
           </div>
+          
           <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
-            <Input id="email" name="email" type="email" placeholder="jane@example.com" required />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="company">Company</Label>
+            <Label htmlFor="email" className="text-sm font-semibold text-white">Email Address</Label>
             <div className="relative">
-              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input id="company" name="company" className="pl-10" placeholder="Company Name" />
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input 
+                id="email" 
+                name="email" 
+                type="email" 
+                className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl" 
+                placeholder="jane@example.com" 
+                required 
+              />
             </div>
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="industry">Relationship / Category</Label>
+            <Label htmlFor="phone" className="text-sm font-semibold text-white">Contact Number</Label>
+            <div className="relative">
+              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input 
+                id="phone" 
+                name="phone" 
+                className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl" 
+                placeholder="+1 (555) 000-0000" 
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="company" className="text-sm font-semibold text-white">Company</Label>
+            <div className="relative">
+              <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input 
+                id="company" 
+                name="company" 
+                className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl" 
+                placeholder="Company Name" 
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="industry" className="text-sm font-semibold text-white">Relationship / Category</Label>
             <Select name="industry" defaultValue="Client">
-              <SelectTrigger>
+              <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
                 <SelectItem value="Client">Client</SelectItem>
                 <SelectItem value="Partner">Partner</SelectItem>
                 <SelectItem value="Vendor">Vendor</SelectItem>
@@ -88,9 +130,21 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter className="pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={loading} className="shadow-lg shadow-primary/20">
+
+          <DialogFooter className="pt-4 gap-3">
+            <Button 
+              type="button" 
+              variant="ghost" 
+              onClick={() => onOpenChange(false)}
+              className="bg-[#1c1c1f] hover:bg-gray-800 text-white font-bold h-12 px-8 rounded-xl border-none"
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={loading} 
+              className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none shadow-lg shadow-primary/20"
+            >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Contact
             </Button>
