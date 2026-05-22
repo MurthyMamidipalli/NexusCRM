@@ -1,37 +1,61 @@
 
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useMemo, useEffect, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
-import { useUser } from '@/firebase'
+import { useUser, useFirestore, useDoc } from '@/firebase'
+import { doc } from 'firebase/firestore'
+import { collections } from '@/lib/firestore-service'
+import { usePersistentDocument } from '@/hooks/use-persistence'
 import { Settings, User, Bell, Shield, Eye, Loader2, Save } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
+const EMPTY_SETTINGS = {
+  notifications: true,
+  publicProfile: false,
+  compactMode: false
+};
+
 export default function SettingsPage() {
   const { user, loading: userLoading } = useUser()
+  const db = useFirestore()
   const [mounted, setMounted] = useState(false)
-
-  // Local state for UI toggles (demo purposes)
-  const [notifications, setNotifications] = useState(true)
-  const [publicProfile, setPublicProfile] = useState(false)
-  const [compactMode, setCompactMode] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
+  const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
+
+  const initialData = useMemo(() => {
+    if (!profileDoc) return EMPTY_SETTINGS;
+    return {
+      notifications: profileDoc.notifications ?? true,
+      publicProfile: profileDoc.publicProfile ?? false,
+      compactMode: profileDoc.compactMode ?? false,
+    };
+  }, [profileDoc]);
+
+  const { data: settings, updateField, save } = usePersistentDocument(
+    collections.PROFILES,
+    user?.uid,
+    initialData
+  )
+
   const handleSaveSettings = () => {
+    save()
     toast({
       title: "Settings Saved",
-      description: "Your preferences have been updated locally."
+      description: "Your preferences have been synchronized to the cloud."
     })
   }
 
-  if (!mounted || userLoading) {
+  if (!mounted || userLoading || profileLoading) {
     return (
       <CRMLayout>
         <div className="flex h-64 items-center justify-center">
@@ -88,7 +112,10 @@ export default function SettingsPage() {
                   </div>
                   <p className="text-xs text-muted-foreground">Receive alerts for deal updates and tasks.</p>
                 </div>
-                <Switch checked={notifications} onCheckedChange={setNotifications} />
+                <Switch 
+                  checked={settings.notifications} 
+                  onCheckedChange={(val) => updateField('notifications', val)} 
+                />
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-xl bg-muted/20 border border-border/50">
@@ -99,7 +126,10 @@ export default function SettingsPage() {
                   </div>
                   <p className="text-xs text-muted-foreground">Allow others to view your shared professional data.</p>
                 </div>
-                <Switch checked={publicProfile} onCheckedChange={setPublicProfile} />
+                <Switch 
+                  checked={settings.publicProfile} 
+                  onCheckedChange={(val) => updateField('publicProfile', val)} 
+                />
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-xl bg-muted/20 border border-border/50">
@@ -110,7 +140,10 @@ export default function SettingsPage() {
                   </div>
                   <p className="text-xs text-muted-foreground">Streamline the UI for high-density data viewing.</p>
                 </div>
-                <Switch checked={compactMode} onCheckedChange={setCompactMode} />
+                <Switch 
+                  checked={settings.compactMode} 
+                  onCheckedChange={(val) => updateField('compactMode', val)} 
+                />
               </div>
             </CardContent>
             <CardFooter className="border-t border-border/50 pt-6">
