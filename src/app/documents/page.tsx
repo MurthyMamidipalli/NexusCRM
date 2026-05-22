@@ -157,6 +157,13 @@ export default function DocumentsPage() {
     })
   }, [documents, searchQuery, categoryFilter])
 
+  // Get unique categories for filter dropdown
+  const categories = useMemo(() => {
+    if (!documents) return []
+    const set = new Set(documents.map((d: any) => d.category).filter(Boolean))
+    return Array.from(set) as string[]
+  }, [documents])
+
   if (!mounted) return null
 
   return (
@@ -212,19 +219,7 @@ export default function DocumentsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="category">Category</Label>
-                    <Select name="category" defaultValue={editingDoc?.category || "Contracts"}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Contracts">Contracts</SelectItem>
-                        <SelectItem value="Invoices">Invoices</SelectItem>
-                        <SelectItem value="Quotations">Quotations</SelectItem>
-                        <SelectItem value="Legal">Legal</SelectItem>
-                        <SelectItem value="Personal">Personal</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input id="category" name="category" defaultValue={editingDoc?.category || ''} placeholder="e.g. Invoices, Contracts" required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="status">Status</Label>
@@ -301,12 +296,9 @@ export default function DocumentsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="All Documents">All Documents</SelectItem>
-                <SelectItem value="Contracts">Contracts</SelectItem>
-                <SelectItem value="Invoices">Invoices</SelectItem>
-                <SelectItem value="Quotations">Quotations</SelectItem>
-                <SelectItem value="Legal">Legal</SelectItem>
-                <SelectItem value="Personal">Personal</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
