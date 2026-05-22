@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Loader2, Trash2, Calendar, Trophy, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -29,12 +29,21 @@ export default function AchievementsPage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.ACHIEVEMENTS), 
-      where('ownerId', '==', user.uid),
-      orderBy('date', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: achievements, loading: achLoading } = useCollection(achQuery)
+  const { data: rawAchievements, loading: achLoading } = useCollection(achQuery)
+
+  // In-memory sorting for index resilience
+  const achievements = useMemo(() => {
+    if (!rawAchievements) return []
+    return [...rawAchievements].sort((a: any, b: any) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    })
+  }, [rawAchievements])
 
   useEffect(() => {
     setMounted(true)

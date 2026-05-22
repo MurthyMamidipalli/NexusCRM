@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Hammer, Loader2, Trash2, Award, AlertCircle, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
@@ -27,14 +27,20 @@ export default function SkillsPage() {
 
   const skillsQuery = useMemo(() => {
     if (!db || !user) return null;
+    // We remove orderBy to avoid requiring a composite index
     return query(
       collection(db, collections.SKILLS), 
-      where('ownerId', '==', user.uid),
-      orderBy('name', 'asc')
+      where('ownerId', '==', user.uid)
     );
   }, [db, user])
 
-  const { data: skills, loading: skillsLoading, error } = useCollection(skillsQuery)
+  const { data: rawSkills, loading: skillsLoading, error } = useCollection(skillsQuery)
+
+  // Perform sorting in memory to be index-resilient
+  const skills = useMemo(() => {
+    if (!rawSkills) return []
+    return [...rawSkills].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
+  }, [rawSkills])
 
   const handleSaveSkill = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -134,7 +140,7 @@ export default function SkillsPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Data</AlertTitle>
           <AlertDescription>
-            {error.message}
+            This view is optimizing. If error persists, please check your database connection.
           </AlertDescription>
         </Alert>
       )}

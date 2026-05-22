@@ -6,7 +6,7 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Button } from '@/components/ui/button'
 import { Plus, Calendar as CalendarIcon, Clock, Users, MapPin, Loader2, MoreVertical, MessageSquare } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -22,12 +22,21 @@ export default function MeetingsPage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.MEETINGS),
-      where('ownerId', '==', user.uid),
-      orderBy('date', 'asc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: meetings, loading } = useCollection(meetingsQuery)
+  const { data: rawMeetings, loading } = useCollection(meetingsQuery)
+
+  // In-memory sorting for index resilience
+  const meetings = useMemo(() => {
+    if (!rawMeetings) return []
+    return [...rawMeetings].sort((a: any, b: any) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateA - dateB;
+    })
+  }, [rawMeetings])
 
   return (
     <CRMLayout>

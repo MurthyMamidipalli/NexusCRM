@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
@@ -21,7 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -56,12 +57,21 @@ export default function DocumentsPage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.DOCUMENTS), 
-      where('ownerId', '==', user.uid),
-      orderBy('updatedAt', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: documents, loading: docsLoading } = useCollection(docsQuery)
+  const { data: rawDocuments, loading: docsLoading } = useCollection(docsQuery)
+
+  // In-memory sorting
+  const documents = useMemo(() => {
+    if (!rawDocuments) return []
+    return [...rawDocuments].sort((a: any, b: any) => {
+      const timeA = a.updatedAt?.seconds || 0;
+      const timeB = b.updatedAt?.seconds || 0;
+      return timeB - timeA;
+    })
+  }, [rawDocuments])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

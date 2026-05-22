@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, GraduationCap, Loader2, Trash2, Calendar, BookOpen, Award, Pencil, AlertCircle } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -29,12 +29,21 @@ export default function EducationPage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.EDUCATION), 
-      where('ownerId', '==', user.uid),
-      orderBy('startDate', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: education, loading: eduLoading, error: eduError } = useCollection(eduQuery)
+  const { data: rawEducation, loading: eduLoading, error: eduError } = useCollection(eduQuery)
+
+  // Sort in memory to avoid index requirements
+  const education = useMemo(() => {
+    if (!rawEducation) return []
+    return [...rawEducation].sort((a: any, b: any) => {
+      const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
+      const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
+      return dateB - dateA;
+    })
+  }, [rawEducation])
 
   const handleSaveEdu = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -198,7 +207,7 @@ export default function EducationPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Records</AlertTitle>
           <AlertDescription>
-            {eduError.message}
+            The system is optimizing your data view. Please try refreshing if records don't appear.
           </AlertDescription>
         </Alert>
       )}

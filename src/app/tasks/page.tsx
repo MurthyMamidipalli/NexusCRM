@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Calendar, Plus, Clock, Loader2, ClipboardList } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, updateRecord } from '@/lib/firestore-service'
 
 export default function TasksPage() {
@@ -22,12 +22,21 @@ export default function TasksPage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.TASKS), 
-      where('ownerId', '==', user.uid),
-      orderBy('dueDate', 'asc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: tasks, loading } = useCollection(tasksQuery)
+  const { data: rawTasks, loading } = useCollection(tasksQuery)
+
+  // In-memory sorting for index resilience
+  const tasks = useMemo(() => {
+    if (!rawTasks) return []
+    return [...rawTasks].sort((a: any, b: any) => {
+      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      return dateA - dateB;
+    })
+  }, [rawTasks])
 
   const handleToggleTask = async (taskId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'Completed' ? 'Pending' : 'Completed'

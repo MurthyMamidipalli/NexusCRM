@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Briefcase, Loader2, Trash2, Calendar, MapPin, Pencil, ExternalLink, Link as LinkIcon, X } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -39,12 +39,21 @@ export default function ExperiencePage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.EXPERIENCE), 
-      where('ownerId', '==', user.uid),
-      orderBy('startDate', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: experience, loading: expLoading } = useCollection(expQuery)
+  const { data: rawExperience, loading: expLoading } = useCollection(expQuery)
+
+  // In-memory sorting for index resilience
+  const experience = useMemo(() => {
+    if (!rawExperience) return []
+    return [...rawExperience].sort((a: any, b: any) => {
+      const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
+      const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
+      return dateB - dateA;
+    })
+  }, [rawExperience])
 
   const handleAddProjectLink = () => {
     if (!newProjectName || !newProjectUrl) {

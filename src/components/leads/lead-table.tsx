@@ -22,7 +22,7 @@ import { MoreHorizontal, Mail, Phone, Trash2, Loader2, Briefcase, ExternalLink }
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 
@@ -34,12 +34,21 @@ export function LeadTable() {
     if (!db || !user) return null
     return query(
       collection(db, collections.LEADS), 
-      where('ownerId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: leads, loading } = useCollection(leadsQuery)
+  const { data: rawLeads, loading } = useCollection(leadsQuery)
+
+  // In-memory sorting for index resilience
+  const leads = useMemo(() => {
+    if (!rawLeads) return []
+    return [...rawLeads].sort((a: any, b: any) => {
+      const timeA = a.createdAt?.seconds || 0;
+      const timeB = b.createdAt?.seconds || 0;
+      return timeB - timeA;
+    })
+  }, [rawLeads])
 
   const getStatusColor = (status: string) => {
     switch (status) {

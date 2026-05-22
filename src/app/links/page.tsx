@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Link as LinkIcon, Loader2, Trash2, Globe, Github, Linkedin, Twitter, ExternalLink, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
@@ -28,12 +28,21 @@ export default function LinksPage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.LINKS), 
-      where('ownerId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: links, loading: linksLoading } = useCollection(linksQuery)
+  const { data: rawLinks, loading: linksLoading } = useCollection(linksQuery)
+
+  // In-memory sorting
+  const links = useMemo(() => {
+    if (!rawLinks) return []
+    return [...rawLinks].sort((a: any, b: any) => {
+      const timeA = a.createdAt?.seconds || 0;
+      const timeB = b.createdAt?.seconds || 0;
+      return timeB - timeA;
+    })
+  }, [rawLinks])
 
   useEffect(() => {
     setMounted(true)
