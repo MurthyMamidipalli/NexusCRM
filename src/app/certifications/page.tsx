@@ -43,14 +43,14 @@ export default function CertificationsPage() {
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<string>("study")
   
-  const [category, setCategory] = useState<string>("Course Certificate")
+  const [category, setCategory] = useState<string>("Study Certificate")
   const [visibility, setVisibility] = useState<string>("Private")
   const [documentData, setDocumentData] = useState<string>('')
   
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Ensure category matches tab when opening dialog
+  // Explicitly sync category with tab context when opening dialog
   useEffect(() => {
     if (isDialogOpen && !editingCert) {
       if (activeTab === "grades") setCategory("Grade Sheet");
@@ -103,27 +103,28 @@ export default function CertificationsPage() {
       ownerId: user.uid
     }
 
+    // Snappy UI: Optimistic immediate feedback
+    toast({ title: editingCert ? 'Credential Updated' : 'Record Created' })
+    setIsDialogOpen(false)
+    const wasEditing = !!editingCert;
+    const currentId = editingCert?.id;
+    resetForm()
+    setLoading(false)
+
     try {
-      if (editingCert) {
-        await updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
+      if (wasEditing) {
+        await updateRecord(db, collections.CERTIFICATIONS, currentId, data)
       } else {
         await createRecord(db, collections.CERTIFICATIONS, data, user.uid)
       }
-      
-      toast({ title: editingCert ? 'Credential Updated' : 'Record Created' })
-      setIsDialogOpen(false)
-      resetForm()
     } catch (serverError: any) {
-      console.error('Save Error:', serverError);
       const permissionError = new FirestorePermissionError({
-        path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
-        operation: editingCert ? 'update' : 'create',
+        path: wasEditing ? `${collections.CERTIFICATIONS}/${currentId}` : collections.CERTIFICATIONS,
+        operation: wasEditing ? 'update' : 'create',
         requestResourceData: data,
         originalError: serverError
       } satisfies SecurityRuleContext);
       errorEmitter.emit('permission-error', permissionError);
-    } finally {
-      setLoading(false)
     }
   }
 
