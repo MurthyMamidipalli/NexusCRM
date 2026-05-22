@@ -41,12 +41,13 @@ export function createRecord(db: Firestore, collectionName: string, data: any, u
   
   const payload = {
     ...data,
+    ownerId: userId || data.ownerId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   };
 
-  if (userId) {
-    payload.ownerId = userId;
+  if (!payload.ownerId) {
+    console.warn(`Record created in ${collectionName} without an ownerId. This data will not sync across devices.`);
   }
 
   return addDoc(colRef, payload);

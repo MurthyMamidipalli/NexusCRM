@@ -18,7 +18,7 @@
         "location": { "type": "string" },
         "address": { "type": "string" },
         "avatarUrl": { "type": "string" },
-        "links": { "type": "array", "items": { "type": "object", "properties": { "label": { "type": "string" }, "url": { "type": "string" } } } }
+        "ownerId": { "type": "string" }
       }
     },
     "Skill": {
@@ -28,7 +28,7 @@
       "properties": {
         "name": { "type": "string" },
         "category": { "type": "string", "enum": ["Technical", "Soft Skills", "Tools", "Languages"] },
-        "level": { "type": "number", "description": "1 to 100" }
+        "ownerId": { "type": "string" }
       }
     },
     "Experience": {
@@ -41,8 +41,8 @@
         "location": { "type": "string" },
         "startDate": { "type": "string", "format": "date" },
         "endDate": { "type": "string", "format": "date" },
-        "isCurrent": { "type": "boolean" },
-        "description": { "type": "string" }
+        "description": { "type": "string" },
+        "ownerId": { "type": "string" }
       }
     },
     "Education": {
@@ -56,8 +56,7 @@
         "startDate": { "type": "string", "format": "date" },
         "endDate": { "type": "string", "format": "date" },
         "cgpa": { "type": "string" },
-        "percentage": { "type": "string" },
-        "description": { "type": "string" }
+        "ownerId": { "type": "string" }
       }
     },
     "Project": {
@@ -67,33 +66,9 @@
       "properties": {
         "title": { "type": "string" },
         "description": { "type": "string" },
-        "technologies": { "type": "array", "items": { "type": "string" } },
         "url": { "type": "string" },
-        "imageUrl": { "type": "string" },
-        "status": { "type": "string", "enum": ["In Progress", "Completed", "Archived"] }
-      }
-    },
-    "Achievement": {
-      "title": "Achievement",
-      "description": "Awards and notable accomplishments.",
-      "type": "object",
-      "properties": {
-        "title": { "type": "string" },
-        "issuer": { "type": "string" },
-        "date": { "type": "string", "format": "date" },
-        "description": { "type": "string" }
-      }
-    },
-    "Testimonial": {
-      "title": "Testimonial",
-      "description": "Professional endorsements and reviews.",
-      "type": "object",
-      "properties": {
-        "author": { "type": "string" },
-        "role": { "type": "string" },
-        "company": { "type": "string" },
-        "content": { "type": "string" },
-        "date": { "type": "string", "format": "date" }
+        "category": { "type": "string" },
+        "ownerId": { "type": "string" }
       }
     },
     "Contact": {
@@ -103,9 +78,47 @@
       "properties": {
         "name": { "type": "string" },
         "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
         "company": { "type": "string" },
-        "relationship": { "type": "string" },
-        "notes": { "type": "string" }
+        "industry": { "type": "string" },
+        "ownerId": { "type": "string" }
+      }
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Stored files and assets.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "ownerId": { "type": "string" }
+      }
+    },
+    "Resume": {
+      "title": "Resume",
+      "description": "CV files and portfolio links.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["file", "link"] },
+        "url": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "ownerId": { "type": "string" }
+      }
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Sales lead information.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "company": { "type": "string" },
+        "status": { "type": "string" },
+        "value": { "type": "number" },
+        "ownerId": { "type": "string" }
       }
     }
   },
@@ -118,8 +131,9 @@
     "/experience/{expId}": { "schema": "#/entities/Experience", "description": "Work history." },
     "/education/{eduId}": { "schema": "#/entities/Education", "description": "Education history." },
     "/projects/{projectId}": { "schema": "#/entities/Project", "description": "Portfolio projects." },
-    "/achievements/{achId}": { "schema": "#/entities/Achievement", "description": "Awards and achievements." },
-    "/testimonials/{testId}": { "schema": "#/entities/Testimonial", "description": "Professional testimonials." },
-    "/contacts/{contactId}": { "schema": "#/entities/Contact", "description": "Network contacts." }
+    "/contacts/{contactId}": { "schema": "#/entities/Contact", "description": "Network contacts." },
+    "/documents/{docId}": { "schema": "#/entities/Document", "description": "Vault documents." },
+    "/resumes/{resId}": { "schema": "#/entities/Resume", "description": "Resume records." },
+    "/leads/{leadId}": { "schema": "#/entities/Lead", "description": "Sales leads." }
   }
 }
