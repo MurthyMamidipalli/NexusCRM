@@ -7,23 +7,22 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Profiles: Anyone can get a profile, only owner can list or write.
+    // Profiles: Anyone can get a profile, only owner can write.
     match /profiles/{uid} {
       allow get: if true;
       allow list, write: if isAuthenticated() && request.auth.uid == uid;
     }
 
-    // Generic rule for all user-owned records (Leads, Skills, Certifications, etc.)
+    // Generic rule for all user-owned records
     match /{collection}/{id} {
       // READ: Allow if owner OR if item is marked public
       allow read: if (isAuthenticated() && (resource == null || resource.data.ownerId == request.auth.uid)) 
                   || (resource != null && resource.data.isPublic == true);
       
-      // CREATE: Must be authenticated and setting themselves as owner
-      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
-      
-      // UPDATE/DELETE: Must be the owner
-      allow update, delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+      // CREATE/WRITE: Must be owner. Direct ownership check for performance.
+      allow create, update, delete: if isAuthenticated() && 
+        (request.resource == null || request.resource.data.ownerId == request.auth.uid) &&
+        (resource == null || resource.data.ownerId == request.auth.uid);
     }
     
     // Internal Drafts handling

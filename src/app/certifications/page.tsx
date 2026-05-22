@@ -34,8 +34,7 @@ import { Badge } from '@/components/ui/badge'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
-// Firestore has a 1MB document limit. Base64 encoding adds ~37% overhead.
-// Setting limit to 700KB to ensure metadata + Base64 fits within 1MB.
+// Safe limit for Base64 Firestore storage
 const MAX_FILE_SIZE = 700000; 
 
 export default function CertificationsPage() {
@@ -71,7 +70,12 @@ export default function CertificationsPage() {
 
   const certifications = useMemo(() => {
     if (!rawCertifications) return []
-    return [...rawCertifications].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''))
+    return [...rawCertifications].sort((a: any, b: any) => {
+      const timeA = a.updatedAt?.seconds || 0;
+      const timeB = b.updatedAt?.seconds || 0;
+      if (timeA !== timeB) return timeB - timeA;
+      return (b.id || '').localeCompare(a.id || '');
+    })
   }, [rawCertifications])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,9 +86,9 @@ export default function CertificationsPage() {
       toast({ 
         variant: 'destructive', 
         title: 'File Too Large', 
-        description: 'Maximum size for database storage is 700KB due to cloud limits.' 
+        description: 'Database maximum is 700KB. Try a smaller PDF or image.' 
       })
-      e.target.value = ''; // Reset input
+      e.target.value = '';
       return
     }
 
@@ -111,7 +115,6 @@ export default function CertificationsPage() {
       ownerId: user.uid
     }
 
-    // Close and reset immediately for a snappy feel
     const wasEditing = !!editingCert;
     const currentId = editingCert?.id;
     
@@ -123,10 +126,8 @@ export default function CertificationsPage() {
     try {
       if (wasEditing) {
         await updateRecord(db, collections.CERTIFICATIONS, currentId, data)
-        toast({ title: 'Credential Updated' })
       } else {
         await createRecord(db, collections.CERTIFICATIONS, data, user.uid)
-        toast({ title: 'New Record Created' })
       }
     } catch (serverError: any) {
       const permissionError = new FirestorePermissionError({
@@ -136,12 +137,6 @@ export default function CertificationsPage() {
         originalError: serverError
       } satisfies SecurityRuleContext);
       errorEmitter.emit('permission-error', permissionError);
-      
-      toast({ 
-        variant: 'destructive', 
-        title: 'Cloud Save Failed', 
-        description: 'The record could not be synchronized. Check file size or permissions.' 
-      })
     }
   }
 
@@ -154,14 +149,6 @@ export default function CertificationsPage() {
   const handleDelete = (id: string) => {
     if (!db) return
     deleteRecord(db, collections.CERTIFICATIONS, id)
-      .catch(async (err: any) => {
-        const permissionError = new FirestorePermissionError({
-          path: `${collections.CERTIFICATIONS}/${id}`,
-          operation: 'delete',
-          originalError: err
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      })
     toast({ title: 'Record Removed' })
   }
 
@@ -170,7 +157,7 @@ export default function CertificationsPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">🏆 Credentials & Grade Sheets</h1>
-          <p className="text-muted-foreground">Secure vault for your verified academic and professional records.</p>
+          <p className="text-muted-foreground">Secure vault for multiple academic and professional records.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { 
           setIsDialogOpen(o); 
@@ -188,7 +175,7 @@ export default function CertificationsPage() {
                 {editingCert ? 'Edit Credential' : 'Add New Credential'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Store and manage your professional verification documents.
+                Store verification documents up to 700KB.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveCert} className="space-y-6 pt-4">
@@ -222,12 +209,12 @@ export default function CertificationsPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="title">Title / Name</Label>
-                <Input id="title" name="title" defaultValue={editingCert?.title} placeholder="e.g. Master of Business Administration" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" />
+                <Input id="title" name="title" defaultValue={editingCert?.title} placeholder="e.g. MBA Grade Sheet" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="issuer">Issued by / Institution</Label>
-                <Input id="issuer" name="issuer" defaultValue={editingCert?.issuer} placeholder="e.g. Harvard University" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" />
+                <Input id="issuer" name="issuer" defaultValue={editingCert?.issuer} placeholder="e.g. Stanford University" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -249,12 +236,12 @@ export default function CertificationsPage() {
                 {documentData ? (
                   <div className="flex flex-col items-center gap-2">
                     <CheckCircle2 className="h-10 w-10 text-primary" />
-                    <span className="text-xs font-bold text-primary">Document Loaded</span>
+                    <span className="text-xs font-bold text-primary">File Attached</span>
                   </div>
                 ) : editingCert?.documentUrl ? (
                   <div className="flex flex-col items-center gap-2">
                     <ShieldCheck className="h-10 w-10 text-primary/50" />
-                    <span className="text-xs font-bold text-gray-400">Current Document Stored</span>
+                    <span className="text-xs font-bold text-gray-400">Current File Safe</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-center">

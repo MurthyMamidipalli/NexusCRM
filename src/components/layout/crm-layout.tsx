@@ -74,7 +74,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
 
-  // Fetch real-time profile for the avatar and display name
+  // Explicitly reference the profile for real-time avatar sync
   const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
   const { data: profile } = useDoc(profileRef, { silent: true })
 
