@@ -3,14 +3,13 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
   FileText, 
   Upload, 
   Download, 
   Trash2, 
-  ShieldCheck,
   Search,
   Loader2,
   FileBox,
@@ -18,7 +17,8 @@ import {
   List,
   Pencil,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  Filter
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -41,6 +41,7 @@ export default function DocumentsPage() {
   const [editingDoc, setEditingDoc] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('All Documents')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [mounted, setMounted] = useState(false)
 
@@ -149,11 +150,12 @@ export default function DocumentsPage() {
 
   const filteredDocs = useMemo(() => {
     if (!documents) return []
-    return documents.filter((doc: any) => 
-      doc.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.category?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  }, [documents, searchQuery])
+    return documents.filter((doc: any) => {
+      const matchesSearch = doc.name?.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesCategory = categoryFilter === 'All Documents' || doc.category === categoryFilter
+      return matchesSearch && matchesCategory
+    })
+  }, [documents, searchQuery, categoryFilter])
 
   if (!mounted) return null
 
@@ -278,189 +280,205 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <div className="lg:col-span-1 space-y-6">
-          <Card className="border-none bg-card/50 backdrop-blur-md">
-            <CardHeader>
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Quick Filters</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1">
-              {['All Documents', 'Contracts', 'Invoices', 'Quotations', 'Legal', 'Personal'].map(cat => (
-                <Button 
-                  key={cat} 
-                  variant="ghost" 
-                  onClick={() => setSearchQuery(cat === 'All Documents' ? '' : cat)}
-                  className={cn(
-                    "w-full justify-start text-sm transition-all",
-                    searchQuery === (cat === 'All Documents' ? '' : cat) ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted"
-                  )}
-                >
-                  {cat}
-                </Button>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-3 space-y-6">
-          <div className="relative">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col sm:flex-row items-center gap-4 bg-card/30 p-4 rounded-2xl border border-border/50 backdrop-blur-md shadow-sm">
+          <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input 
-              className="pl-10 bg-card/50 border-border/50 h-11" 
-              placeholder="Search by filename or metadata..." 
+              className="pl-10 bg-background/50 border-border/50 h-11 focus:ring-primary/20" 
+              placeholder="Search by filename..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-
-          {docsLoading ? (
-            <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : filteredDocs.length > 0 ? (
-            viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {filteredDocs.map((doc: any) => (
-                  <Card key={doc.id} className="group hover:border-primary/50 transition-all shadow-md hover:shadow-xl bg-card/30 border-none backdrop-blur-sm">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors">
-                            <FileText className="h-8 w-8 text-primary" />
-                          </div>
-                          <div className="overflow-hidden">
-                            <h4 className="text-sm font-bold truncate max-w-[150px]" title={doc.name}>{doc.name}</h4>
-                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">
-                              {doc.size || 'N/A'} • {doc.category || 'General'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <Badge className={cn(
-                            "text-[10px] uppercase px-1.5 h-5",
-                            doc.status === 'Signed' ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-primary/10 text-primary border-primary/20"
-                          )} variant="outline">
-                            {doc.status || 'Active'}
-                          </Badge>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-7 w-7 text-primary"
-                              onClick={() => { setEditingDoc(doc); setIsDialogOpen(true); }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-7 w-7 text-destructive"
-                              onClick={() => handleDelete(doc.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 mt-6">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="flex-1 text-[11px] gap-1.5 h-8 font-bold disabled:opacity-30"
-                          disabled={!doc.fileUrl}
-                          asChild={!!doc.fileUrl}
-                        >
-                          {doc.fileUrl ? (
-                            <a href={doc.fileUrl} download={doc.fileName || 'document'}>
-                              <Download className="h-3 w-3" /> Download
-                            </a>
-                          ) : (
-                            <span><Download className="h-3 w-3" /> Download</span>
-                          )}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="flex-1 text-[11px] gap-1.5 h-8 font-bold disabled:opacity-30"
-                          disabled={!doc.fileUrl}
-                          asChild={!!doc.fileUrl}
-                        >
-                          {doc.fileUrl ? (
-                            <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
-                              <Eye className="h-3 w-3" /> View
-                            </a>
-                          ) : (
-                            <span><Eye className="h-3 w-3" /> View</span>
-                          )}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-border/50 bg-card/30 overflow-hidden backdrop-blur-md shadow-lg">
-                <Table>
-                  <TableHeader className="bg-muted/50">
-                    <TableRow>
-                      <TableHead>Document Name</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Size</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredDocs.map((doc: any) => (
-                      <TableRow key={doc.id} className="hover:bg-muted/30 transition-colors">
-                        <TableCell className="font-bold">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-primary" />
-                            <span className="truncate max-w-[200px]">{doc.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs font-semibold">{doc.category}</TableCell>
-                        <TableCell className="text-[10px] font-mono">{doc.size || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={cn(
-                            "text-[10px] h-5",
-                            doc.status === 'Signed' ? "text-green-500 border-green-500/20" : "text-primary"
-                          )}>{doc.status}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-primary" 
-                              onClick={() => { setEditingDoc(doc); setIsDialogOpen(true); }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-destructive" 
-                              onClick={() => handleDelete(doc.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )
-          ) : (
-            <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30">
-              <FileBox className="h-12 w-12 text-muted-foreground/30 mb-4" />
-              <p className="text-muted-foreground">No documents found matching your search.</p>
-            </div>
-          )}
+          <div className="w-full sm:w-64">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-11 bg-background/50 border-border/50 focus:ring-primary/20">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                  <SelectValue placeholder="Category" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All Documents">All Documents</SelectItem>
+                <SelectItem value="Contracts">Contracts</SelectItem>
+                <SelectItem value="Invoices">Invoices</SelectItem>
+                <SelectItem value="Quotations">Quotations</SelectItem>
+                <SelectItem value="Legal">Legal</SelectItem>
+                <SelectItem value="Personal">Personal</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
+        {docsLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : filteredDocs.length > 0 ? (
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredDocs.map((doc: any) => (
+                <Card key={doc.id} className="group hover:border-primary/50 transition-all shadow-md hover:shadow-xl bg-card/40 border-none backdrop-blur-sm overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="h-32 bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center border-b border-border/30 relative">
+                      <FileText className="h-12 w-12 text-primary opacity-20 group-hover:scale-110 transition-transform" />
+                      <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-primary bg-background/80 hover:bg-background"
+                          onClick={() => { setEditingDoc(doc); setIsDialogOpen(true); }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-destructive bg-background/80 hover:bg-background"
+                          onClick={() => handleDelete(doc.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="p-5">
+                      <div className="flex flex-col gap-1">
+                        <h4 className="text-sm font-bold truncate" title={doc.name}>{doc.name}</h4>
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+                          {doc.size || 'N/A'} • {doc.category || 'General'}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/30">
+                        <Badge className={cn(
+                          "text-[9px] uppercase px-1.5 h-5",
+                          doc.status === 'Signed' ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-primary/10 text-primary border-primary/20"
+                        )} variant="outline">
+                          {doc.status || 'Active'}
+                        </Badge>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-7 w-7 p-0 rounded-full disabled:opacity-30"
+                            disabled={!doc.fileUrl}
+                            asChild={!!doc.fileUrl}
+                          >
+                            {doc.fileUrl ? (
+                              <a href={doc.fileUrl} download={doc.fileName || 'document'}>
+                                <Download className="h-3.5 w-3.5" />
+                              </a>
+                            ) : (
+                              <span><Download className="h-3.5 w-3.5" /></span>
+                            )}
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-7 w-7 p-0 rounded-full disabled:opacity-30"
+                            disabled={!doc.fileUrl}
+                            asChild={!!doc.fileUrl}
+                          >
+                            {doc.fileUrl ? (
+                              <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                                <Eye className="h-3.5 w-3.5" />
+                              </a>
+                            ) : (
+                              <span><Eye className="h-3.5 w-3.5" /></span>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-border/50 bg-card/30 overflow-hidden backdrop-blur-md shadow-lg">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead>Document Name</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredDocs.map((doc: any) => (
+                    <TableRow key={doc.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell className="font-bold">
+                        <div className="flex items-center gap-3">
+                          <div className="p-1.5 rounded-md bg-primary/10 text-primary">
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <span className="truncate max-w-[250px]">{doc.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{doc.category}</TableCell>
+                      <TableCell className="text-[10px] font-mono">{doc.size || 'N/A'}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn(
+                          "text-[9px] h-5",
+                          doc.status === 'Signed' ? "text-green-500 border-green-500/20" : "text-primary border-primary/20"
+                        )}>{doc.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-primary" 
+                            onClick={() => { setEditingDoc(doc); setIsDialogOpen(true); }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-destructive" 
+                            onClick={() => handleDelete(doc.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )
+        ) : (
+          <EmptyFieldSection />
+        )}
       </div>
     </CRMLayout>
+  )
+}
+
+function EmptyFieldSection() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 rounded-3xl border-2 border-dashed border-border/50 bg-card/10 animate-in fade-in zoom-in duration-500">
+      <div className="p-6 rounded-full bg-muted/20 mb-6">
+        <FileBox className="h-16 w-16 text-muted-foreground/30" />
+      </div>
+      <h3 className="text-2xl font-bold font-headline mb-2 text-foreground/80">Vault Empty</h3>
+      <p className="text-muted-foreground text-center max-w-sm mb-8 px-4">
+        Your professional document vault is currently empty. Start by uploading contracts, invoices, or legal paperwork.
+      </p>
+      <div className="flex gap-4">
+        <Button variant="outline" className="gap-2 border-border/50">
+          Learn More
+        </Button>
+        <Button className="gap-2 shadow-lg shadow-primary/20">
+          <Upload className="h-4 w-4" />
+          Initial Upload
+        </Button>
+      </div>
+    </div>
   )
 }
