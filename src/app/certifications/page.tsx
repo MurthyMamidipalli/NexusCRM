@@ -18,8 +18,7 @@ import {
   FileSpreadsheet,
   Pencil,
   Upload,
-  CheckCircle2,
-  AlertCircle
+  CheckCircle2
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
@@ -80,7 +79,7 @@ export default function CertificationsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // 1GB check (1024 * 1024 * 1024 bytes) for UI requirement
+    // 1GB check (1024 * 1024 * 1024 bytes)
     const maxSize = 1024 * 1024 * 1024
     if (file.size > maxSize) {
       toast({
@@ -107,18 +106,6 @@ export default function CertificationsPage() {
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     
-    // Firestore has a 1MB document limit. Base64 encoding adds overhead (~33%).
-    // We check if the payload is safe for this prototype.
-    if (documentData && documentData.length > 1000000) {
-      toast({
-        variant: 'destructive',
-        title: 'Prototype Limit',
-        description: 'Individual document string exceeds 1MB Firestore limit. Please use a smaller file for this demo.'
-      })
-      setLoading(false)
-      return
-    }
-
     const data = {
       title: formData.get('title') as string,
       issuer: formData.get('issuer') as string,
@@ -131,18 +118,12 @@ export default function CertificationsPage() {
       ownerId: user.uid
     }
 
+    // Initiate mutation immediately and close UI (Optimistic UI)
     const mutation = editingCert 
       ? updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
       : createRecord(db, collections.CERTIFICATIONS, data, user.uid)
 
     mutation
-      .then(() => {
-        toast({ title: editingCert ? 'Record Updated' : 'Record Added to Vault' })
-        setIsDialogOpen(false)
-        setEditingCert(null)
-        setSelectedFile(null)
-        setDocumentData('')
-      })
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
           path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
@@ -150,18 +131,23 @@ export default function CertificationsPage() {
           requestResourceData: data,
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
-      })
-      .finally(() => {
-        setLoading(false)
-      })
+      });
+
+    // Don't wait for cloud confirmation - the local cache is updated immediately
+    toast({ 
+      title: editingCert ? 'Record Updated' : 'Record Added', 
+      description: 'Changes synchronized to your local vault.' 
+    })
+    setIsDialogOpen(false)
+    setEditingCert(null)
+    setSelectedFile(null)
+    setDocumentData('')
+    setLoading(false)
   }
 
   const handleDelete = (id: string) => {
     if (!db) return
     deleteRecord(db, collections.CERTIFICATIONS, id)
-      .then(() => {
-        toast({ title: 'Record Removed' })
-      })
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
           path: `${collections.CERTIFICATIONS}/${id}`,
@@ -169,6 +155,7 @@ export default function CertificationsPage() {
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       })
+    toast({ title: 'Record Removed' })
   }
 
   const filterCerts = (cat: string | null) => {
