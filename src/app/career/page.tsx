@@ -1,46 +1,37 @@
 
 "use client"
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useMemo } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { Building2, Save, Loader2, Sparkles, Briefcase, Zap } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Building2, Briefcase, Loader2, Sparkles } from 'lucide-react'
 import { useUser, useFirestore, useDoc } from '@/firebase'
-import { doc, setDoc } from 'firebase/firestore'
+import { doc } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
-import { toast } from '@/hooks/use-toast'
+import { usePersistentDocument } from '@/hooks/use-persistence'
 
 export default function CareerPage() {
   const { user } = useUser()
   const db = useFirestore()
-  const [mounted, setMounted] = useState(false)
-  const [saving, setSaving] = useState(false)
 
-  const profileRef = user ? doc(db, collections.PROFILES, user.uid) : null
-  const { data: profile, loading: profileLoading } = useDoc(profileRef)
+  const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
+  const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // Use global persistence hook for the nested currentJob object
+  const { data: profile, updateField } = usePersistentDocument(
+    collections.PROFILES,
+    user?.uid,
+    profileDoc || {}
+  )
 
-  const handleAutoSave = useCallback(async (field: string, value: string) => {
-    if (!user || !db || profile?.currentJob?.[field] === value) return
+  const handleJobUpdate = (field: string, value: string) => {
+    const currentJob = { ...(profile?.currentJob || {}), [field]: value }
+    updateField('currentJob' as any, currentJob)
+  }
 
-    setSaving(true)
-    const currentJob = { ...profile?.currentJob, [field]: value }
-    try {
-      await setDoc(doc(db, collections.PROFILES, user.uid), { currentJob }, { merge: true })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    } finally {
-      setSaving(false)
-    }
-  }, [user, db, profile])
-
-  if (!mounted || profileLoading) {
+  if (profileLoading) {
     return (
       <CRMLayout>
         <div className="flex h-64 items-center justify-center">
@@ -55,14 +46,8 @@ export default function CareerPage() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">🏢 Current Job</h1>
-          <p className="text-muted-foreground">Managing your current professional role details.</p>
+          <p className="text-muted-foreground">Managing your current professional role details with auto-save.</p>
         </div>
-        {saving && (
-          <div className="flex items-center gap-2 text-xs text-primary animate-pulse">
-            <Zap className="h-3 w-3 fill-primary" />
-            Auto-saving...
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -78,8 +63,8 @@ export default function CareerPage() {
                   <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     id="title" 
-                    defaultValue={profile?.currentJob?.title || ''} 
-                    onBlur={(e) => handleAutoSave('title', e.target.value)}
+                    value={profile?.currentJob?.title || ''} 
+                    onChange={(e) => handleJobUpdate('title', e.target.value)}
                     className="pl-10" 
                     placeholder="Principal Engineer" 
                   />
@@ -91,8 +76,8 @@ export default function CareerPage() {
                   <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     id="company" 
-                    defaultValue={profile?.currentJob?.company || ''} 
-                    onBlur={(e) => handleAutoSave('company', e.target.value)}
+                    value={profile?.currentJob?.company || ''} 
+                    onChange={(e) => handleJobUpdate('company', e.target.value)}
                     className="pl-10" 
                     placeholder="Global Tech Systems" 
                   />
@@ -103,8 +88,8 @@ export default function CareerPage() {
                 <Input 
                   id="startDate" 
                   type="date" 
-                  defaultValue={profile?.currentJob?.startDate || ''} 
-                  onBlur={(e) => handleAutoSave('startDate', e.target.value)}
+                  value={profile?.currentJob?.startDate || ''} 
+                  onChange={(e) => handleJobUpdate('startDate', e.target.value)}
                 />
               </div>
             </CardContent>
@@ -120,7 +105,7 @@ export default function CareerPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm opacity-90 leading-relaxed">
-                Data entered here is saved the moment you move to another field. Your information is never lost.
+                Changes here are captured instantly and synced to your professional vault. Never lose a detail.
               </p>
             </CardContent>
           </Card>

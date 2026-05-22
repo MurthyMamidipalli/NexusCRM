@@ -17,24 +17,38 @@ let auth: Auth;
 let db: Firestore;
 
 /**
- * Initializes Firebase services with persistent local cache.
+ * Initializes Firebase services with a robust singleton pattern.
+ * Ensures offline persistence is only configured on the client side once.
  */
 export function initializeFirebase() {
   if (getApps().length === 0) {
     app = initializeApp(firebaseConfig);
-    // Initialize Firestore with offline persistence enabled (only once)
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    });
   } else {
     app = getApp();
-    // Retrieve the existing Firestore instance instead of re-initializing
-    db = getFirestore(app);
+  }
+
+  if (!db) {
+    // Check if we are in the browser to enable persistence
+    if (typeof window !== 'undefined') {
+      try {
+        db = initializeFirestore(app, {
+          localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager(),
+          }),
+        });
+      } catch (e) {
+        // Fallback if initializeFirestore was already called elsewhere
+        db = getFirestore(app);
+      }
+    } else {
+      // Server-side uses standard Firestore instance
+      db = getFirestore(app);
+    }
   }
   
-  auth = getAuth(app);
+  if (!auth) {
+    auth = getAuth(app);
+  }
   
   return { app, auth, db };
 }
