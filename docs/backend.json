@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Profile": {
@@ -9,8 +10,13 @@
         "tagline": { "type": "string" },
         "bio": { "type": "string" },
         "email": { "type": "string", "format": "email" },
+        "secondaryEmail": { "type": "string", "format": "email" },
         "phone": { "type": "string" },
+        "secondaryPhone": { "type": "string" },
+        "age": { "type": "number" },
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other", "Prefer not to say"] },
         "location": { "type": "string" },
+        "address": { "type": "string" },
         "avatarUrl": { "type": "string" },
         "links": { "type": "array", "items": { "type": "object", "properties": { "label": { "type": "string" }, "url": { "type": "string" } } } }
       }
