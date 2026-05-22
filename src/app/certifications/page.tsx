@@ -17,7 +17,9 @@ import {
   FileSpreadsheet,
   Pencil,
   Upload,
-  CheckCircle2
+  CheckCircle2,
+  Eye,
+  X
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -53,6 +55,9 @@ export default function CertificationsPage() {
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   
+  // Preview State
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
+
   // Form State
   const [category, setCategory] = useState<string>("Course Certificate")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -272,21 +277,50 @@ export default function CertificationsPage() {
           </TabsList>
 
           <TabsContent value="study" className="mt-0">
-            <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
+            <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} onPreview={(url, name) => setPreviewDoc({ url, name })} />
           </TabsContent>
           <TabsContent value="course" className="mt-0">
-            <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
+            <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} onPreview={(url, name) => setPreviewDoc({ url, name })} />
           </TabsContent>
           <TabsContent value="grades" className="mt-0">
-            <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} />
+            <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} onPreview={(url, name) => setPreviewDoc({ url, name })} />
           </TabsContent>
         </Tabs>
       )}
+
+      {/* Full Screen File Previewer */}
+      <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
+        <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col">
+          <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              <DialogTitle className="font-bold text-sm truncate max-w-[200px] md:max-w-md">
+                {previewDoc?.name || 'Document Preview'}
+              </DialogTitle>
+            </div>
+            <DialogDescription className="sr-only">
+              Full screen credential document preview.
+            </DialogDescription>
+            <Button variant="ghost" size="icon" onClick={() => setPreviewDoc(null)} className="h-8 w-8 hover:bg-white/5">
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          <div className="flex-1 bg-black/40">
+            {previewDoc?.url && (
+              <iframe 
+                src={previewDoc.url} 
+                className="w-full h-full border-none"
+                title={previewDoc.name}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </CRMLayout>
   )
 }
 
-function CertGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id: string) => void, onEdit: (cert: any) => void }) {
+function CertGrid({ items, onDelete, onEdit, onPreview }: { items: any[], onDelete: (id: string) => void, onEdit: (cert: any) => void, onPreview: (url: string, name: string) => void }) {
   if (items.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30 text-muted-foreground italic">
@@ -335,13 +369,30 @@ function CertGrid({ items, onDelete, onEdit }: { items: any[], onDelete: (id: st
                   <span><ExternalLink className="h-3 w-3" /> Verify</span>
                 )}
               </Button>
-              <Button variant="outline" size="sm" className="text-[11px] gap-1.5 h-8 font-bold disabled:opacity-30" disabled={!cert.documentUrl} asChild={!!cert.documentUrl}>
-                {cert.documentUrl ? (
-                  <a href={cert.documentUrl} download={cert.fileName || 'certificate'}><FileText className="h-3 w-3" /> Document</a>
-                ) : (
-                  <span><FileText className="h-3 w-3" /> Document</span>
-                )}
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1 text-[11px] gap-1.5 h-8 font-bold" 
+                  disabled={!cert.documentUrl}
+                  onClick={() => cert.documentUrl && onPreview(cert.documentUrl, cert.title)}
+                >
+                  <Eye className="h-3 w-3" /> View
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8 w-8 p-0 font-bold disabled:opacity-30" 
+                  disabled={!cert.documentUrl} 
+                  asChild={!!cert.documentUrl}
+                >
+                  {cert.documentUrl ? (
+                    <a href={cert.documentUrl} download={cert.fileName || 'certificate'}><FileText className="h-3 w-3" /></a>
+                  ) : (
+                    <span><FileText className="h-3 w-3" /></span>
+                  )}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

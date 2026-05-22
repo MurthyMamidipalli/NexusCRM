@@ -24,7 +24,8 @@ import {
   Github,
   Linkedin,
   Twitter,
-  X
+  X,
+  ShieldCheck
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
@@ -109,7 +110,7 @@ export default function PublicProfilePage() {
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="mt-4 text-xs text-muted-foreground uppercase tracking-widest font-bold animate-pulse">
           Connecting to Nexus Hub...
-        </p>
+        </div>
       </div>
     )
   }
@@ -334,13 +335,25 @@ export default function PublicProfilePage() {
                       <CardContent className="p-5 space-y-3">
                         <h4 className="font-bold text-sm leading-tight">{cert.title}</h4>
                         <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{cert.issuer}</p>
-                        <div className="flex items-center justify-between pt-2">
+                        <div className="flex flex-col gap-3 pt-2">
                           <span className="text-[9px] text-muted-foreground">{cert.date}</span>
-                          {cert.externalLink && (
-                            <Button variant="link" size="sm" className="p-0 h-auto text-[9px] text-primary" asChild>
-                              <a href={cert.externalLink} target="_blank" rel="noopener noreferrer">Verify Credential</a>
-                            </Button>
-                          )}
+                          <div className="flex flex-wrap gap-2">
+                            {cert.externalLink && (
+                              <Button variant="link" size="sm" className="p-0 h-auto text-[9px] text-primary" asChild>
+                                <a href={cert.externalLink} target="_blank" rel="noopener noreferrer">Verify Credential</a>
+                              </Button>
+                            )}
+                            {cert.documentUrl && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-[9px] h-7 px-2 border-white/10 hover:bg-white/5"
+                                onClick={() => setPreviewFile({ url: cert.documentUrl, name: cert.title })}
+                              >
+                                <Eye className="h-3 w-3 mr-1.5" /> View Document
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
