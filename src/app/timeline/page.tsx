@@ -9,6 +9,7 @@ import { useFirestore, useCollection } from '@/firebase'
 import { collection, query, orderBy } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 import { format } from 'date-fns'
+import { cn } from '@/lib/utils'
 
 export default function TimelinePage() {
   const db = useFirestore()
