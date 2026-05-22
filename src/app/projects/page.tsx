@@ -23,7 +23,7 @@ import {
   X
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -63,12 +63,21 @@ export default function ProjectsPage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.PROJECTS), 
-      where('ownerId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
 
-  const { data: projects, loading: projectsLoading } = useCollection(projectsQuery)
+  const { data: rawProjects, loading: projectsLoading } = useCollection(projectsQuery)
+
+  // In-memory sorting for index resilience
+  const projects = useMemo(() => {
+    if (!rawProjects) return []
+    return [...rawProjects].sort((a: any, b: any) => {
+      const timeA = a.createdAt?.seconds || 0;
+      const timeB = b.createdAt?.seconds || 0;
+      return timeB - timeA;
+    })
+  }, [rawProjects])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'pdf') => {
     const file = e.target.files?.[0]

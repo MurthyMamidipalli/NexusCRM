@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useEffect } from 'react'
@@ -6,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Filter, Download, UserCheck, Loader2, Building2, Mail, Phone, Trash2, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
-import { collection, query, orderBy, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord } from '@/lib/firestore-service'
 import { AddContactDialog } from '@/components/contacts/add-contact-dialog'
 import { 
@@ -33,12 +34,21 @@ export default function ContactsPage() {
     if (!db || !user) return null
     return query(
       collection(db, collections.CONTACTS), 
-      where('ownerId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('ownerId', '==', user.uid)
     )
   }, [db, user])
   
-  const { data: contacts, loading } = useCollection(contactsQuery)
+  const { data: rawContacts, loading } = useCollection(contactsQuery)
+
+  // In-memory sorting for index resilience
+  const contacts = useMemo(() => {
+    if (!rawContacts) return []
+    return [...rawContacts].sort((a: any, b: any) => {
+      const timeA = a.createdAt?.seconds || 0;
+      const timeB = b.createdAt?.seconds || 0;
+      return timeB - timeA;
+    })
+  }, [rawContacts])
 
   useEffect(() => {
     setMounted(true)
