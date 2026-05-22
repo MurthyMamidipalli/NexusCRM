@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { errorEmitter } from '@/firebase/error-emitter'
-import { FirestorePermissionError } from '@/firebase/errors'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function EducationPage() {
   const db = useFirestore()
@@ -53,7 +53,6 @@ export default function EducationPage() {
       description: formData.get('description') as string,
     }
 
-    // NON-BLOCKING mutation pattern: trigger and proceed
     if (editingEdu) {
       updateRecord(db, collections.EDUCATION, editingEdu.id, data)
         .catch(async (err) => {
@@ -61,7 +60,7 @@ export default function EducationPage() {
             path: `${collections.EDUCATION}/${editingEdu.id}`,
             operation: 'update',
             requestResourceData: data,
-          });
+          } satisfies SecurityRuleContext);
           errorEmitter.emit('permission-error', permissionError);
         });
       toast({ title: 'Education Updated' })
@@ -72,7 +71,7 @@ export default function EducationPage() {
             path: collections.EDUCATION,
             operation: 'create',
             requestResourceData: { ...data, ownerId: user.uid },
-          });
+          } satisfies SecurityRuleContext);
           errorEmitter.emit('permission-error', permissionError);
         });
       toast({ title: 'Education Added' })
@@ -91,7 +90,7 @@ export default function EducationPage() {
         const permissionError = new FirestorePermissionError({
           path: `${collections.EDUCATION}/${id}`,
           operation: 'delete',
-        });
+        } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       });
     toast({ title: 'Record Removed' })
