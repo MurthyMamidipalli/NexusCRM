@@ -5,7 +5,7 @@ import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Hammer, Loader2, Trash2, Award } from 'lucide-react'
+import { Plus, Hammer, Loader2, Trash2, Award, AlertCircle } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { useFirestore, useCollection } from '@/firebase'
 import { collection, query, orderBy } from 'firebase/firestore'
@@ -15,14 +15,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 export default function SkillsPage() {
   const db = useFirestore()
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const skillsQuery = useMemo(() => query(collection(db, collections.SKILLS), orderBy('level', 'desc')), [db])
-  const { data: skills, loading: skillsLoading } = useCollection(skillsQuery)
+  // Memoize the query to prevent infinite re-renders
+  const skillsQuery = useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, collections.SKILLS), orderBy('level', 'desc'));
+  }, [db])
+
+  const { data: skills, loading: skillsLoading, error } = useCollection(skillsQuery)
 
   const handleAddSkill = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -36,10 +42,10 @@ export default function SkillsPage() {
 
     try {
       await createRecord(db, collections.SKILLS, data)
-      toast({ title: 'Skill Added' })
+      toast({ title: 'Skill Added Successfully' })
       setIsAddOpen(false)
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message })
     } finally {
       setLoading(false)
     }
@@ -49,19 +55,9 @@ export default function SkillsPage() {
     try {
       await deleteRecord(db, collections.SKILLS, id)
       toast({ title: 'Skill Removed' })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message })
     }
-  }
-
-  if (skillsLoading) {
-    return (
-      <CRMLayout>
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </CRMLayout>
-    )
   }
 
   return (
@@ -69,7 +65,7 @@ export default function SkillsPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">🛠 Skills & Expertise</h1>
-          <p className="text-muted-foreground">Mapping your core competencies and professional tools.</p>
+          <p className="text-muted-foreground">Mapping your core competencies and professional tools within NexusCRM.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
@@ -116,7 +112,21 @@ export default function SkillsPage() {
         </Dialog>
       </div>
 
-      {skills && skills.length > 0 ? (
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error Loading Data</AlertTitle>
+          <AlertDescription>
+            There was a problem connecting to the database. {error.message}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {skillsLoading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : skills && skills.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {skills.map((skill: any) => (
             <Card key={skill.id} className="group border-none bg-card/50 backdrop-blur-md shadow-lg hover:shadow-xl transition-all">
@@ -155,7 +165,7 @@ export default function SkillsPage() {
       ) : (
         <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30">
           <Hammer className="h-12 w-12 text-muted-foreground/30 mb-4" />
-          <p className="text-muted-foreground">No skills mapped yet. Start by defining your expertise.</p>
+          <p className="text-muted-foreground font-headline">No skills mapped yet. Start by defining your expertise.</p>
         </div>
       )}
     </CRMLayout>
