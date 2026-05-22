@@ -15,10 +15,15 @@ export function FirebaseErrorListener() {
 
   useEffect(() => {
     const handlePermissionError = (error: FirestorePermissionError) => {
+      // Check if it's a common "index" error or a standard permission denied
+      const isIndexError = error.message.toLowerCase().includes('index');
+      
       toast({
         variant: 'destructive',
-        title: 'Permission Denied',
-        description: `You do not have permission to ${error.context.operation} this document. Check your security rules for path: ${error.context.path}`,
+        title: isIndexError ? 'Database Index Required' : 'Access Restricted',
+        description: isIndexError 
+          ? 'This view requires a database index. Please check your browser console for the setup link.' 
+          : `Security violation at: ${error.context.path}. You may not have permission to ${error.context.operation} this record.`,
       });
     };
 
