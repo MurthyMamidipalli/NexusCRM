@@ -16,16 +16,19 @@ import {
   Link as LinkIcon,
   Globe,
   ExternalLink,
-  X
+  X,
+  Lock
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
+import { collections, createRecord, deleteRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 import { format } from 'date-fns'
@@ -41,6 +44,7 @@ export default function ResumePage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [fileData, setFileData] = useState<string>('')
   const [activeTab, setActiveTab] = useState('PDF')
+  const [visibility, setVisibility] = useState<string>("Private")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Preview State
@@ -60,7 +64,6 @@ export default function ResumePage() {
 
   const { data: rawResumes, loading: resumeLoading } = useCollection(resumeQuery)
 
-  // In-memory sorting for index resilience
   const resumes = useMemo(() => {
     if (!rawResumes) return []
     return [...rawResumes].sort((a: any, b: any) => {
@@ -103,6 +106,8 @@ export default function ResumePage() {
     const data: any = {
       name: formData.get('name') as string,
       type: type,
+      visibility: visibility,
+      isPublic: visibility === 'Public',
       ownerId: user.uid,
     }
 
@@ -188,7 +193,7 @@ export default function ResumePage() {
                 {activeTab === 'PDF' ? 'Upload Resume PDF' : 'Add Resume Link'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                {activeTab === 'PDF' ? 'Files under 1MB for database sync.' : 'Add a link to your online portfolio.'}
+                Visibility control is mandatory for each record.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSave} className="space-y-6">
@@ -201,6 +206,19 @@ export default function ResumePage() {
                   required 
                   className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="visibility" className="text-sm font-semibold text-white">Visibility (Mandatory)</Label>
+                <Select value={visibility} onValueChange={setVisibility}>
+                  <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl">
+                    <SelectValue placeholder="Select Visibility" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                    <SelectItem value="Private">🔒 Private (Vault Only)</SelectItem>
+                    <SelectItem value="Public">🌍 Public (Shared on Hub)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {activeTab === 'PDF' ? (
@@ -269,12 +287,18 @@ export default function ResumePage() {
             {resumes.filter((r: any) => r.type === 'file').map((resume: any) => (
               <Card key={resume.id} className="relative group border-none bg-[#0f1115] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden">
                 <CardContent className="p-8">
-                  <button 
-                    className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:text-destructive transition-colors"
-                    onClick={() => handleDelete(resume.id)}
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
+                  <div className="flex items-center justify-between mb-4">
+                    <Badge variant="outline" className={`text-[9px] uppercase font-bold tracking-widest ${resume.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}`}>
+                      {resume.isPublic ? <Globe className="h-3 w-3 mr-1" /> : <Lock className="h-3 w-3 mr-1" />}
+                      {resume.visibility || (resume.isPublic ? 'Public' : 'Private')}
+                    </Badge>
+                    <button 
+                      className="p-2 rounded-full text-gray-500 hover:text-destructive transition-colors"
+                      onClick={() => handleDelete(resume.id)}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  </div>
                   <div className="flex flex-col gap-6">
                     <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">
                       <FileText className="h-8 w-8 text-primary" />
@@ -313,12 +337,18 @@ export default function ResumePage() {
             {resumes.filter((r: any) => r.type === 'link').map((resume: any) => (
               <Card key={resume.id} className="relative group border-none bg-[#0f1115] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden">
                 <CardContent className="p-8">
-                  <button 
-                    className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:text-destructive transition-colors"
-                    onClick={() => handleDelete(resume.id)}
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
+                  <div className="flex items-center justify-between mb-4">
+                    <Badge variant="outline" className={`text-[9px] uppercase font-bold tracking-widest ${resume.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}`}>
+                      {resume.isPublic ? <Globe className="h-3 w-3 mr-1" /> : <Lock className="h-3 w-3 mr-1" />}
+                      {resume.visibility || (resume.isPublic ? 'Public' : 'Private')}
+                    </Badge>
+                    <button 
+                      className="p-2 rounded-full text-gray-500 hover:text-destructive transition-colors"
+                      onClick={() => handleDelete(resume.id)}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  </div>
                   <div className="flex flex-col gap-6">
                     <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">
                       <Globe className="h-8 w-8 text-primary" />

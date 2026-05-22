@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "Profile": {
@@ -109,7 +108,8 @@
         "category": { "type": "string" },
         "fileUrl": { "type": "string" },
         "fileName": { "type": "string" },
-        "ownerId": { "type": "string" }
+        "ownerId": { "type": "string" },
+        "isPublic": { "type": "boolean", "description": "Mandatory: Allow public viewing of this specific document." }
       }
     },
     "Resume": {
@@ -121,7 +121,8 @@
         "type": { "type": "string", "enum": ["file", "link"] },
         "url": { "type": "string" },
         "fileUrl": { "type": "string" },
-        "ownerId": { "type": "string" }
+        "ownerId": { "type": "string" },
+        "isPublic": { "type": "boolean", "description": "Mandatory: Allow public viewing and download of this resume." }
       }
     },
     "Achievement": {
@@ -145,7 +146,8 @@
         "issuer": { "type": "string" },
         "date": { "type": "string" },
         "category": { "type": "string" },
-        "ownerId": { "type": "string" }
+        "ownerId": { "type": "string" },
+        "isPublic": { "type": "boolean", "description": "Mandatory: Allow public viewing of this certification." }
       }
     },
     "Lead": {
@@ -172,10 +174,10 @@
     "/education/{eduId}": { "schema": "#/entities/Education", "description": "Education history. READ access is public for any visitor viewing a public profile hub." },
     "/projects/{projectId}": { "schema": "#/entities/Project", "description": "Portfolio projects. READ access is public for any visitor viewing a public profile hub." },
     "/contacts/{contactId}": { "schema": "#/entities/Contact", "description": "Network contacts. PRIVATE: Only owner can access." },
-    "/documents/{docId}": { "schema": "#/entities/Document", "description": "Vault documents. PRIVATE: Only owner can access." },
-    "/resumes/{resId}": { "schema": "#/entities/Resume", "description": "Resume records. PRIVATE: Only owner can access." },
+    "/documents/{docId}": { "schema": "#/entities/Document", "description": "Vault documents. PRIVATE: Only owner can access unless explicitly marked public." },
+    "/resumes/{resId}": { "schema": "#/entities/Resume", "description": "Resume records. PRIVATE: Only owner can access unless explicitly marked public." },
     "/leads/{leadId}": { "schema": "#/entities/Lead", "description": "Sales leads. PRIVATE: Only owner can access." },
     "/achievements/{achId}": { "schema": "#/entities/Achievement", "description": "Awards and honors. READ access is public for any visitor viewing a public profile hub." },
-    "/certifications/{certId}": { "schema": "#/entities/Certification", "description": "Credentials. PRIVATE: Only owner can access." }
+    "/certifications/{certId}": { "schema": "#/entities/Certification", "description": "Credentials. PRIVATE: Only owner can access unless explicitly marked public." }
   }
 }

@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
@@ -16,7 +15,9 @@ import {
   Eye,
   CheckCircle2,
   Filter,
-  X
+  X,
+  Globe,
+  Lock
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -28,7 +29,6 @@ import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
@@ -40,6 +40,9 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState('All Documents')
   const [mounted, setMounted] = useState(false)
+  
+  // Visibility State
+  const [visibility, setVisibility] = useState<string>("Private")
 
   // Preview State
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
@@ -63,7 +66,6 @@ export default function DocumentsPage() {
 
   const { data: rawDocuments, loading: docsLoading } = useCollection(docsQuery)
 
-  // In-memory sorting
   const documents = useMemo(() => {
     if (!rawDocuments) return []
     return [...rawDocuments].sort((a: any, b: any) => {
@@ -113,6 +115,8 @@ export default function DocumentsPage() {
       name: formData.get('name') as string,
       category: formData.get('category') as string,
       status: formData.get('status') as string || 'Active',
+      visibility: visibility,
+      isPublic: visibility === 'Public',
       size: displaySize,
       fileUrl: fileData || editingDoc?.fileUrl || '',
       fileName: selectedFile?.name || editingDoc?.fileName || '',
@@ -186,7 +190,10 @@ export default function DocumentsPage() {
             }
           }}>
             <DialogTrigger asChild>
-              <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingDoc(null)}>
+              <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => {
+                setEditingDoc(null);
+                setVisibility("Private");
+              }}>
                 <Upload className="h-4 w-4" />
                 Upload File
               </Button>
@@ -219,6 +226,21 @@ export default function DocumentsPage() {
                     </Select>
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="visibility">Visibility Control (Mandatory)</Label>
+                  <Select value={visibility} onValueChange={setVisibility}>
+                    <SelectTrigger className="border-primary/20">
+                      <SelectValue placeholder="Select Visibility" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Private">🔒 Private (Vault Only)</SelectItem>
+                      <SelectItem value="Public">🌍 Public (Shared on Hub)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest px-1"> Public documents can be viewed by anyone with your Hub link. </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label>Document Attachment (Max 1MB)</Label>
                   <div 
@@ -280,9 +302,15 @@ export default function DocumentsPage() {
               <Card key={doc.id} className="group hover:border-primary/50 transition-all shadow-md bg-card/40 border-none backdrop-blur-sm overflow-hidden">
                 <CardContent className="p-0">
                   <div className="h-32 bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center border-b border-border/30 relative">
+                    <div className="absolute top-4 left-4">
+                      <Badge variant="outline" className={`text-[9px] uppercase font-bold tracking-widest ${doc.isPublic ? 'border-green-500/20 text-green-500 bg-black/40' : 'border-gray-500/20 text-gray-500 bg-black/40'}`}>
+                        {doc.isPublic ? <Globe className="h-2 w-2 mr-1" /> : <Lock className="h-2 w-2 mr-1" />}
+                        {doc.visibility || (doc.isPublic ? 'Public' : 'Private')}
+                      </Badge>
+                    </div>
                     <FileText className="h-12 w-12 text-primary opacity-20" />
                     <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary bg-background/80" onClick={() => { setEditingDoc(doc); setIsDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary bg-background/80" onClick={() => { setEditingDoc(doc); setIsDialogOpen(true); setVisibility(doc.visibility || (doc.isPublic ? "Public" : "Private")); }}><Pencil className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive bg-background/80" onClick={() => handleDelete(doc.id)}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>

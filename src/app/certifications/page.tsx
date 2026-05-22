@@ -19,7 +19,9 @@ import {
   Upload,
   CheckCircle2,
   Eye,
-  X
+  X,
+  Globe,
+  Lock
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -44,6 +46,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
@@ -60,6 +63,7 @@ export default function CertificationsPage() {
 
   // Form State
   const [category, setCategory] = useState<string>("Course Certificate")
+  const [visibility, setVisibility] = useState<string>("Private")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [documentData, setDocumentData] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -112,6 +116,8 @@ export default function CertificationsPage() {
       date: formData.get('date') as string,
       credentialId: formData.get('credentialId') as string,
       category: category,
+      visibility: visibility,
+      isPublic: visibility === 'Public',
       externalLink: formData.get('externalLink') as string,
       documentUrl: documentData || editingCert?.documentUrl || '',
       fileName: selectedFile?.name || editingCert?.fileName || '',
@@ -172,7 +178,10 @@ export default function CertificationsPage() {
             }
           }}>
             <DialogTrigger asChild>
-              <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingCert(null)}>
+              <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => {
+                setEditingCert(null);
+                setVisibility("Private");
+              }}>
                 <Plus className="h-4 w-4" />
                 Add Record
               </Button>
@@ -200,9 +209,22 @@ export default function CertificationsPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="title">Title / Course Name</Label>
-                    <Input id="title" name="title" defaultValue={editingCert?.title || ''} placeholder="AWS Solutions Architect" required />
+                    <Label htmlFor="visibility">Visibility (Mandatory)</Label>
+                    <Select defaultValue={editingCert?.visibility || "Private"} onValueChange={setVisibility}>
+                      <SelectTrigger className="border-primary/20">
+                        <SelectValue placeholder="Select Visibility" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Private">🔒 Private (Profile Only)</SelectItem>
+                        <SelectItem value="Public">🌍 Public (Visible on Hub)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title / Course Name</Label>
+                  <Input id="title" name="title" defaultValue={editingCert?.title || ''} placeholder="AWS Solutions Architect" required />
                 </div>
                 
                 <div className="space-y-2">
@@ -277,13 +299,13 @@ export default function CertificationsPage() {
           </TabsList>
 
           <TabsContent value="study" className="mt-0">
-            <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} onPreview={(url, name) => setPreviewDoc({ url, name })} />
+            <CertGrid items={filterCerts('Study Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); setVisibility(c.visibility || "Private"); }} onPreview={(url, name) => setPreviewDoc({ url, name })} />
           </TabsContent>
           <TabsContent value="course" className="mt-0">
-            <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} onPreview={(url, name) => setPreviewDoc({ url, name })} />
+            <CertGrid items={filterCerts('Course Certificate')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); setVisibility(c.visibility || "Private"); }} onPreview={(url, name) => setPreviewDoc({ url, name })} />
           </TabsContent>
           <TabsContent value="grades" className="mt-0">
-            <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); }} onPreview={(url, name) => setPreviewDoc({ url, name })} />
+            <CertGrid items={filterCerts('Grade Sheet')} onDelete={handleDelete} onEdit={(c) => { setEditingCert(c); setIsDialogOpen(true); setCategory(c.category); setVisibility(c.visibility || "Private"); }} onPreview={(url, name) => setPreviewDoc({ url, name })} />
           </TabsContent>
         </Tabs>
       )}
@@ -335,8 +357,14 @@ function CertGrid({ items, onDelete, onEdit, onPreview }: { items: any[], onDele
         <Card key={cert.id} className="group border-none bg-card/50 backdrop-blur-md shadow-md hover:shadow-xl transition-all">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
-              <div className="p-3 rounded-2xl bg-primary/10 text-primary">
-                {cert.category === 'Grade Sheet' ? <FileSpreadsheet className="h-6 w-6" /> : <ShieldCheck className="h-6 w-6" />}
+              <div className="flex flex-col gap-2">
+                <div className="p-3 rounded-2xl bg-primary/10 text-primary w-fit">
+                  {cert.category === 'Grade Sheet' ? <FileSpreadsheet className="h-6 w-6" /> : <ShieldCheck className="h-6 w-6" />}
+                </div>
+                <Badge variant="outline" className={`text-[9px] uppercase font-bold tracking-widest ${cert.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}`}>
+                  {cert.isPublic ? <Globe className="h-3 w-3 mr-1" /> : <Lock className="h-3 w-3 mr-1" />}
+                  {cert.visibility || (cert.isPublic ? 'Public' : 'Private')}
+                </Badge>
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => onEdit(cert)}><Pencil className="h-4 w-4" /></Button>

@@ -42,7 +42,7 @@ service cloud.firestore {
       allow write: if isOwner(request.resource.data) || isOwner(resource.data);
     }
     match /certifications/{id} {
-      allow read: if isOwner(resource.data) || isPublicProfile(resource.data.ownerId);
+      allow read: if isOwner(resource.data) || (isPublicProfile(resource.data.ownerId) && resource.data.isPublic == true);
       allow write: if isOwner(request.resource.data) || isOwner(resource.data);
     }
     match /links/{id} {
@@ -50,7 +50,7 @@ service cloud.firestore {
       allow write: if isOwner(request.resource.data) || isOwner(resource.data);
     }
     match /resumes/{id} {
-      allow read: if isOwner(resource.data) || isPublicProfile(resource.data.ownerId);
+      allow read: if isOwner(resource.data) || (isPublicProfile(resource.data.ownerId) && resource.data.isPublic == true);
       allow write: if isOwner(request.resource.data) || isOwner(resource.data);
     }
     match /testimonials/{id} {
@@ -58,11 +58,14 @@ service cloud.firestore {
       allow write: if isOwner(request.resource.data) || isOwner(resource.data);
     }
 
-    // Private Vault Collections: Strictly owner-only access.
-    match /contacts/{id} {
-      allow read, write: if isOwner(resource.data) || isOwner(request.resource.data);
-    }
+    // Vault Collections: Owner-only by default, public-read if specifically enabled per document.
     match /documents/{id} {
+      allow read: if isOwner(resource.data) || (isPublicProfile(resource.data.ownerId) && resource.data.isPublic == true);
+      allow write: if isOwner(resource.data) || isOwner(request.resource.data);
+    }
+
+    // Strictly Private Vault Collections: Strictly owner-only access.
+    match /contacts/{id} {
       allow read, write: if isOwner(resource.data) || isOwner(request.resource.data);
     }
     match /tasks/{id} {
