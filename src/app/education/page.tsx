@@ -6,8 +6,8 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, GraduationCap, Loader2, Trash2, Calendar, BookOpen, Award } from 'lucide-react'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -17,14 +17,25 @@ import { Textarea } from '@/components/ui/textarea'
 
 export default function EducationPage() {
   const db = useFirestore()
+  const { user } = useUser()
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const eduQuery = useMemo(() => query(collection(db, collections.EDUCATION), orderBy('startDate', 'desc')), [db])
+  const eduQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.EDUCATION), 
+      where('ownerId', '==', user.uid),
+      orderBy('startDate', 'desc')
+    )
+  }, [db, user])
+
   const { data: education, loading: eduLoading } = useCollection(eduQuery)
 
   const handleAddEdu = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!user) return
+
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
@@ -39,7 +50,7 @@ export default function EducationPage() {
     }
 
     try {
-      await createRecord(db, collections.EDUCATION, data)
+      await createRecord(db, collections.EDUCATION, data, user.uid)
       toast({ title: 'Education Added' })
       setIsAddOpen(false)
     } catch (error: any) {
@@ -86,7 +97,7 @@ export default function EducationPage() {
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold font-headline">Add Education</DialogTitle>
               <DialogDescription>
-                Enter the details of your educational institution and degree.
+                Enter the details of your educational institution.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddEdu} className="space-y-6 py-4">
@@ -101,7 +112,7 @@ export default function EducationPage() {
                   <Input id="degree" name="degree" placeholder="e.g. Bachelor of Science" required />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="fieldOfStudy">Field of Study (Optional)</Label>
+                  <Label htmlFor="fieldOfStudy">Field of Study</Label>
                   <Input id="fieldOfStudy" name="fieldOfStudy" placeholder="e.g. Computer Science" />
                 </div>
               </div>
@@ -119,17 +130,17 @@ export default function EducationPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="cgpa">CGPA (Optional)</Label>
+                  <Label htmlFor="cgpa">CGPA</Label>
                   <Input id="cgpa" name="cgpa" placeholder="e.g. 3.8/4.0" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="percentage">Percentage (Optional)</Label>
+                  <Label htmlFor="percentage">Percentage</Label>
                   <Input id="percentage" name="percentage" placeholder="e.g. 92%" />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Achievements / Description (Optional)</Label>
+                <Label htmlFor="description">Achievements / Description</Label>
                 <Textarea 
                   id="description" 
                   name="description" 
@@ -138,9 +149,8 @@ export default function EducationPage() {
                 />
               </div>
 
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={loading} className="shadow-lg shadow-primary/20">
+              <DialogFooter>
+                <Button type="submit" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Add Record
                 </Button>

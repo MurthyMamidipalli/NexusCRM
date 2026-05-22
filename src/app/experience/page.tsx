@@ -6,8 +6,8 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Briefcase, Loader2, Trash2, Calendar, MapPin } from 'lucide-react'
-import { useFirestore, useCollection } from '@/firebase'
-import { collection, query, orderBy } from 'firebase/firestore'
+import { useFirestore, useCollection, useUser } from '@/firebase'
+import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
@@ -17,14 +17,25 @@ import { Textarea } from '@/components/ui/textarea'
 
 export default function ExperiencePage() {
   const db = useFirestore()
+  const { user } = useUser()
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const expQuery = useMemo(() => query(collection(db, collections.EXPERIENCE), orderBy('startDate', 'desc')), [db])
+  const expQuery = useMemo(() => {
+    if (!db || !user) return null
+    return query(
+      collection(db, collections.EXPERIENCE), 
+      where('ownerId', '==', user.uid),
+      orderBy('startDate', 'desc')
+    )
+  }, [db, user])
+
   const { data: experience, loading: expLoading } = useCollection(expQuery)
 
   const handleAddExp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!user) return
+
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
@@ -37,7 +48,7 @@ export default function ExperiencePage() {
     }
 
     try {
-      await createRecord(db, collections.EXPERIENCE, data)
+      await createRecord(db, collections.EXPERIENCE, data, user.uid)
       toast({ title: 'Experience Added' })
       setIsAddOpen(false)
     } catch (error: any) {
@@ -111,7 +122,7 @@ export default function ExperiencePage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
-                <Textarea id="description" name="description" placeholder="Summarize your impact and achievements..." className="min-h-[100px]" />
+                <Textarea id="description" name="description" placeholder="Summarize your impact..." className="min-h-[100px]" />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={loading}>

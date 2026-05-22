@@ -27,20 +27,28 @@ export const collections = {
   LEADS: 'leads',
   CERTIFICATIONS: 'certifications',
   LINKS: 'links',
-  CAREER: 'profiles' // Store current job info in profile
+  CAREER: 'profiles' 
 };
 
 /**
  * Creates a new record in the specified collection.
+ * Automatically adds ownership and timestamps.
  */
-export function createRecord(db: Firestore, collectionName: string, data: any) {
+export function createRecord(db: Firestore, collectionName: string, data: any, userId?: string) {
   if (!collectionName) throw new Error('Collection name is required');
   const colRef = collection(db, collectionName);
-  return addDoc(colRef, {
+  
+  const payload = {
     ...data,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
-  });
+  };
+
+  if (userId) {
+    payload.ownerId = userId;
+  }
+
+  return addDoc(colRef, payload);
 }
 
 /**
