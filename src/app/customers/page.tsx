@@ -6,7 +6,6 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Search, Filter, Download, UserCheck, Loader2, Building2, Mail, ExternalLink, Phone, User } from 'lucide-react'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
@@ -85,22 +84,18 @@ export default function ContactsPage() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           {contacts.map((contact: any) => (
             <Card key={contact.id} className="group border-none bg-card/50 backdrop-blur-md shadow-lg hover:shadow-2xl transition-all duration-300">
-              <CardHeader className="flex flex-row items-center justify-center pb-2">
-                <Avatar className="h-16 w-16 border-2 border-primary/20 group-hover:border-primary/50 transition-colors">
-                  <AvatarImage src={`https://picsum.photos/seed/${contact.id}/64/64`} />
-                  <AvatarFallback>{contact.name?.[0] || 'C'}</AvatarFallback>
-                </Avatar>
-              </CardHeader>
-              <CardContent className="text-center">
-                <h3 className="font-headline text-xl font-bold group-hover:text-primary transition-colors mb-6">{contact.name}</h3>
-                
-                <Button 
-                  variant="ghost" 
-                  className="w-full text-primary group-hover:bg-primary group-hover:text-white transition-all border border-primary/20 group-hover:border-transparent"
-                  onClick={() => setSelectedContact(contact)}
-                >
-                  View Details
-                </Button>
+              <CardContent className="text-center p-6">
+                <div className="flex flex-col items-center justify-center py-6">
+                  <h3 className="font-headline text-xl font-bold group-hover:text-primary transition-colors mb-6">{contact.name}</h3>
+                  
+                  <Button 
+                    variant="ghost" 
+                    className="w-full text-primary group-hover:bg-primary group-hover:text-white transition-all border border-primary/20 group-hover:border-transparent"
+                    onClick={() => setSelectedContact(contact)}
+                  >
+                    View Details
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -119,11 +114,7 @@ export default function ContactsPage() {
         <DialogContent className="sm:max-w-[450px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden">
           <div className="h-32 bg-gradient-to-r from-primary/20 to-accent/20" />
           <div className="px-8 pb-8 -mt-12 space-y-6">
-            <div className="flex flex-col items-center text-center space-y-4">
-              <Avatar className="h-24 w-24 border-4 border-[#121214] shadow-xl">
-                <AvatarImage src={`https://picsum.photos/seed/${selectedContact?.id}/96/96`} />
-                <AvatarFallback className="text-2xl bg-muted"><User className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
-              </Avatar>
+            <div className="flex flex-col items-center text-center space-y-2 pt-16">
               <div className="space-y-1">
                 <DialogTitle className="text-3xl font-bold font-headline">{selectedContact?.name}</DialogTitle>
                 <DialogDescription className="text-primary font-semibold">
