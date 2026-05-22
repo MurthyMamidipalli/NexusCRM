@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo } from 'react'
@@ -5,7 +6,7 @@ import { useParams } from 'next/navigation'
 import { useFirestore, useDoc, useCollection } from '@/firebase'
 import { doc, collection, query, where, orderBy } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
-import { Loader2, User, Mail, MapPin, Globe, Briefcase, GraduationCap, Rocket, Award, Lock } from 'lucide-react'
+import { Loader2, User, Mail, MapPin, Globe, Briefcase, GraduationCap, Rocket, Award, Lock, AlertCircle } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -16,13 +17,13 @@ export default function PublicProfilePage() {
   const uid = params.uid as string
   const db = useFirestore()
 
-  // Queries
+  // Queries - These will work even if the user is unauthenticated, provided security rules allow public read
   const profileRef = useMemo(() => uid ? doc(db, collections.PROFILES, uid) : null, [db, uid])
   const skillsQuery = useMemo(() => uid ? query(collection(db, collections.SKILLS), where('ownerId', '==', uid), orderBy('name', 'asc')) : null, [db, uid])
   const expQuery = useMemo(() => uid ? query(collection(db, collections.EXPERIENCE), where('ownerId', '==', uid), orderBy('startDate', 'desc')) : null, [db, uid])
-  const projectsQuery = useMemo(() => uid ? query(collection(db, collections.PROJECTS), where('ownerId', '==', uid), orderBy('createdAt', 'desc')) : null, [db, uid])
+  const projectsQuery = useMemo(() => uid ? query(collection(db, collections.PROJECTS), where('ownerId', '==', uid), orderBy('updatedAt', 'desc')) : null, [db, uid])
 
-  const { data: profile, loading: profileLoading } = useDoc(profileRef)
+  const { data: profile, loading: profileLoading, error: profileError } = useDoc(profileRef)
   const { data: skills, loading: skillsLoading } = useCollection(skillsQuery)
   const { data: experience, loading: expLoading } = useCollection(expQuery)
   const { data: projects, loading: projectsLoading } = useCollection(projectsQuery)
@@ -35,17 +36,25 @@ export default function PublicProfilePage() {
     )
   }
 
-  if (!profile || !profile.publicProfile) {
+  // Handle case where profile doesn't exist or visibility is turned off
+  if (!profile || !profile.publicProfile || profileError) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0c] text-white p-6 text-center">
         <div className="p-6 rounded-full bg-muted/10 mb-6">
           <Lock className="h-12 w-12 text-muted-foreground" />
         </div>
-        <h1 className="text-3xl font-bold font-headline mb-2">Private Portfolio</h1>
-        <p className="text-muted-foreground max-w-md">This professional hub is currently private or does not exist. Please contact the owner for access.</p>
-        <Button variant="outline" className="mt-8 border-white/10 text-white" asChild>
-          <a href="/login">Create Your Own Hub</a>
-        </Button>
+        <h1 className="text-3xl font-bold font-headline mb-2">Private Hub</h1>
+        <p className="text-muted-foreground max-w-md">
+          This professional intelligence hub is either private, does not exist, or your access is restricted by workstation security.
+        </p>
+        <div className="mt-8 flex flex-col gap-4">
+          <Button variant="outline" className="border-white/10 text-white" asChild>
+            <a href="/login">Manage My Hub</a>
+          </Button>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest max-w-xs">
+            Note: Workstation URLs require you to be signed into your developer account to view.
+          </p>
+        </div>
       </div>
     )
   }
@@ -71,7 +80,7 @@ export default function PublicProfilePage() {
                 <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {profile.location}</span>
               )}
               {profile.email && (
-                <span className="flex items-center gap-1.5 lowercase"><Mail className="h-4 w-4" /> {profile.email}</span>
+                <span className="flex items-center gap-1.5 lowercase italic"><Mail className="h-4 w-4" /> {profile.email.toLowerCase()}</span>
               )}
             </div>
           </div>

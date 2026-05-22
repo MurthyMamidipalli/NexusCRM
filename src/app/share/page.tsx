@@ -5,7 +5,7 @@ import React, { useMemo, useEffect, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Globe, Copy, Share2, Loader2, Eye, ShieldCheck, Lock } from 'lucide-react'
+import { Globe, Copy, Share2, Loader2, Eye, ShieldCheck, Lock, AlertTriangle } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { useUser, useFirestore, useDoc } from '@/firebase'
@@ -44,7 +44,10 @@ export default function PublicSharePage() {
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(publicUrl)
-    toast({ title: 'Link Copied', description: 'Your public profile link is now in your clipboard.' })
+    toast({ 
+      title: 'Link Copied', 
+      description: 'Public profile URL is now in your clipboard.' 
+    })
   }
 
   const handlePreview = () => {
@@ -95,16 +98,28 @@ export default function PublicSharePage() {
 
               {settings.publicProfile ? (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                  <Label>Your unique Hub Link</Label>
-                  <div className="flex gap-2">
-                    <div className="flex-1 bg-muted/50 border border-border p-3 rounded-lg text-sm font-mono truncate">
-                      {publicUrl}
+                  <div className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20 flex gap-4">
+                    <AlertTriangle className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-yellow-500">Security Note</h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        While in development, your "Public URL" is protected by workstation security. To test this in another browser, you must be signed into your Google developer account in that browser as well.
+                      </p>
                     </div>
-                    <Button onClick={copyToClipboard} variant="secondary" className="gap-2">
-                      <Copy className="h-4 w-4" /> Copy
-                    </Button>
                   </div>
-                  <Button onClick={handlePreview} variant="outline" className="w-full gap-2">
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Your Hub Link</Label>
+                    <div className="flex gap-2">
+                      <div className="flex-1 bg-muted/50 border border-border p-3 rounded-lg text-sm font-mono truncate">
+                        {publicUrl}
+                      </div>
+                      <Button onClick={copyToClipboard} variant="secondary" className="gap-2">
+                        <Copy className="h-4 w-4" /> Copy
+                      </Button>
+                    </div>
+                  </div>
+                  <Button onClick={handlePreview} variant="outline" className="w-full gap-2 h-12 font-bold">
                     <Eye className="h-4 w-4" /> Preview Public Hub
                   </Button>
                 </div>
@@ -131,7 +146,7 @@ export default function PublicSharePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm opacity-90 leading-relaxed">
-              When public access is enabled, your **Bio**, **Skills**, **Experience**, and **Projects** will be visible to anyone with the link. **Contacts** and **Private Documents** always remain secure.
+              When public access is enabled, your **Bio**, **Skills**, **Experience**, and **Projects** will be visible to anyone with access to the link. **Contacts** and **Private Documents** always remain secure.
             </CardContent>
           </Card>
         </div>
