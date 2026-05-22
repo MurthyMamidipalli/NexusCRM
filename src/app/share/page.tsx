@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useEffect, useState } from 'react'
@@ -29,11 +28,11 @@ export default function PublicSharePage() {
 
   // Wait for doc to load to avoid flickering 'isPublic' to false
   const initialData = useMemo(() => {
-    if (!profileDoc) return null;
+    if (profileLoading || !profileDoc) return null;
     return {
-      isPublic: profileDoc.isPublic ?? false
+      isPublic: profileDoc.isPublic === true
     };
-  }, [profileDoc]);
+  }, [profileDoc, profileLoading]);
 
   const { data: settings, updateField, save } = usePersistentDocument(
     collections.PROFILES,
@@ -92,6 +91,7 @@ export default function PublicSharePage() {
                   checked={settings?.isPublic || false} 
                   onCheckedChange={(val) => {
                     updateField('isPublic', val);
+                    // Critical: Trigger immediate save to cloud to bypass debounce for instant link availability
                     save();
                     toast({ 
                       title: val ? 'Hub Published' : 'Hub Private', 

@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useEffect, useState } from 'react'
@@ -42,14 +41,14 @@ export default function PublicProfilePage() {
       console.log('Target Profile UID (from URL):', uid);
       
       try {
-        // 1. List EVERY document in the collection
+        // 1. Attempt to list the collection to see if ANY public profiles exist
         const qAll = query(collection(db, collections.PROFILES));
         const snapshot = await getDocs(qAll);
         
         if (snapshot.empty) {
-          console.warn('❌ profiles collection is empty');
+          console.warn('❌ profiles collection is empty (or no public profiles exist)');
         } else {
-          console.log(`✅ Found ${snapshot.size} documents in "profiles" collection:`);
+          console.log(`✅ Found ${snapshot.size} public documents in "profiles" collection:`);
           snapshot.docs.forEach((d) => {
             const data = d.data();
             console.log(`- Document ID: ${d.id}`, {
@@ -76,8 +75,10 @@ export default function PublicProfilePage() {
           }
         }
       } catch (err: any) {
-        console.error('🛑 Diagnostic Blocked:', err.message);
-        console.log('Suggestion: Ensure Security Rules allow reading public profiles.');
+        console.error('🛑 Diagnostic Error:', err.message);
+        if (err.message.includes('permission-denied')) {
+          console.error('SECURITY ALERT: Firestore rules are blocking access. Ensure isPublic is true.');
+        }
       } finally {
         setListingFinished(true);
         console.groupEnd();
