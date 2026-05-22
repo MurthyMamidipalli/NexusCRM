@@ -14,10 +14,6 @@ import { collections } from '@/lib/firestore-service'
 import { usePersistentDocument } from '@/hooks/use-persistence'
 import { toast } from '@/hooks/use-toast'
 
-const EMPTY_VISIBILITY = {
-  isPublic: false
-};
-
 export default function PublicSharePage() {
   const { user, loading: userLoading } = useUser()
   const db = useFirestore()
@@ -31,14 +27,18 @@ export default function PublicSharePage() {
   const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
   const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
 
-  const initialData = useMemo(() => ({
-    isPublic: profileDoc?.isPublic ?? false
-  }), [profileDoc]);
+  // Wait for doc to load to avoid flickering 'isPublic' to false
+  const initialData = useMemo(() => {
+    if (!profileDoc) return null;
+    return {
+      isPublic: profileDoc.isPublic ?? false
+    };
+  }, [profileDoc]);
 
   const { data: settings, updateField, save } = usePersistentDocument(
     collections.PROFILES,
     user?.uid,
-    initialData
+    initialData || { isPublic: false }
   )
 
   const publicUrl = user ? `${typeof window !== 'undefined' ? window.location.origin : ''}/p/${user.uid}` : ''
@@ -57,7 +57,7 @@ export default function PublicSharePage() {
     }
   }
 
-  if (!mounted || userLoading || profileLoading) {
+  if (!mounted || userLoading || (profileLoading && !profileDoc)) {
     return (
       <CRMLayout>
         <div className="flex h-64 items-center justify-center">
@@ -89,7 +89,7 @@ export default function PublicSharePage() {
                   <p className="text-sm text-muted-foreground">Make your professional hub accessible via a unique URL.</p>
                 </div>
                 <Switch 
-                  checked={settings.isPublic} 
+                  checked={settings?.isPublic || false} 
                   onCheckedChange={(val) => {
                     updateField('isPublic', val);
                     save();
@@ -101,7 +101,7 @@ export default function PublicSharePage() {
                 />
               </div>
 
-              {settings.isPublic ? (
+              {settings?.isPublic ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
                   <div className="p-5 rounded-xl bg-[#1c1c1f] border border-border/50">
                     <h4 className="text-sm font-bold text-white mb-2">Public Profile</h4>

@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import { useFirestore, useDoc, useCollection } from '@/firebase'
 import { doc, collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
-import { Loader2, User, Mail, MapPin, Globe, Briefcase, Rocket, Lock, ShieldAlert, Search } from 'lucide-react'
+import { Loader2, User, Mail, MapPin, Globe, Briefcase, Rocket, Lock, ShieldAlert } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -36,20 +36,16 @@ export default function PublicProfilePage() {
   useEffect(() => {
     async function searchFallback() {
       if (!profileLoading && !profileDoc && uid && db) {
-        console.log('⚠️ Direct profile lookup failed. Attempting fallback search by ownerId...');
         setSearchingFallback(true)
         try {
           const q = query(collection(db, collections.PROFILES), where('ownerId', '==', uid), limit(1))
           const querySnapshot = await getDocs(q)
           if (!querySnapshot.empty) {
             const found = querySnapshot.docs[0].data()
-            console.log('✅ Fallback profile found via ownerId search:', found)
             setFallbackProfile({ ...found, id: querySnapshot.docs[0].id })
-          } else {
-            console.error('❌ No profile document found with this UID or ownerId.')
           }
         } catch (err) {
-          console.error('❌ Fallback search error:', err)
+          console.error('Fallback search error:', err)
         } finally {
           setSearchingFallback(false)
         }
@@ -67,16 +63,20 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (!profileLoading && !searchingFallback) {
       console.group('🔍 Public Hub Diagnostic');
-      console.log('URL Identifier:', uid);
-      console.log('Active Profile Object:', activeProfile);
-      console.log('Found via Direct Ref:', !!profileDoc);
-      console.log('Found via ownerId Query:', !!fallbackProfile);
-      console.log('Visibility (isPublic):', activeProfile?.isPublic);
+      console.log('Target UID:', uid);
+      console.log('Profile Document Found:', !!activeProfile);
+      if (activeProfile) {
+        console.log('Visibility (isPublic):', activeProfile.isPublic);
+        console.log('Found via Fallback:', !!fallbackProfile);
+      }
+      if (profileError) {
+        console.log('Firestore Error:', profileError.message);
+      }
       console.groupEnd();
     }
-  }, [activeProfile, profileDoc, fallbackProfile, profileLoading, searchingFallback, uid]);
+  }, [activeProfile, profileDoc, fallbackProfile, profileLoading, searchingFallback, uid, profileError]);
 
-  if (profileLoading || searchingFallback) {
+  if (profileLoading || (searchingFallback && !activeProfile)) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0c]">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
