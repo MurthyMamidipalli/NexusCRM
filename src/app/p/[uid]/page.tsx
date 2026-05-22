@@ -16,18 +16,14 @@ export default function PublicProfilePage() {
   const uid = params.uid as string
   const db = useFirestore()
   
-  // State for fallback search if direct ID fails
-  const [fallbackProfile, setFallbackProfile] = useState<any>(null)
-  const [searchingFallback, setSearchingFallback] = useState(false)
-
-  // 1. Primary Profile Query: Direct reference
+  // 1. Primary Profile Query: Direct reference using the URL UID (Auth UID)
   const profileRef = useMemo(() => uid && db ? doc(db, collections.PROFILES, uid) : null, [db, uid])
-  const { data: profileDoc, loading: profileLoading, error: profileError } = useDoc(profileRef)
+  const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
 
-  const activeProfile = profileDoc || fallbackProfile
-  const isVisible = activeProfile && activeProfile.isPublic === true
+  // Determine visibility safely
+  const isVisible = profileDoc && profileDoc.isPublic === true
 
-  // 2. Sub-resource Queries: ONLY run these if the profile is confirmed as PUBLIC
+  // 2. Sub-resource Queries: ONLY run these if the profile is confirmed as PUBLIC to avoid permission errors
   const skillsQuery = useMemo(() => 
     isVisible && uid && db ? query(collection(db, collections.SKILLS), where('ownerId', '==', uid), orderBy('name', 'asc')) : null, 
     [db, uid, isVisible]
@@ -37,7 +33,7 @@ export default function PublicProfilePage() {
     [db, uid, isVisible]
   )
   const projectsQuery = useMemo(() => 
-    isVisible && uid && db ? query(collection(db, collections.PROJECTS), where('ownerId', '==', uid), orderBy('updatedAt', 'desc')) : null, 
+    isVisible && uid && db ? query(collection(db, collections.PROJECTS), where('ownerId', '==', uid)) : null, 
     [db, uid, isVisible]
   )
 
@@ -45,30 +41,8 @@ export default function PublicProfilePage() {
   const { data: experience } = useCollection(expQuery)
   const { data: projects } = useCollection(projectsQuery)
 
-  // Fallback diagnostic: if direct doc(uid) fails, check if doc exists with ownerId field
-  useEffect(() => {
-    async function checkOwnerFallback() {
-      if (!db || !uid || profileDoc || profileLoading) return;
-      
-      setSearchingFallback(true);
-      try {
-        const q = query(collection(db, collections.PROFILES), where('ownerId', '==', uid), where('isPublic', '==', true), limit(1));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          setFallbackProfile({ ...querySnapshot.docs[0].data(), id: querySnapshot.docs[0].id });
-        }
-      } catch (err) {
-        console.warn('Diagnostic search failed (likely unauthenticated access restriction):', err);
-      } finally {
-        setSearchingFallback(false);
-      }
-    }
-    
-    checkOwnerFallback();
-  }, [uid, db, profileDoc, profileLoading]);
-
   // Loading State
-  if (profileLoading || (searchingFallback && !activeProfile)) {
+  if (profileLoading) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0c]">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -99,6 +73,7 @@ export default function PublicProfilePage() {
     )
   }
 
+  const activeProfile = profileDoc;
   const displayFirstName = activeProfile.firstName || '';
   const displayLastName = activeProfile.lastName || '';
   const displayFullName = displayFirstName || displayLastName 
