@@ -27,7 +27,8 @@ export const collections = {
   LEADS: 'leads',
   CERTIFICATIONS: 'certifications',
   LINKS: 'links',
-  CAREER: 'profiles' 
+  CAREER: 'profiles',
+  RESUMES: 'resumes'
 };
 
 /**

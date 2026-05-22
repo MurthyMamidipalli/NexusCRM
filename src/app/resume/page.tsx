@@ -47,7 +47,7 @@ export default function ResumePage() {
   const resumeQuery = useMemo(() => {
     if (!db || !user) return null
     return query(
-      collection(db, 'resumes'), 
+      collection(db, collections.RESUMES), 
       where('ownerId', '==', user.uid),
       orderBy('createdAt', 'desc'), 
       limit(1)
@@ -86,28 +86,41 @@ export default function ResumePage() {
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
+    
+    // Firestore has a 1MB limit for individual documents. 
+    // If the file is larger than 1MB, we store metadata only for the prototype.
+    const isTooLargeForFirestore = fileData.length > 1048576; 
+    
     const data = {
       name: formData.get('name') as string,
       version: (formData.get('version') as string) || '1.0',
-      fileUrl: fileData || activeResume?.fileUrl || '',
+      fileUrl: isTooLargeForFirestore ? '' : (fileData || activeResume?.fileUrl || ''),
       fileName: selectedFile?.name || activeResume?.fileName || '',
-      ownerId: user.uid
+      ownerId: user.uid,
+      isMetadataOnly: isTooLargeForFirestore
     }
 
     // Optimistic close
     setIsUploadOpen(false)
 
     const mutation = activeResume 
-      ? updateRecord(db, 'resumes', activeResume.id, data)
-      : createRecord(db, 'resumes', data, user.uid)
+      ? updateRecord(db, collections.RESUMES, activeResume.id, data)
+      : createRecord(db, collections.RESUMES, data, user.uid)
 
     mutation
       .then(() => {
-        toast({ title: activeResume ? 'Resume Updated' : 'Resume Uploaded' })
+        if (isTooLargeForFirestore) {
+          toast({ 
+            title: 'Metadata Saved', 
+            description: 'File exceeds 1MB Firestore limit. Metadata recorded; production apps would use Firebase Storage for 1GB files.' 
+          })
+        } else {
+          toast({ title: activeResume ? 'Resume Updated' : 'Resume Uploaded' })
+        }
       })
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
-          path: activeResume ? `resumes/${activeResume.id}` : 'resumes',
+          path: activeResume ? `${collections.RESUMES}/${activeResume.id}` : collections.RESUMES,
           operation: activeResume ? 'update' : 'create',
           requestResourceData: data,
         } satisfies SecurityRuleContext);
@@ -122,10 +135,10 @@ export default function ResumePage() {
 
   const handleDelete = (id: string) => {
     if (!db) return
-    deleteRecord(db, 'resumes', id)
+    deleteRecord(db, collections.RESUMES, id)
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
-          path: `resumes/${id}`,
+          path: `${collections.RESUMES}/${id}`,
           operation: 'delete',
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
@@ -241,7 +254,7 @@ export default function ResumePage() {
                    </div>
                  </div>
                  <div className="flex justify-center gap-4 pt-4">
-                    <Button variant="outline" className="gap-2 min-w-[140px]" asChild={!!activeResume.fileUrl}>
+                    <Button variant="outline" className="gap-2 min-w-[140px]" disabled={!activeResume.fileUrl} asChild={!!activeResume.fileUrl}>
                       {activeResume.fileUrl ? (
                         <a href={activeResume.fileUrl} download={activeResume.fileName || 'resume'}>
                           <Download className="h-4 w-4" /> Download
@@ -258,6 +271,11 @@ export default function ResumePage() {
                       <Trash2 className="h-4 w-4" /> Delete
                     </Button>
                  </div>
+                 {activeResume.isMetadataOnly && (
+                   <p className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest">
+                     Stored as metadata (Original exceeds 1MB Firestore Limit)
+                   </p>
+                 )}
                </div>
              ) : (
                <div className="text-center space-y-4 p-8">
@@ -282,7 +300,7 @@ export default function ResumePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button variant="secondary" className="w-full justify-between group h-11" disabled={!activeResume}>
+              <Button variant="secondary" className="w-full justify-between group h-11" disabled={!activeResume?.fileUrl}>
                 Download PDF <Download className="h-4 w-4 group-hover:translate-y-0.5 transition-transform" />
               </Button>
               <Button variant="secondary" className="w-full justify-between group h-11" disabled={!activeResume}>
