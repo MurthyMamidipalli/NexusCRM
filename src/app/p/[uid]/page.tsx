@@ -110,7 +110,7 @@ export default function PublicProfilePage() {
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="mt-4 text-xs text-muted-foreground uppercase tracking-widest font-bold animate-pulse">
           Connecting to Nexus Hub...
-        </div>
+        </p>
       </div>
     )
   }
