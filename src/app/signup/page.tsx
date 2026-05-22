@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useState, useEffect } from 'react'
@@ -15,7 +14,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Target, Chrome, Loader2, Github, Eye, EyeOff } from 'lucide-react'
+import { Target, Chrome, Loader2, Eye, EyeOff } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
 export default function SignupPage() {
@@ -185,14 +184,10 @@ export default function SignupPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <Button variant="outline" onClick={handleGoogleLogin} disabled={loading} className="gap-2">
                 <Chrome className="h-4 w-4" />
-                Google
-              </Button>
-              <Button variant="outline" disabled={loading} className="gap-2">
-                <Github className="h-4 w-4" />
-                GitHub
+                Continue with Google
               </Button>
             </div>
           </CardContent>
