@@ -25,8 +25,9 @@ export default function PublicProfilePage() {
   const isVisible = profileDoc && profileDoc.isPublic === true
 
   // 2. Sub-resource Queries: ONLY run these if the profile is confirmed as PUBLIC
+  // We remove sorting from skills to ensure it works without complex composite indexes
   const skillsQuery = useMemo(() => 
-    isVisible && uid && db ? query(collection(db, collections.SKILLS), where('ownerId', '==', uid), orderBy('name', 'asc')) : null, 
+    isVisible && uid && db ? query(collection(db, collections.SKILLS), where('ownerId', '==', uid)) : null, 
     [db, uid, isVisible]
   )
   const expQuery = useMemo(() => 
@@ -38,9 +39,9 @@ export default function PublicProfilePage() {
     [db, uid, isVisible]
   )
 
-  const { data: skills } = useCollection(skillsQuery, { silent: true })
-  const { data: experience } = useCollection(expQuery, { silent: true })
-  const { data: projects } = useCollection(projectsQuery, { silent: true })
+  const { data: skills, loading: skillsLoading } = useCollection(skillsQuery, { silent: true })
+  const { data: experience, loading: expLoading } = useCollection(expQuery, { silent: true })
+  const { data: projects, loading: projLoading } = useCollection(projectsQuery, { silent: true })
 
   if (profileLoading) {
     return (
@@ -118,7 +119,12 @@ export default function PublicProfilePage() {
             <section className="space-y-6">
               <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground border-b border-white/5 pb-2">Competencies</h2>
               <div className="flex flex-wrap gap-2">
-                {skills && skills.length > 0 ? (
+                {skillsLoading ? (
+                  <div className="flex items-center gap-2 text-muted-foreground animate-pulse">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span className="text-[10px] uppercase font-bold tracking-widest">Loading Expertise...</span>
+                  </div>
+                ) : skills && skills.length > 0 ? (
                   skills.map((skill: any) => (
                     <Badge key={skill.id} variant="outline" className="bg-white/5 border-white/10 py-1.5 px-3 text-[11px] uppercase tracking-widest font-bold">
                       {skill.name}
@@ -138,7 +144,11 @@ export default function PublicProfilePage() {
                 <h2 className="text-2xl font-bold font-headline">Professional Journey</h2>
               </div>
               <div className="space-y-8 border-l border-white/5 pl-8 relative">
-                {experience && experience.length > 0 ? (
+                {expLoading ? (
+                  <div className="space-y-4">
+                    {[1, 2].map(i => <div key={i} className="h-24 w-full bg-white/5 rounded-xl animate-pulse" />)}
+                  </div>
+                ) : experience && experience.length > 0 ? (
                   experience.map((exp: any) => (
                     <div key={exp.id} className="relative">
                       <div className="absolute -left-[41px] top-1 h-4 w-4 rounded-full bg-[#0a0a0c] border-2 border-primary" />
@@ -168,7 +178,11 @@ export default function PublicProfilePage() {
                 <h2 className="text-2xl font-bold font-headline">Featured Projects</h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {projects && projects.length > 0 ? (
+                {projLoading ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 col-span-full">
+                    {[1, 2].map(i => <div key={i} className="h-48 w-full bg-white/5 rounded-xl animate-pulse" />)}
+                  </div>
+                ) : projects && projects.length > 0 ? (
                   projects.map((proj: any) => (
                     <Card key={proj.id} className="bg-white/5 border-none shadow-none hover:bg-white/10 transition-all overflow-hidden group">
                       <div className="h-32 bg-white/5 relative overflow-hidden">
