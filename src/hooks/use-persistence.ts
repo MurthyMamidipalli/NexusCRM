@@ -73,11 +73,11 @@ export function usePersistentDocument<T>(
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    // Debounce save operation to reduce database writes and costs
+    // Debounce save operation - reduced to 1s for better responsiveness
     timeoutRef.current = setTimeout(() => {
       saveToFirestore(updated);
       timeoutRef.current = null;
-    }, 1500);
+    }, 1000);
   };
 
   const manualSave = () => {

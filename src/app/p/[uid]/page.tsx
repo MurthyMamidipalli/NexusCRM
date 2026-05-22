@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import { useFirestore, useDoc, useCollection } from '@/firebase'
 import { doc, collection, query, where, orderBy } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
-import { Loader2, User, Mail, MapPin, Globe, Briefcase, Rocket, Lock } from 'lucide-react'
+import { Loader2, User, Mail, MapPin, Globe, Briefcase, Rocket, Lock, ShieldAlert } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -38,23 +38,41 @@ export default function PublicProfilePage() {
   }
 
   // Handle case where profile doesn't exist, visibility is turned off, or a permission error occurred
-  if (!profile || !profile.publicProfile || profileError) {
+  const isPrivate = !profile || !profile.publicProfile;
+  const isPermissionDenied = !!profileError;
+
+  if (isPrivate || isPermissionDenied) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0c] text-white p-6 text-center">
         <div className="p-6 rounded-full bg-muted/10 mb-6">
-          <Lock className="h-12 w-12 text-muted-foreground" />
+          {isPermissionDenied ? (
+            <ShieldAlert className="h-12 w-12 text-yellow-500" />
+          ) : (
+            <Lock className="h-12 w-12 text-muted-foreground" />
+          )}
         </div>
-        <h1 className="text-4xl font-bold font-headline mb-4">Private Portfolio</h1>
-        <p className="text-muted-foreground max-w-md text-lg">
-          This professional hub is currently private or does not exist. Please contact the owner for access.
+        <h1 className="text-4xl font-bold font-headline mb-4">
+          {isPermissionDenied ? 'Access Restricted' : 'Private Portfolio'}
+        </h1>
+        <p className="text-muted-foreground max-w-md text-lg leading-relaxed">
+          {isPermissionDenied 
+            ? "This professional hub is protected by security rules. If you are the owner, please check your Public Share settings."
+            : "This professional hub is currently private or does not exist. Please contact the owner for access."}
         </p>
         <div className="mt-8 flex flex-col gap-4">
           <Button variant="outline" className="border-white/10 text-white h-12 px-8 rounded-xl font-bold" asChild>
-            <a href="/login">Create Your Own Hub</a>
+            <a href="/login">Manage Your Own Intelligence</a>
           </Button>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest max-w-xs mt-4">
-            Security Notice: If you are the owner, ensure "Public Profile Access" is enabled in your Share settings.
-          </p>
+          <div className="space-y-1 mt-4">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest max-w-xs mx-auto">
+              Security Notice: Public access requires "Public Profile Access" enabled in Share settings.
+            </p>
+            {isPermissionDenied && (
+              <p className="text-[9px] text-yellow-500/50 uppercase font-mono">
+                Code: PERMISSION_DENIED (Workstation Identity Required)
+              </p>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -74,8 +92,8 @@ export default function PublicProfilePage() {
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 space-y-2 mb-2 text-center md:text-left">
-            <h1 className="text-4xl md:text-5xl font-bold font-headline tracking-tight">{profile.fullName}</h1>
-            <p className="text-xl text-primary font-semibold">{profile.tagline}</p>
+            <h1 className="text-4xl md:text-5xl font-bold font-headline tracking-tight">{profile.fullName || 'Professional'}</h1>
+            <p className="text-xl text-primary font-semibold">{profile.tagline || 'Talent Intelligence'}</p>
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 pt-4 text-sm text-muted-foreground font-medium uppercase tracking-widest">
               {profile.location && (
                 <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {profile.location}</span>
@@ -190,7 +208,7 @@ export default function PublicProfilePage() {
       {/* Public Footer */}
       <footer className="container mx-auto px-6 max-w-5xl mt-24 pt-12 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
         <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.2em]">
-          &copy; {new Date().getFullYear()} {profile.fullName} | Powered by NexusCRM
+          &copy; {new Date().getFullYear()} {profile.fullName || 'Nexus Hub'} | Powered by NexusCRM
         </p>
         <Button size="sm" variant="ghost" className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground hover:text-white" asChild>
           <a href="/login">Manage Your Intelligence</a>

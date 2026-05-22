@@ -91,7 +91,12 @@ export default function PublicSharePage() {
                   checked={settings.publicProfile} 
                   onCheckedChange={(val) => {
                     updateField('publicProfile', val);
-                    toast({ title: val ? 'Hub Published' : 'Hub Private', description: val ? 'Your profile is now live.' : 'Public access has been revoked.' });
+                    // Explicitly trigger an instant cloud save for visibility changes
+                    save();
+                    toast({ 
+                      title: val ? 'Hub Published' : 'Hub Private', 
+                      description: val ? 'Your profile is now live in the cloud.' : 'Public access has been revoked.' 
+                    });
                   }} 
                 />
               </div>
@@ -101,19 +106,19 @@ export default function PublicSharePage() {
                   <div className="p-5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex gap-4">
                     <AlertTriangle className="h-6 w-6 text-yellow-500 shrink-0 mt-0.5" />
                     <div className="space-y-2">
-                      <h4 className="text-sm font-bold text-yellow-500 uppercase tracking-wider">Development Environment Restriction</h4>
+                      <h4 className="text-sm font-bold text-yellow-500 uppercase tracking-wider">Cloud Environment Restriction</h4>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        The link below is currently hosted on your <strong>Private Workstation</strong>. Due to Google Cloud security (401 errors), it will only work for you while you are signed into your primary developer account.
+                        In this development workstation, your link is protected by a secondary security layer. It will work perfectly for you, but others will only be able to see it once you <strong>Deploy to Production</strong>.
                       </p>
                       <div className="flex items-center gap-2 pt-2">
                         <Rocket className="h-3 w-3 text-primary" />
-                        <p className="text-[10px] font-bold text-primary uppercase">To share with everyone: Deploy to Firebase Hosting</p>
+                        <p className="text-[10px] font-bold text-primary uppercase">Production URL will be fully public</p>
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Your Hub Link (Development)</Label>
+                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Your Hub Link</Label>
                     <div className="flex gap-2">
                       <div className="flex-1 bg-muted/50 border border-border p-3 rounded-lg text-sm font-mono truncate select-all">
                         {publicUrl}
