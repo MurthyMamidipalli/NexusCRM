@@ -22,9 +22,16 @@ export function usePersistentDocument<T>(
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync local state when external initialData (from useDoc/useCollection) changes
+  // We use structural comparison to prevent infinite render loops when initialData
+  // is passed as a new object literal (e.g., data || {})
   useEffect(() => {
     if (initialData) {
-      setLocalData(initialData);
+      setLocalData((prev) => {
+        const prevString = JSON.stringify(prev);
+        const nextString = JSON.stringify(initialData);
+        if (prevString === nextString) return prev;
+        return initialData;
+      });
     }
   }, [initialData]);
 
@@ -57,6 +64,7 @@ export function usePersistentDocument<T>(
 
     timeoutRef.current = setTimeout(() => {
       save(updated);
+      timeoutRef.current = null;
     }, 1500); // 1.5s debounce
   };
 
@@ -68,6 +76,7 @@ export function usePersistentDocument<T>(
 
     timeoutRef.current = setTimeout(() => {
       save(updated);
+      timeoutRef.current = null;
     }, 1500);
   };
 

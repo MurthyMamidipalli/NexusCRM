@@ -12,6 +12,8 @@ import { doc } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 import { usePersistentDocument } from '@/hooks/use-persistence'
 
+const EMPTY_CAREER = {};
+
 export default function CareerPage() {
   const { user } = useUser()
   const db = useFirestore()
@@ -19,15 +21,17 @@ export default function CareerPage() {
   const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
   const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
 
+  const initialData = useMemo(() => profileDoc || EMPTY_CAREER, [profileDoc]);
+
   // Use global persistence hook for the nested currentJob object
   const { data: profile, updateField } = usePersistentDocument(
     collections.PROFILES,
     user?.uid,
-    profileDoc || {}
+    initialData
   )
 
   const handleJobUpdate = (field: string, value: string) => {
-    const currentJob = { ...(profile?.currentJob || {}), [field]: value }
+    const currentJob = { ...((profile as any)?.currentJob || {}), [field]: value }
     updateField('currentJob' as any, currentJob)
   }
 
@@ -62,7 +66,7 @@ export default function CareerPage() {
                 <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
                   id="title" 
-                  value={profile?.currentJob?.title || ''} 
+                  value={(profile as any)?.currentJob?.title || ''} 
                   onChange={(e) => handleJobUpdate('title', e.target.value)}
                   className="pl-10" 
                   placeholder="Principal Engineer" 
@@ -75,7 +79,7 @@ export default function CareerPage() {
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
                   id="company" 
-                  value={profile?.currentJob?.company || ''} 
+                  value={(profile as any)?.currentJob?.company || ''} 
                   onChange={(e) => handleJobUpdate('company', e.target.value)}
                   className="pl-10" 
                   placeholder="Global Tech Systems" 
@@ -87,7 +91,7 @@ export default function CareerPage() {
               <Input 
                 id="startDate" 
                 type="date" 
-                value={profile?.currentJob?.startDate || ''} 
+                value={(profile as any)?.currentJob?.startDate || ''} 
                 onChange={(e) => handleJobUpdate('startDate', e.target.value)}
               />
             </div>

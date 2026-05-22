@@ -14,6 +14,8 @@ import { doc } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 import { usePersistentDocument } from '@/hooks/use-persistence'
 
+const EMPTY_PROFILE = {};
+
 export default function ProfilePage() {
   const { user } = useUser()
   const db = useFirestore()
@@ -21,10 +23,13 @@ export default function ProfilePage() {
   const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
   const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
 
+  // Use a memoized initial data object to prevent re-render loops
+  const initialData = useMemo(() => profileDoc || EMPTY_PROFILE, [profileDoc]);
+
   const { data: profile, updateField } = usePersistentDocument(
     collections.PROFILES,
     user?.uid,
-    profileDoc || {}
+    initialData
   )
 
   if (profileLoading) {
@@ -58,7 +63,7 @@ export default function ProfilePage() {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     id="fullName" 
-                    value={profile?.fullName || ''} 
+                    value={(profile as any)?.fullName || ''} 
                     onChange={(e) => updateField('fullName', e.target.value)}
                     className="pl-10 focus:ring-primary" 
                     placeholder="John Doe" 
@@ -69,7 +74,7 @@ export default function ProfilePage() {
                 <Label htmlFor="tagline">Professional Tagline</Label>
                 <Input 
                   id="tagline" 
-                  value={profile?.tagline || ''} 
+                  value={(profile as any)?.tagline || ''} 
                   onChange={(e) => updateField('tagline', e.target.value)}
                   placeholder="Software Engineer | AI Specialist" 
                   className="focus:ring-primary"
@@ -82,7 +87,7 @@ export default function ProfilePage() {
               <Textarea 
                 id="bio" 
                 className="min-h-[120px] focus:ring-primary" 
-                value={profile?.bio || ''} 
+                value={(profile as any)?.bio || ''} 
                 onChange={(e) => updateField('bio', e.target.value)}
                 placeholder="Brief summary of your professional background..." 
               />
@@ -104,7 +109,7 @@ export default function ProfilePage() {
                   <Input 
                     id="email" 
                     type="email" 
-                    value={profile?.email || ''} 
+                    value={(profile as any)?.email || ''} 
                     onChange={(e) => updateField('email', e.target.value)}
                     className="pl-10 focus:ring-primary" 
                     placeholder="primary@example.com" 
@@ -118,7 +123,7 @@ export default function ProfilePage() {
                   <Input 
                     id="secondaryEmail" 
                     type="email" 
-                    value={profile?.secondaryEmail || ''} 
+                    value={(profile as any)?.secondaryEmail || ''} 
                     onChange={(e) => updateField('secondaryEmail', e.target.value)}
                     className="pl-10 focus:ring-primary" 
                     placeholder="secondary@example.com" 
@@ -131,7 +136,7 @@ export default function ProfilePage() {
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     id="phone" 
-                    value={profile?.phone || ''} 
+                    value={(profile as any)?.phone || ''} 
                     onChange={(e) => updateField('phone', e.target.value)}
                     className="pl-10 focus:ring-primary" 
                     placeholder="+1 (555) 000-0000" 
@@ -144,7 +149,7 @@ export default function ProfilePage() {
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
                   <Input 
                     id="secondaryPhone" 
-                    value={profile?.secondaryPhone || ''} 
+                    value={(profile as any)?.secondaryPhone || ''} 
                     onChange={(e) => updateField('secondaryPhone', e.target.value)}
                     className="pl-10 focus:ring-primary" 
                     placeholder="+1 (555) 111-2222" 
@@ -169,8 +174,8 @@ export default function ProfilePage() {
                   <Input 
                     id="age" 
                     type="number"
-                    value={profile?.age || ''} 
-                    onChange={(e) => updateField('age', parseInt(e.target.value))}
+                    value={(profile as any)?.age || ''} 
+                    onChange={(e) => updateField('age', e.target.value ? parseInt(e.target.value) : '')}
                     className="pl-10 focus:ring-primary" 
                     placeholder="25" 
                   />
@@ -179,7 +184,7 @@ export default function ProfilePage() {
               <div className="space-y-2">
                 <Label htmlFor="gender">Gender</Label>
                 <Select 
-                  value={profile?.gender || ''} 
+                  value={(profile as any)?.gender || 'Prefer not to say'} 
                   onValueChange={(val) => updateField('gender', val)}
                 >
                   <SelectTrigger id="gender" className="focus:ring-primary">
@@ -199,7 +204,7 @@ export default function ProfilePage() {
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     id="location" 
-                    value={profile?.location || ''} 
+                    value={(profile as any)?.location || ''} 
                     onChange={(e) => updateField('location', e.target.value)}
                     className="pl-10 focus:ring-primary" 
                     placeholder="San Francisco, CA" 
@@ -215,7 +220,7 @@ export default function ProfilePage() {
                 <Textarea 
                   id="address" 
                   className="pl-10 min-h-[80px] focus:ring-primary" 
-                  value={profile?.address || ''} 
+                  value={(profile as any)?.address || ''} 
                   onChange={(e) => updateField('address', e.target.value)}
                   placeholder="House No, Street, Landmark, Pincode..." 
                 />
