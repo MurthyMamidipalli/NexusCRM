@@ -9,6 +9,7 @@ service cloud.firestore {
     }
 
     // Profiles: Allow visitors to 'get' by ID to check public status
+    // List is restricted to the owner only
     match /profiles/{uid} {
       allow get: if true; 
       allow list: if request.auth != null && request.auth.uid == uid;
