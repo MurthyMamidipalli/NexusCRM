@@ -5,7 +5,7 @@ import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, GraduationCap, Loader2, Trash2, Calendar, BookOpen, Award, Pencil } from 'lucide-react'
+import { Plus, GraduationCap, Loader2, Trash2, Calendar, BookOpen, Award, Pencil, AlertCircle } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
@@ -14,6 +14,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError } from '@/firebase/errors'
 
 export default function EducationPage() {
   const db = useFirestore()
@@ -31,49 +34,67 @@ export default function EducationPage() {
     )
   }, [db, user])
 
-  const { data: education, loading: eduLoading } = useCollection(eduQuery)
+  const { data: education, loading: eduLoading, error: eduError } = useCollection(eduQuery)
 
-  const handleSaveEdu = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveEdu = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !db) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
-      institution: formData.get('institution'),
-      degree: formData.get('degree'),
-      fieldOfStudy: formData.get('fieldOfStudy'),
-      startDate: formData.get('startDate'),
-      endDate: formData.get('endDate'),
-      cgpa: formData.get('cgpa'),
-      percentage: formData.get('percentage'),
-      description: formData.get('description'),
+      institution: formData.get('institution') as string,
+      degree: formData.get('degree') as string,
+      fieldOfStudy: formData.get('fieldOfStudy') as string,
+      startDate: formData.get('startDate') as string,
+      endDate: formData.get('endDate') as string,
+      cgpa: formData.get('cgpa') as string,
+      percentage: formData.get('percentage') as string,
+      description: formData.get('description') as string,
     }
 
-    try {
-      if (editingEdu) {
-        await updateRecord(db, collections.EDUCATION, editingEdu.id, data)
-        toast({ title: 'Education Updated' })
-      } else {
-        await createRecord(db, collections.EDUCATION, data, user.uid)
-        toast({ title: 'Education Added' })
-      }
-      setIsDialogOpen(false)
-      setEditingEdu(null)
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    } finally {
-      setLoading(false)
+    // NON-BLOCKING mutation pattern: trigger and proceed
+    if (editingEdu) {
+      updateRecord(db, collections.EDUCATION, editingEdu.id, data)
+        .catch(async (err) => {
+          const permissionError = new FirestorePermissionError({
+            path: `${collections.EDUCATION}/${editingEdu.id}`,
+            operation: 'update',
+            requestResourceData: data,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        });
+      toast({ title: 'Education Updated' })
+    } else {
+      createRecord(db, collections.EDUCATION, data, user.uid)
+        .catch(async (err) => {
+          const permissionError = new FirestorePermissionError({
+            path: collections.EDUCATION,
+            operation: 'create',
+            requestResourceData: { ...data, ownerId: user.uid },
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        });
+      toast({ title: 'Education Added' })
     }
+
+    setIsDialogOpen(false)
+    setEditingEdu(null)
+    setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteRecord(db, collections.EDUCATION, id)
-      toast({ title: 'Record Removed' })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    }
+  const handleDelete = (id: string) => {
+    if (!db) return
+    
+    deleteRecord(db, collections.EDUCATION, id)
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.EDUCATION}/${id}`,
+          operation: 'delete',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      });
+    toast({ title: 'Record Removed' })
   }
 
   if (eduLoading) {
@@ -172,6 +193,16 @@ export default function EducationPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {eduError && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error Loading Records</AlertTitle>
+          <AlertDescription>
+            {eduError.message}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {education && education.length > 0 ? (
         <div className="space-y-4">
