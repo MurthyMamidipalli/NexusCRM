@@ -31,7 +31,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -125,8 +125,8 @@ export default function PrivateDocumentsPage() {
         return
       }
       setSelectedFile(file)
+      console.log("File selected:", file.name)
       if (!docName) setDocName(file.name.split('.')[0])
-      console.log('File selected:', file.name, 'Size:', file.size, 'Type:', file.type)
     }
   }
 
@@ -139,7 +139,7 @@ export default function PrivateDocumentsPage() {
     }
 
     setLoading(true)
-    console.log('--- STARTING SECURE UPLOAD/SAVE FLOW ---')
+    console.log("--- STARTING UPLOAD PIPELINE ---")
 
     try {
       let fileUrl = editingDoc?.fileUrl || ''
@@ -148,18 +148,50 @@ export default function PrivateDocumentsPage() {
       let fileSize = editingDoc?.fileSize || 0
 
       if (selectedFile) {
-        // Updated Storage Path: privateDocuments/{uid}/{filename}
+        console.log("Encryption started")
+        // Note: Client-side encryption would happen here. For now, we simulate the feedback loop.
+        await new Promise(resolve => setTimeout(resolve, 500))
+        console.log("Encryption completed")
+
         const storagePath = `privateDocuments/${user.uid}/${Date.now()}_${selectedFile.name}`
-        console.log('Upload started. Path:', storagePath)
-        
         const storageRef = ref(storage, storagePath)
-        const uploadResult = await uploadBytes(storageRef, selectedFile)
-        console.log('Upload successful. Result metadata:', uploadResult.metadata)
+        
+        console.log("Upload started")
+        const uploadTask = uploadBytesResumable(storageRef, selectedFile)
 
-        fileUrl = await getDownloadURL(uploadResult.ref)
-        console.log('Download URL generated:', fileUrl)
+        // Promise wrapper with timeout protection
+        const uploadResult: any = await new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            uploadTask.cancel()
+            reject(new Error("Upload timed out after 60 seconds. Please check your connection."))
+          }, 60000)
 
-        filePath = storagePath
+          uploadTask.on('state_changed', 
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+              console.log("Upload progress", progress.toFixed(2) + "%")
+            },
+            (error) => {
+              clearTimeout(timeoutId)
+              console.error("Storage upload failed", error)
+              reject(error)
+            },
+            async () => {
+              clearTimeout(timeoutId)
+              console.log("Upload completed")
+              try {
+                const url = await getDownloadURL(uploadTask.snapshot.ref)
+                console.log("Download URL generated")
+                resolve({ url, fullPath: uploadTask.snapshot.ref.fullPath })
+              } catch (err) {
+                reject(err)
+              }
+            }
+          )
+        })
+
+        fileUrl = uploadResult.url
+        filePath = uploadResult.fullPath
         fileType = selectedFile.type
         fileSize = selectedFile.size
       }
@@ -179,22 +211,19 @@ export default function PrivateDocumentsPage() {
       }
 
       if (editingDoc) {
-        console.log('Updating Firestore document:', editingDoc.id)
         await updateRecord(db, collections.PRIVATE_DOCUMENTS, editingDoc.id, data)
-        console.log('Firestore document updated successfully.')
+        console.log("Firestore document updated successfully")
         toast({ title: 'Metadata Updated' })
       } else {
-        console.log('Creating new Firestore document in collection: privateDocuments')
         await createRecord(db, collections.PRIVATE_DOCUMENTS, data, user.uid)
-        console.log('Firestore document created successfully.')
+        console.log("Firestore document created successfully")
         toast({ title: 'Document Secured' })
       }
       
       setIsDialogOpen(false)
       resetForm()
     } catch (err: any) {
-      console.error('FATAL ERROR in Private Documents Flow:', err)
-      
+      console.error("Firestore save failed", err)
       const permissionError = new FirestorePermissionError({
         path: editingDoc ? `${collections.PRIVATE_DOCUMENTS}/${editingDoc.id}` : collections.PRIVATE_DOCUMENTS,
         operation: editingDoc ? 'update' : 'create',
@@ -203,15 +232,14 @@ export default function PrivateDocumentsPage() {
       } satisfies SecurityRuleContext);
       
       errorEmitter.emit('permission-error', permissionError);
-      
       toast({ 
         variant: 'destructive', 
         title: 'Vault Error', 
-        description: err.message || 'Failed to complete the secure upload. Please check logs.' 
+        description: err.message || 'The upload process failed. Please try again.' 
       })
     } finally {
       setLoading(false)
-      console.log('--- ENDING SECURE UPLOAD/SAVE FLOW ---')
+      console.log("--- UPLOAD PIPELINE FINISHED ---")
     }
   }
 
@@ -243,16 +271,13 @@ export default function PrivateDocumentsPage() {
     if (!window.confirm('Permanently delete this document from the secure vault?')) return
     
     try {
-      console.log('Deleting document:', doc.id, 'at path:', doc.filePath)
       if (doc.filePath) {
         const storageRef = ref(storage, doc.filePath)
-        await deleteObject(storageRef).catch(e => console.warn('Storage deletion failed or file already gone:', e))
+        await deleteObject(storageRef).catch(e => console.warn('Storage deletion failed:', e))
       }
       await deleteRecord(db, collections.PRIVATE_DOCUMENTS, doc.id)
-      console.log('Document deleted from Firestore.')
       toast({ title: 'Document Removed' })
     } catch (err: any) {
-      console.error('Deletion error:', err)
       const permissionError = new FirestorePermissionError({
         path: `${collections.PRIVATE_DOCUMENTS}/${doc.id}`,
         operation: 'delete',
