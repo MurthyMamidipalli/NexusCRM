@@ -5,7 +5,7 @@ import React, { useMemo, useEffect, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Globe, Copy, Share2, Loader2, Eye, ShieldCheck, Lock, AlertTriangle } from 'lucide-react'
+import { Globe, Copy, Share2, Loader2, Eye, ShieldCheck, Lock, AlertTriangle, Rocket } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { useUser, useFirestore, useDoc } from '@/firebase'
@@ -97,21 +97,25 @@ export default function PublicSharePage() {
               </div>
 
               {settings.publicProfile ? (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20 flex gap-4">
-                    <AlertTriangle className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-yellow-500">Security Note</h4>
+                <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
+                  <div className="p-5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex gap-4">
+                    <AlertTriangle className="h-6 w-6 text-yellow-500 shrink-0 mt-0.5" />
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-bold text-yellow-500 uppercase tracking-wider">Development Environment Restriction</h4>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        While in development, your "Public URL" is protected by workstation security. To test this in another browser, you must be signed into your Google developer account in that browser as well.
+                        The link below is currently hosted on your <strong>Private Workstation</strong>. Due to Google Cloud security (401 errors), it will only work for you while you are signed into your primary developer account.
                       </p>
+                      <div className="flex items-center gap-2 pt-2">
+                        <Rocket className="h-3 w-3 text-primary" />
+                        <p className="text-[10px] font-bold text-primary uppercase">To share with everyone: Deploy to Firebase Hosting</p>
+                      </div>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Your Hub Link</Label>
+                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Your Hub Link (Development)</Label>
                     <div className="flex gap-2">
-                      <div className="flex-1 bg-muted/50 border border-border p-3 rounded-lg text-sm font-mono truncate">
+                      <div className="flex-1 bg-muted/50 border border-border p-3 rounded-lg text-sm font-mono truncate select-all">
                         {publicUrl}
                       </div>
                       <Button onClick={copyToClipboard} variant="secondary" className="gap-2">
@@ -146,7 +150,7 @@ export default function PublicSharePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm opacity-90 leading-relaxed">
-              When public access is enabled, your **Bio**, **Skills**, **Experience**, and **Projects** will be visible to anyone with access to the link. **Contacts** and **Private Documents** always remain secure.
+              When public access is enabled, your **Bio**, **Skills**, **Experience**, and **Projects** will be visible to anyone with access to the link. **Contacts** and **Private Documents** always remain secure and encrypted.
             </CardContent>
           </Card>
         </div>
