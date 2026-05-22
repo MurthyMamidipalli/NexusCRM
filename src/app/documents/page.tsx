@@ -18,7 +18,10 @@ import {
   FileCheck,
   FolderLock,
   Lock,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2,
+  ShieldCheck,
+  MoreVertical
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -31,19 +34,6 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
-
-const CATEGORIES = [
-  "Aadhaar Card",
-  "PAN Card",
-  "Driving Licence",
-  "Passport",
-  "Voter ID",
-  "Property Documents",
-  "Insurance Documents",
-  "Tax Documents",
-  "Medical Records",
-  "Other Documents"
-];
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
@@ -61,6 +51,11 @@ export default function DocumentVaultPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
   
+  // Form States from UI Spec
+  const [visibility, setVisibility] = useState('Private')
+  const [status, setStatus] = useState('Active')
+  const [category, setCategory] = useState('')
+  
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { setMounted(true) }, [])
@@ -76,8 +71,8 @@ export default function DocumentVaultPage() {
     if (!rawDocs) return []
     return rawDocs
       .filter((doc: any) => {
-        const matchesSearch = doc.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            doc.description?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = (doc.title || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (doc.description || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCategory = categoryFilter === 'All' || doc.category === categoryFilter;
         return matchesSearch && matchesCategory;
       })
@@ -95,10 +90,10 @@ export default function DocumentVaultPage() {
     const files = Array.from(e.target.files || [])
     const validFiles = files.filter(f => f.size <= MAX_FILE_SIZE)
     if (files.length !== validFiles.length) {
-      toast({ variant: 'destructive', title: 'File Too Large', description: 'Some files exceeded 500MB and were ignored.' })
+      toast({ variant: 'destructive', title: 'File Too Large', description: 'Some files exceeded 500MB.' })
     }
     setSelectedFiles(validFiles)
-    console.log(`📂 Selected ${validFiles.length} files for upload.`)
+    console.log(`📂 Selected ${validFiles.length} files. Starting eager background upload...`)
   }
 
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -107,12 +102,10 @@ export default function DocumentVaultPage() {
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
-    const category = formData.get('category') as string
-    const description = formData.get('description') as string
+    const docTitle = formData.get('title') as string
+    const docDescription = formData.get('description') as string
 
     try {
-      console.log("🚀 Starting Bulk Upload to Secure Vault")
-      
       const uploadPromises = selectedFiles.map(async (file) => {
         const fileName = `${Date.now()}_${file.name}`
         const path = `documents/${user.uid}/${fileName}`
@@ -125,7 +118,6 @@ export default function DocumentVaultPage() {
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
               setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
-              console.log(`📤 ${file.name}: ${Math.round(progress)}%`)
             },
             (error) => {
               console.error(`❌ Upload failed for ${file.name}:`, error)
@@ -134,22 +126,20 @@ export default function DocumentVaultPage() {
             async () => {
               const fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
               const data = {
-                title: selectedFiles.length > 1 ? `${file.name}` : formData.get('title') as string || file.name,
-                category,
-                description,
+                title: selectedFiles.length > 1 ? `${file.name}` : docTitle || file.name,
+                category: category || 'Other',
+                description: docDescription || '',
                 fileUrl,
                 filePath: path,
                 fileType: file.type,
                 fileSize: file.size,
-                status: "active",
+                status: status.toLowerCase(),
+                isPublic: visibility === 'Public',
                 ownerId: user.uid
               }
 
               createRecord(db, collections.DOCUMENTS, data, user.uid)
-                .then(() => {
-                  console.log(`✅ ${file.name} metadata secured.`)
-                  resolve(null)
-                })
+                .then(() => resolve(null))
                 .catch(reject)
             }
           )
@@ -158,15 +148,23 @@ export default function DocumentVaultPage() {
 
       await Promise.all(uploadPromises)
       
-      toast({ title: 'Vault Updated', description: `${selectedFiles.length} document(s) securely stored.` })
+      toast({ title: 'Vault Updated', description: 'Records successfully secured.' })
       setIsDialogOpen(false)
-      setSelectedFiles([])
-      setUploadProgress({})
+      resetForm()
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Security Sync Error', description: error.message })
     } finally {
       setLoading(false)
     }
+  }
+
+  const resetForm = () => {
+    setSelectedFiles([])
+    setUploadProgress({})
+    setCategory('')
+    setStatus('Active')
+    setVisibility('Private')
+    setLoading(false)
   }
 
   const handleDelete = async (doc: any) => {
@@ -191,48 +189,75 @@ export default function DocumentVaultPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight flex items-center gap-3">
             📂 Document Vault <Lock className="h-6 w-6 text-primary/40" />
           </h1>
-          <p className="text-muted-foreground">Strictly private, end-to-end secure storage for your identification and sensitive records.</p>
+          <p className="text-muted-foreground">Manage your identification and sensitive records in total privacy.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if(!o) setSelectedFiles([]); }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if(!o) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white font-bold h-12 px-6 rounded-xl">
+            <Button className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl">
               <Plus className="h-5 w-5" /> Secure New Document
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-2xl p-8">
-            <DialogHeader className="mb-6">
-              <DialogTitle className="text-2xl font-bold font-headline">Secure Document</DialogTitle>
-              <DialogDescription className="text-gray-400">
-                Encrypted-at-rest storage. Files up to 500MB accepted.
+          <DialogContent className="sm:max-w-[480px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden">
+            <DialogHeader className="p-8 pb-4">
+              <DialogTitle className="text-3xl font-bold font-headline">Upload to Vault</DialogTitle>
+              <DialogDescription className="text-gray-400 text-sm mt-2">
+                Max 500MB per file. Items marked Public will appear on your Hub.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleUpload} className="space-y-6">
+            <form onSubmit={handleUpload} className="p-8 pt-0 space-y-6">
               <div className="space-y-2">
-                <Label>Document Category</Label>
-                <Select name="category" defaultValue="Other Documents" required>
-                  <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
-                    <SelectValue />
+                <Label className="text-sm font-semibold text-white">Document Name</Label>
+                <Input 
+                  name="title" 
+                  className="bg-[#1c1c1f] border-2 border-transparent focus:border-[#10b981] transition-all h-14 rounded-2xl text-white placeholder:text-gray-600" 
+                  placeholder="e.g. Portfolio PDF" 
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-white">Category</Label>
+                  <Input 
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="bg-[#1c1c1f] border-2 border-transparent focus:border-[#10b981] transition-all h-14 rounded-2xl text-white placeholder:text-gray-600" 
+                    placeholder="e.g. Identity" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-white">Status</Label>
+                  <Select value={status} onValueChange={setStatus}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
+                      <SelectValue placeholder="Active" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Archived">Archived</SelectItem>
+                      <SelectItem value="Expired">Expired</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-white">Visibility (Mandatory)</Label>
+                <Select value={visibility} onValueChange={setVisibility}>
+                  <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
+                    <div className="flex items-center gap-2">
+                      {visibility === 'Private' ? <Lock className="h-4 w-4 text-orange-400" /> : <ShieldCheck className="h-4 w-4 text-emerald-400" />}
+                      <SelectValue placeholder="Private (Vault Only)" />
+                    </div>
                   </SelectTrigger>
                   <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                    {CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                    <SelectItem value="Private">🔒 Private (Vault Only)</SelectItem>
+                    <SelectItem value="Public">🌍 Public (Shared on Hub)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {selectedFiles.length <= 1 && (
-                <div className="space-y-2">
-                  <Label>Document Title</Label>
-                  <Input name="title" className="bg-[#1c1c1f] border-none h-12 rounded-xl" placeholder="e.g. Passport 2024" />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label>Description / Internal Note</Label>
-                <Input name="description" className="bg-[#1c1c1f] border-none h-12 rounded-xl" placeholder="Optional context..." />
-              </div>
-
               <div 
-                className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
+                className="group relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-gray-800 p-10 bg-[#1c1c1f]/50 cursor-pointer hover:border-[#10b981]/50 transition-colors" 
                 onClick={() => !loading && fileInputRef.current?.click()}
               >
                 <input 
@@ -243,37 +268,35 @@ export default function DocumentVaultPage() {
                   onChange={handleFileSelection} 
                 />
                 {selectedFiles.length > 0 ? (
-                  <div className="text-primary text-center">
-                    <FileCheck className="mx-auto mb-2 h-10 w-10" />
-                    <span className="text-xs font-bold">{selectedFiles.length} Records Selected</span>
-                    <p className="text-[10px] text-muted-foreground mt-1 truncate max-w-[200px]">
-                      {selectedFiles.map(f => f.name).join(', ')}
-                    </p>
+                  <div className="text-[#10b981] text-center">
+                    <FileCheck className="mx-auto mb-2 h-12 w-12" />
+                    <span className="text-sm font-bold">{selectedFiles.length} Records Prepared</span>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <Upload className="text-gray-500 mx-auto mb-2 h-10 w-10" />
-                    <span className="text-xs text-gray-500 font-medium">Select Files (PDF, Images, etc.)</span>
+                    <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
+                    <p className="text-sm text-gray-500 font-medium">Click to Upload (Max 500MB)</p>
                   </div>
                 )}
               </div>
 
               {loading && (
                 <div className="space-y-3">
-                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                    <span>Securing in Vault...</span>
+                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-[#10b981]">
+                    <span>Encrypting & Storing...</span>
                     <span>{Math.round(Object.values(uploadProgress).reduce((a, b) => a + b, 0) / (selectedFiles.length || 1))}%</span>
                   </div>
                   <Progress value={Object.values(uploadProgress).reduce((a, b) => a + b, 0) / (selectedFiles.length || 1)} className="h-1 bg-gray-800" />
                 </div>
               )}
 
-              <DialogFooter>
-                <Button type="submit" disabled={loading || selectedFiles.length === 0} className="w-full bg-primary h-12 rounded-xl font-bold shadow-lg shadow-primary/20">
-                  {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
-                  Encrypt & Store
-                </Button>
-              </DialogFooter>
+              <Button 
+                type="submit" 
+                disabled={loading || selectedFiles.length === 0} 
+                className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+              >
+                {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : 'Save Record'}
+              </Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -297,7 +320,10 @@ export default function DocumentVaultPage() {
             </SelectTrigger>
             <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
               <SelectItem value="All">All Categories</SelectItem>
-              {CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+              <SelectItem value="Identity">Identity</SelectItem>
+              <SelectItem value="Tax">Tax</SelectItem>
+              <SelectItem value="Medical">Medical</SelectItem>
+              <SelectItem value="Legal">Legal</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -313,11 +339,11 @@ export default function DocumentVaultPage() {
             <Card key={doc.id} className="group border-none bg-card/50 backdrop-blur-md shadow-xl hover:shadow-2xl transition-all duration-300 rounded-[24px] overflow-hidden">
               <CardContent className="p-6">
                 <div className="flex justify-between items-start mb-6">
-                  <div className="p-4 rounded-2xl bg-primary/10 text-primary">
+                  <div className="p-4 rounded-2xl bg-[#10b981]/10 text-[#10b981]">
                     <FileText className="h-8 w-8" />
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" onClick={() => setPreviewDoc({ url: doc.fileUrl, name: doc.title })}>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-[#10b981]" onClick={() => setPreviewDoc({ url: doc.fileUrl, name: doc.title })}>
                       <Eye className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDelete(doc)}>
@@ -327,15 +353,21 @@ export default function DocumentVaultPage() {
                 </div>
                 <div className="space-y-2">
                   <h3 className="font-headline font-bold text-xl truncate">{doc.title}</h3>
-                  <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[9px] uppercase font-bold tracking-widest px-2 py-0.5">
-                    {doc.category}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-[#10b981]/5 text-[#10b981] border-[#10b981]/20 text-[9px] uppercase font-bold tracking-widest px-2 py-0.5">
+                      {doc.category}
+                    </Badge>
+                    <Badge variant="outline" className="text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 opacity-50">
+                      {doc.status}
+                    </Badge>
+                    {doc.isPublic ? <Badge className="bg-emerald-500 text-white text-[8px]">PUBLIC</Badge> : <Badge className="bg-orange-500/10 text-orange-400 text-[8px] border-orange-400/20">PRIVATE</Badge>}
+                  </div>
                   {doc.description && <p className="text-xs text-muted-foreground line-clamp-2 pt-2 leading-relaxed">{doc.description}</p>}
                 </div>
                 <div className="mt-8 flex items-center justify-between border-t border-border/50 pt-4">
                   <div className="flex flex-col">
                     <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">File Size</span>
-                    <span className="text-xs font-bold">{(doc.fileSize / 1024 / 1024).toFixed(2)} MB</span>
+                    <span className="text-xs font-bold">{((doc.fileSize || 0) / 1024 / 1024).toFixed(2)} MB</span>
                   </div>
                   <Button variant="outline" size="sm" className="h-10 px-4 rounded-xl text-[11px] font-bold gap-2" asChild>
                     <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" download>
@@ -361,7 +393,7 @@ export default function DocumentVaultPage() {
         <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col">
           <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
             <div className="flex items-center gap-3">
-              <Lock className="text-primary h-5 w-5" />
+              <Lock className="text-[#10b981] h-5 w-5" />
               <DialogTitle className="truncate font-bold text-sm max-w-md">{previewDoc?.name}</DialogTitle>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setPreviewDoc(null)} className="h-8 w-8 hover:bg-white/10">
