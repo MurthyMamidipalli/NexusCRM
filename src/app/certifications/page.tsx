@@ -71,10 +71,12 @@ export default function CertificationsPage() {
   const certifications = useMemo(() => {
     if (!rawCertifications) return []
     return [...rawCertifications].sort((a: any, b: any) => {
-      const timeA = a.updatedAt?.seconds || 0;
-      const timeB = b.updatedAt?.seconds || 0;
-      if (timeA !== timeB) return timeB - timeA;
-      return (b.id || '').localeCompare(a.id || '');
+      const getVal = (doc: any) => {
+        if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
+        if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
+        return Date.now();
+      }
+      return getVal(b) - getVal(a);
     })
   }, [rawCertifications])
 
@@ -82,12 +84,7 @@ export default function CertificationsPage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > MAX_FILE_SIZE) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'File Too Large', 
-        description: 'Limit is 500MB.' 
-      })
-      e.target.value = '';
+      toast({ variant: 'destructive', title: 'File Too Large', description: 'Limit is 500MB.' })
       return
     }
     setSelectedFile(file)
@@ -172,11 +169,10 @@ export default function CertificationsPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">🏆 Credentials & Grade Sheets</h1>
           <p className="text-muted-foreground">Secure vault for academic and professional records (Max 500MB).</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if (!o && !loading) resetForm(); }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20" onClick={resetForm}>
-              <Plus className="h-4 w-4" />
-              Add Record
+              <Plus className="h-4 w-4" /> Add Record
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none p-8 rounded-2xl">
@@ -184,18 +180,14 @@ export default function CertificationsPage() {
               <DialogTitle className="text-2xl font-bold font-headline">
                 {editingCert ? 'Edit Credential' : 'Add New Credential'}
               </DialogTitle>
-              <DialogDescription className="text-gray-400">
-                Support for large files up to 500MB.
-              </DialogDescription>
+              <DialogDescription className="text-gray-400">Support for large files up to 500MB.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveCert} className="space-y-6 pt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Record Type</Label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
+                  <Select value={category} onValueChange={setCategory} disabled={loading}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
                       <SelectItem value="Study Certificate">Study Certificate</SelectItem>
                       <SelectItem value="Course Certificate">Course Certificate</SelectItem>
@@ -204,11 +196,9 @@ export default function CertificationsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Visibility (Mandatory)</Label>
-                  <Select value={visibility} onValueChange={setVisibility}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
+                  <Label>Visibility</Label>
+                  <Select value={visibility} onValueChange={setVisibility} disabled={loading}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
                       <SelectItem value="Private">🔒 Private (Vault Only)</SelectItem>
                       <SelectItem value="Public">🌍 Public (Shared on Hub)</SelectItem>
@@ -216,137 +206,33 @@ export default function CertificationsPage() {
                   </Select>
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="title">Title / Name</Label>
-                <Input id="title" name="title" defaultValue={editingCert?.title} placeholder="e.g. MBA Grade Sheet" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="issuer">Issued by / Institution</Label>
-                <Input id="issuer" name="issuer" defaultValue={editingCert?.issuer} placeholder="e.g. Stanford University" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" />
-              </div>
-
+              <div className="space-y-2"><Label>Title / Name</Label><Input id="title" name="title" defaultValue={editingCert?.title} placeholder="e.g. MBA Grade Sheet" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" /></div>
+              <div className="space-y-2"><Label>Issued by</Label><Input id="issuer" name="issuer" defaultValue={editingCert?.issuer} placeholder="e.g. Stanford University" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" /></div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date">Date Issued</Label>
-                  <Input id="date" name="date" type="date" defaultValue={editingCert?.date} required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl [color-scheme:dark]" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="externalLink">Verification Link (Optional)</Label>
-                  <Input id="externalLink" name="externalLink" defaultValue={editingCert?.externalLink} placeholder="https://verify..." className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" />
-                </div>
+                <div className="space-y-2"><Label>Date Issued</Label><Input id="date" name="date" type="date" defaultValue={editingCert?.date} required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl [color-scheme:dark]" /></div>
+                <div className="space-y-2"><Label>Verification Link</Label><Input id="externalLink" name="externalLink" defaultValue={editingCert?.externalLink} placeholder="https://verify..." className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" /></div>
               </div>
-
-              <div 
-                className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => fileInputRef.current?.click()}
-              >
+              <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => !loading && fileInputRef.current?.click()}>
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                {selectedFile ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <CheckCircle2 className="h-10 w-10 text-primary" />
-                    <span className="text-xs font-bold text-primary truncate max-w-[200px]">{selectedFile.name}</span>
-                  </div>
-                ) : editingCert?.documentUrl ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <ShieldCheck className="h-10 w-10 text-primary/50" />
-                    <span className="text-xs font-bold text-gray-400">File already stored</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <Upload className="h-10 w-10 text-gray-500 mb-2" />
-                    <span className="text-xs text-gray-500">Upload PDF or Image (Max 500MB)</span>
-                  </div>
-                )}
+                {selectedFile ? (<div className="flex flex-col items-center gap-2"><CheckCircle2 className="h-10 w-10 text-primary" /><span className="text-xs font-bold text-primary truncate max-w-[200px]">{selectedFile.name}</span></div>) : editingCert?.documentUrl ? (<div className="flex flex-col items-center gap-2"><ShieldCheck className="h-10 w-10 text-primary/50" /><span className="text-xs font-bold text-gray-400">File stored</span></div>) : (<div className="flex flex-col items-center gap-2 text-center"><Upload className="h-10 w-10 text-gray-500 mb-2" /><span className="text-xs text-gray-500">Upload (Max 500MB)</span></div>)}
               </div>
-
-              <DialogFooter>
-                <Button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12 rounded-xl border-none">
-                  {loading ? <Loader2 className="animate-spin h-4 w-4" /> : 'Save Record'}
-                </Button>
-              </DialogFooter>
+              <DialogFooter><Button type="submit" disabled={loading} className="w-full bg-primary h-12 rounded-xl">{loading ? <Loader2 className="animate-spin h-4 w-4" /> : 'Save Record'}</Button></DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
       </div>
-
-      {certLoading ? (
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="animate-spin text-primary h-8 w-8" />
-        </div>
-      ) : (
+      {certLoading ? (<div className="flex h-64 items-center justify-center"><Loader2 className="animate-spin text-primary h-8 w-8" /></div>) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="bg-card/30 p-1 rounded-2xl border border-border/50">
-            <TabsTrigger value="study" className="px-8 rounded-xl font-bold">Study</TabsTrigger>
-            <TabsTrigger value="course" className="px-8 rounded-xl font-bold">Course</TabsTrigger>
-            <TabsTrigger value="grades" className="px-8 rounded-xl font-bold">Grades</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="study">
-            <CertGrid 
-              items={certifications.filter(c => c.category === 'Study Certificate')} 
-              onDelete={handleDelete}
-              onEdit={(c: any) => {
-                setEditingCert(c);
-                setCategory(c.category);
-                setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private'));
-                setIsDialogOpen(true);
-              }}
-              onPreview={(u: string, n: string) => setPreviewDoc({ url: u, name: n })}
-            />
-          </TabsContent>
-          
-          <TabsContent value="course">
-            <CertGrid 
-              items={certifications.filter(c => c.category === 'Course Certificate')} 
-              onDelete={handleDelete}
-              onEdit={(c: any) => {
-                setEditingCert(c);
-                setCategory(c.category);
-                setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private'));
-                setIsDialogOpen(true);
-              }}
-              onPreview={(u: string, n: string) => setPreviewDoc({ url: u, name: n })}
-            />
-          </TabsContent>
-          
-          <TabsContent value="grades">
-            <CertGrid 
-              items={certifications.filter(c => c.category === 'Grade Sheet')} 
-              onDelete={handleDelete}
-              onEdit={(c: any) => {
-                setEditingCert(c);
-                setCategory(c.category);
-                setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private'));
-                setIsDialogOpen(true);
-              }}
-              onPreview={(u: string, n: string) => setPreviewDoc({ url: u, name: n })}
-            />
-          </TabsContent>
+          <TabsList className="bg-card/30 p-1 rounded-2xl border border-border/50"><TabsTrigger value="study" className="px-8 rounded-xl font-bold">Study</TabsTrigger><TabsTrigger value="course" className="px-8 rounded-xl font-bold">Course</TabsTrigger><TabsTrigger value="grades" className="px-8 rounded-xl font-bold">Grades</TabsTrigger></TabsList>
+          <TabsContent value="study"><CertGrid items={certifications.filter(c => c.category === 'Study Certificate')} onDelete={handleDelete} onEdit={(c: any) => { setEditingCert(c); setCategory(c.category); setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private')); setIsDialogOpen(true); }} onPreview={(u: string, n: string) => setPreviewDoc({ url: u, name: n })} /></TabsContent>
+          <TabsContent value="course"><CertGrid items={certifications.filter(c => c.category === 'Course Certificate')} onDelete={handleDelete} onEdit={(c: any) => { setEditingCert(c); setCategory(c.category); setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private')); setIsDialogOpen(true); }} onPreview={(u: string, n: string) => setPreviewDoc({ url: u, name: n })} /></TabsContent>
+          <TabsContent value="grades"><CertGrid items={certifications.filter(c => c.category === 'Grade Sheet')} onDelete={handleDelete} onEdit={(c: any) => { setEditingCert(c); setCategory(c.category); setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private')); setIsDialogOpen(true); }} onPreview={(u: string, n: string) => setPreviewDoc({ url: u, name: n })} /></TabsContent>
         </Tabs>
       )}
-
       <Dialog open={!!previewDoc} onOpenChange={(o) => !o && setPreviewDoc(null)}>
         <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col">
-          <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="text-primary h-5 w-5" />
-              <DialogTitle className="truncate font-bold text-sm max-w-md">{previewDoc?.name}</DialogTitle>
-            </div>
-            <Button variant="ghost" size="icon" onClick={() => setPreviewDoc(null)}>
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-          <div className="flex-1 bg-black/40">
-            {previewDoc?.url && (
-              <iframe 
-                src={previewDoc.url} 
-                className="w-full h-full border-none"
-                title={previewDoc.name}
-              />
-            )}
-          </div>
+          <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]"><div className="flex items-center gap-3"><ShieldCheck className="text-primary h-5 w-5" /><DialogTitle className="truncate font-bold text-sm max-w-md">{previewDoc?.name}</DialogTitle></div><Button variant="ghost" size="icon" onClick={() => setPreviewDoc(null)}><X className="h-5 w-5" /></Button></div>
+          <div className="flex-1 bg-black/40">{previewDoc?.url && <iframe src={previewDoc.url} className="w-full h-full border-none" title={previewDoc.name} />}</div>
         </DialogContent>
       </Dialog>
     </CRMLayout>
@@ -354,75 +240,18 @@ export default function CertificationsPage() {
 }
 
 function CertGrid({ items, onDelete, onEdit, onPreview }: any) {
-  if (items.length === 0) {
-    return (
-      <div className="flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground gap-4">
-        <AlertCircle className="h-8 w-8 opacity-20" />
-        <p className="italic">No records found in this category.</p>
-      </div>
-    )
-  }
-  
+  if (items.length === 0) return (<div className="flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground gap-4"><AlertCircle className="h-8 w-8 opacity-20" /><p className="italic">No records found.</p></div>)
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {items.map((c: any) => (
         <Card key={c.id} className="group border-none bg-card/50 backdrop-blur-md shadow-md hover:shadow-xl transition-all duration-300">
           <CardContent className="p-6">
             <div className="flex justify-between items-start">
-              <div className="space-y-2">
-                <div className="p-3 rounded-2xl bg-primary/10 text-primary w-fit">
-                  {c.category === 'Grade Sheet' ? <FileSpreadsheet className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
-                </div>
-                <Badge variant="outline" className={c.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}>
-                  {c.isPublic ? <Globe className="h-3 w-3 mr-1.5" /> : <Lock className="h-3 w-3 mr-1.5" />}
-                  {c.isPublic ? 'Public' : 'Private'}
-                </Badge>
-              </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(c)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => onDelete(c)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+              <div className="space-y-2"><div className="p-3 rounded-2xl bg-primary/10 text-primary w-fit">{c.category === 'Grade Sheet' ? <FileSpreadsheet className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}</div><Badge variant="outline" className={c.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}>{c.isPublic ? <Globe className="h-3 w-3 mr-1.5" /> : <Lock className="h-3 w-3 mr-1.5" />}{c.isPublic ? 'Public' : 'Private'}</Badge></div>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" onClick={() => onEdit(c)}><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => onDelete(c)}><Trash2 className="h-4 w-4" /></Button></div>
             </div>
-            
-            <div className="mt-4 space-y-1">
-              <h3 className="font-bold text-lg leading-tight line-clamp-2 h-12">{c.title}</h3>
-              <p className="text-sm font-semibold text-primary">{c.issuer}</p>
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-bold tracking-widest pt-1">
-                <Calendar className="h-3 w-3" />
-                {c.date}
-              </div>
-            </div>
-            
-            <div className="mt-6 border-t border-border/50 pt-4 grid grid-cols-2 gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-9 text-[11px] font-bold rounded-xl" 
-                asChild={!!c.externalLink}
-                disabled={!c.externalLink}
-              >
-                {c.externalLink ? (
-                  <a href={c.externalLink} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="mr-1.5 h-3 w-3" /> Verify
-                  </a>
-                ) : (
-                  <span>Verify</span>
-                )}
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-9 text-[11px] font-bold rounded-xl" 
-                onClick={() => c.documentUrl && onPreview(c.documentUrl, c.title)}
-                disabled={!c.documentUrl}
-              >
-                <Eye className="mr-1.5 h-3 w-3" /> View
-              </Button>
-            </div>
+            <div className="mt-4 space-y-1"><h3 className="font-bold text-lg leading-tight line-clamp-2 h-12">{c.title}</h3><p className="text-sm font-semibold text-primary">{c.issuer}</p><div className="flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-bold tracking-widest pt-1"><Calendar className="h-3 w-3" />{c.date}</div></div>
+            <div className="mt-6 border-t border-border/50 pt-4 grid grid-cols-2 gap-2"><Button variant="outline" size="sm" className="h-9 text-[11px] font-bold rounded-xl" asChild={!!c.externalLink} disabled={!c.externalLink}>{c.externalLink ? (<a href={c.externalLink} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1.5 h-3 w-3" /> Verify</a>) : (<span>Verify</span>)}</Button><Button variant="outline" size="sm" className="h-9 text-[11px] font-bold rounded-xl" onClick={() => c.documentUrl && onPreview(c.documentUrl, c.title)} disabled={!c.documentUrl}><Eye className="mr-1.5 h-3 w-3" /> View</Button></div>
           </CardContent>
         </Card>
       ))}
