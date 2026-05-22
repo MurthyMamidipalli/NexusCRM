@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
@@ -25,7 +24,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
-import { collection, query, where } from 'firebase/firestore'
+import { collection, query, where, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject, UploadTask } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
@@ -115,37 +114,45 @@ export default function DocumentsPage() {
       return
     }
 
-    console.log("File selected:", file.name)
+    console.log("File selected for upload:", file.name)
     setSelectedFile(file)
     setIsUploadComplete(false)
     setUploadProgress(0)
+    setPendingFileUrl(null)
+    setPendingFilePath(null)
 
     const storagePath = `documents/${user.uid}/${Date.now()}_${file.name}`
     const storageRef = ref(storage, storagePath)
-    const uploadTask = uploadBytesResumable(storageRef, file)
+    
+    console.log("Initializing Cloud Storage transfer...")
+    const uploadTask = uploadBytesResumable(storageRef, file, { contentType: file.type })
     setActiveUploadTask(uploadTask)
 
-    console.log("Upload started...")
     uploadTask.on(
       'state_changed',
       (snapshot) => {
         const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
         setUploadProgress(progress)
-        console.log(`Upload progress: ${Math.round(progress)}%`)
       },
       (error) => {
         console.error("Storage upload failed:", error)
         toast({ variant: 'destructive', title: 'Upload Failed', description: error.message })
         setActiveUploadTask(null)
+        setSelectedFile(null)
       },
       async () => {
-        console.log("Upload completed successfully.")
-        const url = await getDownloadURL(uploadTask.snapshot.ref)
-        console.log("Download URL generated.")
-        setPendingFileUrl(url)
-        setPendingFilePath(storagePath)
-        setIsUploadComplete(true)
-        setActiveUploadTask(null)
+        try {
+          console.log("Upload completed. Resolving download URL...")
+          const url = await getDownloadURL(uploadTask.snapshot.ref)
+          setPendingFileUrl(url)
+          setPendingFilePath(storagePath)
+          setIsUploadComplete(true)
+          setActiveUploadTask(null)
+          console.log("Secure location verified.")
+        } catch (urlError: any) {
+          console.error("Failed to generate download URL:", urlError)
+          toast({ variant: 'destructive', title: 'Finalization Error', description: 'Could not resolve file link.' })
+        }
       }
     )
   }
@@ -154,9 +161,8 @@ export default function DocumentsPage() {
     e.preventDefault()
     if (!user || !db) return
     
-    // Validate that if we're adding a new file, it's done uploading
     if (!editingDoc && !isUploadComplete && activeUploadTask) {
-      toast({ title: 'Please Wait', description: 'File is still uploading...' })
+      toast({ title: 'Please Wait', description: 'The file is still being secured in the cloud.' })
       return
     }
 
@@ -176,23 +182,24 @@ export default function DocumentsPage() {
         fileUrl: isUploadComplete ? pendingFileUrl : (editingDoc?.fileUrl || ''),
         filePath: isUploadComplete ? pendingFilePath : (editingDoc?.filePath || ''),
         fileType: isUploadComplete ? selectedFile?.type : (editingDoc?.fileType || ''),
-        fileSize: isUploadComplete ? selectedFile?.size : (editingDoc?.fileSize || 0)
+        fileSize: isUploadComplete ? selectedFile?.size : (editingDoc?.fileSize || 0),
+        updatedAt: serverTimestamp()
       }
 
+      console.log(editingDoc ? "Updating existing record..." : "Creating new secure record...")
+      
       const mutation = editingDoc
         ? updateRecord(db, collections.DOCUMENTS, editingDoc.id, data)
         : createRecord(db, collections.DOCUMENTS, data, user.uid);
 
-      console.log(editingDoc ? "Firestore update initiated." : "Firestore creation initiated.")
-      
-      toast({ title: editingDoc ? 'Changes Saved' : 'Document Added' })
+      toast({ title: editingDoc ? 'Changes Saved' : 'Document Secured' })
       setIsDialogOpen(false)
-      reset()
-
+      
+      // Handle background sync resolution
       mutation
-        .then(() => console.log("Firestore save completed."))
+        .then(() => console.log("Metadata synchronized to Vault."))
         .catch(async (err: any) => {
-          console.error("Firestore save failed:", err)
+          console.error("Firestore sync failed:", err)
           const permissionError = new FirestorePermissionError({
             path: editingDoc ? `${collections.DOCUMENTS}/${editingDoc.id}` : collections.DOCUMENTS,
             operation: 'write',
@@ -203,7 +210,7 @@ export default function DocumentsPage() {
         })
 
     } catch (err: any) {
-      console.error("Save process failed:", err)
+      console.error("Save failed:", err)
       toast({ variant: 'destructive', title: 'Action Failed', description: err.message });
     } finally {
       setLoading(false)
@@ -288,7 +295,7 @@ export default function DocumentsPage() {
                     <div className="flex flex-col items-center gap-2">
                       {isUploadComplete ? <CheckCircle2 className="text-primary h-12 w-12" /> : <Loader2 className="text-primary h-12 w-12 animate-spin" />}
                       <span className="text-xs font-bold text-primary truncate max-w-[300px]">
-                        {isUploadComplete ? 'Upload Complete' : `Uploading... ${Math.round(uploadProgress)}%`}
+                        {isUploadComplete ? 'Ready to Secure' : `Uploading... ${Math.round(uploadProgress)}%`}
                       </span>
                       <span className="text-[10px] text-gray-500">{selectedFile.name}</span>
                     </div>
@@ -304,7 +311,7 @@ export default function DocumentsPage() {
               {(activeUploadTask || isUploadComplete) && !editingDoc && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                    <span>{isUploadComplete ? 'Ready to Save' : 'Cloud Syncing...'}</span>
+                    <span>{isUploadComplete ? 'Upload Complete' : 'Synchronizing...'}</span>
                     <span>{Math.round(uploadProgress)}%</span>
                   </div>
                   <Progress value={uploadProgress} className="h-1 bg-gray-800" />
