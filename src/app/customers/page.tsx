@@ -5,10 +5,10 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Search, Filter, Download, UserCheck, Loader2, Building2, Mail, Phone } from 'lucide-react'
+import { Search, Filter, Download, UserCheck, Loader2, Building2, Mail, Phone, Trash2 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
-import { collections } from '@/lib/firestore-service'
+import { collections, deleteRecord } from '@/lib/firestore-service'
 import { Input } from '@/components/ui/input'
 import { AddContactDialog } from '@/components/contacts/add-contact-dialog'
 import { 
@@ -19,6 +19,9 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog'
+import { toast } from '@/hooks/use-toast'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function ContactsPage() {
   const db = useFirestore()
@@ -26,6 +29,7 @@ export default function ContactsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [selectedContact, setSelectedContact] = useState<any>(null)
   const [mounted, setMounted] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   
   const contactsQuery = useMemo(() => {
     if (!db || !user) return null
@@ -41,6 +45,30 @@ export default function ContactsPage() {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!db) return
+    
+    deleteRecord(db, collections.CONTACTS, id)
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.CONTACTS}/${id}`,
+          operation: 'delete',
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+    toast({ title: 'Contact Removed', description: 'The record has been deleted from your network.' })
+  }
+
+  const filteredContacts = useMemo(() => {
+    if (!contacts) return []
+    return contacts.filter((c: any) => 
+      c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.company?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [contacts, searchQuery])
 
   if (!mounted) return null
 
@@ -66,7 +94,12 @@ export default function ContactsPage() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-10 bg-card/50 border-border/50 focus:ring-primary/50" placeholder="Search contacts..." />
+          <Input 
+            className="pl-10 bg-card/50 border-border/50 focus:ring-primary/50" 
+            placeholder="Search contacts..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-2">
@@ -79,17 +112,24 @@ export default function ContactsPage() {
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      ) : contacts && contacts.length > 0 ? (
+      ) : filteredContacts && filteredContacts.length > 0 ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {contacts.map((contact: any) => (
-            <Card key={contact.id} className="group border-none bg-card/50 backdrop-blur-md shadow-lg hover:shadow-2xl transition-all duration-300">
-              <CardContent className="text-center p-6">
-                <div className="flex flex-col items-center justify-center py-6">
-                  <h3 className="font-headline text-xl font-bold group-hover:text-primary transition-colors mb-6">{contact.name}</h3>
+          {filteredContacts.map((contact: any) => (
+            <Card key={contact.id} className="group relative border-none bg-card/50 backdrop-blur-md shadow-lg hover:shadow-2xl transition-all duration-300">
+              <button 
+                onClick={(e) => handleDelete(contact.id, e)}
+                className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              <CardContent className="text-center p-6 pt-10">
+                <div className="flex flex-col items-center justify-center">
+                  <h3 className="font-headline text-xl font-bold group-hover:text-primary transition-colors mb-2">{contact.name}</h3>
+                  <p className="text-xs text-muted-foreground mb-6 line-clamp-1">{contact.company || 'Private Professional'}</p>
                   
                   <Button 
                     variant="ghost" 
-                    className="w-full text-primary group-hover:bg-primary group-hover:text-white transition-all border border-primary/20 group-hover:border-transparent"
+                    className="w-full text-primary group-hover:bg-primary group-hover:text-white transition-all border border-primary/20 group-hover:border-transparent rounded-xl"
                     onClick={() => setSelectedContact(contact)}
                   >
                     View Details

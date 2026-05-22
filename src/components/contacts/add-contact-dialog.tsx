@@ -2,7 +2,7 @@
 "use client"
 
 import React, { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,6 +11,8 @@ import { useFirestore, useUser } from '@/firebase'
 import { createRecord, collections } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Loader2, Building2, User, Phone, Mail } from 'lucide-react'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 interface AddContactDialogProps {
   open: boolean
@@ -19,37 +21,41 @@ interface AddContactDialogProps {
 
 export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) {
   const [loading, setLoading] = useState(false)
+  const [industry, setIndustry] = useState("Client")
   const db = useFirestore()
   const { user } = useUser()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !db) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
-      name: formData.get('name'),
-      email: formData.get('email'),
-      phone: formData.get('phone'),
-      company: formData.get('company'),
-      industry: formData.get('industry'),
+      name: formData.get('name') as string,
+      email: formData.get('email') as string,
+      phone: formData.get('phone') as string,
+      company: formData.get('company') as string,
+      industry: industry,
       since: new Date().getFullYear().toString(),
       ownerId: user.uid,
     }
 
-    // Optimistic UI update
-    onOpenChange(false)
-    
-    createRecord(db, collections.CUSTOMERS, data)
+    createRecord(db, collections.CONTACTS, data)
       .then(() => {
         toast({ title: 'Contact Created', description: `${data.name} has been added to your network.` })
       })
-      .catch((error: any) => {
-        toast({ variant: 'destructive', title: 'Error', description: error.message })
+      .catch(async (error: any) => {
+        const permissionError = new FirestorePermissionError({
+          path: collections.CONTACTS,
+          operation: 'create',
+          requestResourceData: data,
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
       })
       .finally(() => {
         setLoading(false)
+        onOpenChange(false)
       })
   }
 
@@ -58,6 +64,9 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
       <DialogContent className="sm:max-w-[450px] bg-[#121214] text-white border-none rounded-2xl p-8">
         <DialogHeader className="mb-6">
           <DialogTitle className="font-headline text-3xl font-bold">Add Manual Contact</DialogTitle>
+          <DialogDescription className="text-gray-400">
+            Record a new professional relationship in your network.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
@@ -117,7 +126,7 @@ export function AddContactDialog({ open, onOpenChange }: AddContactDialogProps) 
 
           <div className="space-y-2">
             <Label htmlFor="industry" className="text-sm font-semibold text-white">Relationship / Category</Label>
-            <Select name="industry" defaultValue="Client">
+            <Select onValueChange={setIndustry} defaultValue={industry}>
               <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
