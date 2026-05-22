@@ -17,7 +17,8 @@ import {
   Globe,
   ExternalLink,
   X,
-  Lock
+  Lock,
+  Files
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -42,9 +43,9 @@ export default function ResumePage() {
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({})
   const [mounted, setMounted] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [activeTab, setActiveTab] = useState('PDF')
   const [visibility, setVisibility] = useState<string>("Private")
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -72,81 +73,98 @@ export default function ResumePage() {
   }, [rawResumes])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > MAX_FILE_SIZE) {
-      toast({ variant: 'destructive', title: 'File Too Large', description: 'Max 500MB allowed.' })
-      return
-    }
-    setSelectedFile(file)
+    const files = Array.from(e.target.files || [])
+    const validFiles = files.filter(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        console.warn(`File ${file.name} ignored: exceeds 500MB limit.`)
+        return false
+      }
+      return true
+    })
+    setSelectedFiles(validFiles)
   }
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user || !db || !storage) return
+    
     setLoading(true)
-    setUploadProgress(0)
-
     const formData = new FormData(e.currentTarget)
     const type = activeTab === 'PDF' ? 'file' : 'link'
-    const name = formData.get('name') as string
+    const baseName = formData.get('name') as string
 
     try {
-      let fileUrl = ''
-      let fileName = 'resume.pdf'
-      let filePath = ''
-
       if (type === 'file') {
-        if (!selectedFile) { setLoading(false); return; }
-        const path = `resumes/${user.uid}/${Date.now()}_${selectedFile.name}`
-        const storageRef = ref(storage, path)
-        const uploadTask = uploadBytesResumable(storageRef, selectedFile)
+        if (selectedFiles.length === 0) { setLoading(false); return; }
+        
+        // Loop through each selected file
+        for (const file of selectedFiles) {
+          const fileId = `${Date.now()}_${file.name}`
+          const path = `resumes/${user.uid}/${fileId}`
+          const storageRef = ref(storage, path)
+          const uploadTask = uploadBytesResumable(storageRef, file)
 
-        await new Promise((resolve, reject) => {
           uploadTask.on(
             'state_changed',
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-              setUploadProgress(progress)
+              setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
             },
-            (error) => reject(error),
-            () => resolve(null)
+            (error) => {
+              console.error(`Upload failed for ${file.name}:`, error)
+            },
+            async () => {
+              const fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
+              const data: any = {
+                name: selectedFiles.length > 1 ? `${baseName} - ${file.name}` : baseName,
+                type: 'file',
+                visibility,
+                isPublic: visibility === 'Public',
+                ownerId: user.uid,
+                fileUrl,
+                fileName: file.name,
+                filePath: path,
+                fileSize: file.size,
+                fileType: file.type,
+                url: null
+              }
+
+              // Non-blocking Firestore create
+              createRecord(db, collections.RESUMES, data, user.uid).catch(err => {
+                const permissionError = new FirestorePermissionError({
+                  path: collections.RESUMES,
+                  operation: 'create',
+                  requestResourceData: data,
+                  originalError: err
+                } satisfies SecurityRuleContext);
+                errorEmitter.emit('permission-error', permissionError);
+              })
+            }
           )
-        })
-        
-        fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
-        fileName = selectedFile.name
-        filePath = path
+        }
+      } else {
+        // Handle single Link
+        const data: any = {
+          name: baseName,
+          type: 'link',
+          visibility,
+          isPublic: visibility === 'Public',
+          ownerId: user.uid,
+          fileUrl: null,
+          fileName: null,
+          filePath: null,
+          url: formData.get('url') as string
+        }
+
+        createRecord(db, collections.RESUMES, data, user.uid)
       }
 
-      const data: any = {
-        name,
-        type,
-        visibility,
-        isPublic: visibility === 'Public',
-        ownerId: user.uid,
-        fileUrl: type === 'file' ? fileUrl : null,
-        fileName: type === 'file' ? fileName : null,
-        filePath: type === 'file' ? filePath : null,
-        url: type === 'link' ? formData.get('url') as string : null
-      }
-
-      const mutation = createRecord(db, collections.RESUMES, data, user.uid)
-      toast({ title: 'Resume Stored' })
+      toast({ title: 'Syncing to Vault', description: 'Your records are being secured in the background.' })
       setIsDialogOpen(false)
-      setSelectedFile(null)
-
-      mutation.catch(async (err: any) => {
-        const permissionError = new FirestorePermissionError({
-          path: collections.RESUMES,
-          operation: 'create',
-          requestResourceData: data,
-          originalError: err
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      })
+      setSelectedFiles([])
+      setUploadProgress({})
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
+      console.error('Vault process failed:', err)
     } finally {
       setLoading(false)
     }
@@ -162,58 +180,209 @@ export default function ResumePage() {
     toast({ title: 'Removed' })
   }
 
+  const totalProgress = Object.values(uploadProgress).reduce((acc, curr) => acc + curr, 0) / (selectedFiles.length || 1)
+
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><h1 className="font-headline text-4xl font-bold tracking-tight">📜 Resume Vault</h1><p className="text-muted-foreground">Manage your CVs and live links (Max 500MB).</p></div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => setIsDialogOpen(o)}><DialogTrigger asChild><Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white"><Plus className="h-4 w-4" /> {activeTab === 'PDF' ? 'Upload Resume' : 'Add Link'}</Button></DialogTrigger>
+        <div>
+          <h1 className="font-headline text-4xl font-bold tracking-tight">📜 Resume & Links Vault</h1>
+          <p className="text-muted-foreground">Manage your Resumes & CV'S and Links in a secure environment.</p>
+        </div>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => setIsDialogOpen(o)}>
+          <DialogTrigger asChild>
+            <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white">
+              <Plus className="h-4 w-4" /> {activeTab === 'PDF' ? 'Upload Resumes' : 'Add Link'}
+            </Button>
+          </DialogTrigger>
           <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-2xl p-8">
-            <DialogHeader className="mb-6"><DialogTitle className="text-2xl font-bold font-headline">{activeTab === 'PDF' ? 'Upload PDF' : 'Add CV Link'}</DialogTitle></DialogHeader>
+            <DialogHeader className="mb-6">
+              <DialogTitle className="text-2xl font-bold font-headline">
+                {activeTab === 'PDF' ? 'Upload Resumes & CV\'S' : 'Add Link'}
+              </DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Securely store files up to 500MB.
+              </DialogDescription>
+            </DialogHeader>
             <form onSubmit={handleSave} className="space-y-6">
-              <div className="space-y-2"><Label>Document Name</Label><Input id="name" name="name" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" /></div>
-              <div className="space-y-2"><Label>Visibility (Mandatory)</Label><Select value={visibility} onValueChange={setVisibility}><SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl"><SelectValue /></SelectTrigger><SelectContent className="bg-[#1c1c1f] border-gray-800 text-white"><SelectItem value="Private">🔒 Private (Vault Only)</SelectItem><SelectItem value="Public">🌍 Public (Shared on Hub)</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2">
+                <Label>Record Name / Folder Label</Label>
+                <Input id="name" name="name" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="e.g. Senior Software Engineer CV" />
+              </div>
+              <div className="space-y-2">
+                <Label>Visibility (Mandatory)</Label>
+                <Select value={visibility} onValueChange={setVisibility}>
+                  <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                    <SelectItem value="Private">🔒 Private (Vault Only)</SelectItem>
+                    <SelectItem value="Public">🌍 Public (Shared on Hub)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {activeTab === 'PDF' ? (
-                <div className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                  <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileChange} />
-                  {selectedFile ? <div className="text-primary text-center"><CheckCircle2 className="mx-auto mb-2" /> {selectedFile.name}</div> : <Upload className="text-gray-500" />}
+                <div 
+                  className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
+                  onClick={() => !loading && fileInputRef.current?.click()}
+                >
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept=".pdf,.doc,.docx" 
+                    multiple 
+                    onChange={handleFileChange} 
+                  />
+                  {selectedFiles.length > 0 ? (
+                    <div className="text-primary text-center">
+                      <Files className="mx-auto mb-2 h-10 w-10" />
+                      <span className="text-xs font-bold">{selectedFiles.length} Files Selected</span>
+                      <p className="text-[10px] text-muted-foreground mt-1 truncate max-w-[200px]">
+                        {selectedFiles.map(f => f.name).join(', ')}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <Upload className="text-gray-500 mx-auto mb-2 h-10 w-10" />
+                      <span className="text-xs text-gray-500">Select Files (Max 500MB ea.)</span>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="space-y-2"><Label>URL</Label><Input name="url" required className="bg-[#1c1c1f] border-none h-12 rounded-xl" /></div>
+                <div className="space-y-2">
+                  <Label>Link URL</Label>
+                  <Input name="url" required className="bg-[#1c1c1f] border-none h-12 rounded-xl" placeholder="https://linkedin.com/in/username" />
+                </div>
               )}
               
-              {loading && activeTab === 'PDF' && (
+              {loading && activeTab === 'PDF' && selectedFiles.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                    <span>Uploading...</span>
-                    <span>{Math.round(uploadProgress)}%</span>
+                    <span>Securing Vault...</span>
+                    <span>{Math.round(totalProgress)}%</span>
                   </div>
-                  <Progress value={uploadProgress} className="h-1 bg-gray-800" />
+                  <Progress value={totalProgress} className="h-1 bg-gray-800" />
                 </div>
               )}
 
-              <DialogFooter><Button type="submit" disabled={loading} className="bg-primary h-12 px-8 rounded-xl">{loading ? <Loader2 className="animate-spin" /> : 'Save Record'}</Button></DialogFooter>
+              <DialogFooter>
+                <Button type="submit" disabled={loading} className="w-full bg-primary h-12 rounded-xl font-bold">
+                  {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : 'Secure in Vault'}
+                </Button>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
       <Tabs defaultValue="PDF" onValueChange={setActiveTab} className="space-y-8">
-        <TabsList className="bg-card/30 p-1 rounded-2xl border border-border/50"><TabsTrigger value="PDF" className="px-8 py-2.5 rounded-xl font-bold"><FileText className="mr-2 h-4 w-4" /> PDF Vault</TabsTrigger><TabsTrigger value="Link" className="px-8 py-2.5 rounded-xl font-bold"><LinkIcon className="mr-2 h-4 w-4" /> CV Links</TabsTrigger></TabsList>
-        <TabsContent value="PDF"><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">{resumes.filter(r => r.type === 'file').map(r => <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onPreview={setPreviewFile} />)}</div></TabsContent>
-        <TabsContent value="Link"><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">{resumes.filter(r => r.type === 'link').map(r => <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onPreview={setPreviewFile} />)}</div></TabsContent>
+        <TabsList className="bg-card/30 p-1 rounded-2xl border border-border/50">
+          <TabsTrigger value="PDF" className="px-8 py-2.5 rounded-xl font-bold">
+            <FileText className="mr-2 h-4 w-4" /> Resumes & CV'S
+          </TabsTrigger>
+          <TabsTrigger value="Link" className="px-8 py-2.5 rounded-xl font-bold">
+            <LinkIcon className="mr-2 h-4 w-4" /> Links
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="PDF">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {resumes.filter(r => r.type === 'file').map(r => (
+              <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onPreview={setPreviewFile} />
+            ))}
+            {resumes.filter(r => r.type === 'file').length === 0 && (
+              <div className="col-span-full flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground">
+                <FileText className="h-10 w-10 opacity-20 mb-4" />
+                <p className="italic">Resumes folder is empty.</p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="Link">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {resumes.filter(r => r.type === 'link').map(r => (
+              <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onPreview={setPreviewFile} />
+            ))}
+            {resumes.filter(r => r.type === 'link').length === 0 && (
+              <div className="col-span-full flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground">
+                <LinkIcon className="h-10 w-10 opacity-20 mb-4" />
+                <p className="italic">Links folder is empty.</p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
 
-      <Dialog open={!!previewFile} onOpenChange={(o) => !o && setPreviewFile(null)}><DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col"><div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]"><div className="flex items-center gap-3"><FileText className="text-primary" /><DialogTitle className="truncate">{previewFile?.name}</DialogTitle></div><Button variant="ghost" onClick={() => setPreviewFile(null)}><X /></Button></div><div className="flex-1">{previewFile?.url && <iframe src={previewFile.url} className="w-full h-full border-none" />}</div></DialogContent></Dialog>
+      <Dialog open={!!previewFile} onOpenChange={(o) => !o && setPreviewFile(null)}>
+        <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col">
+          <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
+            <div className="flex items-center gap-3">
+              <FileText className="text-primary h-5 w-5" />
+              <DialogTitle className="truncate font-bold text-sm max-w-md">{previewFile?.name}</DialogTitle>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setPreviewFile(null)}>
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          <div className="flex-1 bg-black/40">
+            {previewFile?.url && (
+              <iframe 
+                src={previewFile.url} 
+                className="w-full h-full border-none" 
+                title={previewFile.name} 
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </CRMLayout>
   )
 }
 
 function ResumeCard({ resume, onDelete, onPreview }: { resume: any, onDelete: any, onPreview: any }) {
   return (
-    <Card className="relative group border-none bg-[#0f1115] text-white shadow-xl rounded-3xl overflow-hidden">
+    <Card className="relative group border-none bg-[#0f1115] text-white shadow-xl rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-300">
       <CardContent className="p-8">
-        <div className="flex items-center justify-between mb-4"><Badge variant="outline" className={resume.isPublic ? 'border-green-500/20 text-green-500' : 'border-gray-500/20 text-gray-500'}>{resume.isPublic ? <Globe className="h-3 w-3 mr-1" /> : <Lock className="h-3 w-3 mr-1" />}{resume.visibility || (resume.isPublic ? 'Public' : 'Private')}</Badge><button onClick={() => onDelete(resume)} className="text-gray-500 hover:text-destructive"><Trash2 className="h-5 w-5" /></button></div>
-        <div className="flex flex-col gap-6"><div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">{resume.type === 'file' ? <FileText className="text-primary" /> : <Globe className="text-primary" />}</div><div className="space-y-2"><h3 className="text-2xl font-bold truncate">{resume.name}</h3><p className="text-[10px] uppercase font-bold text-gray-500">{resume.type === 'file' ? 'PDF DOCUMENT' : 'EXTERNAL LINK'}</p></div><div className="flex gap-4">{resume.type === 'file' ? <><Button variant="outline" className="flex-1 bg-[#1a1c21] border-none h-12 rounded-xl" onClick={() => onPreview({ url: resume.fileUrl, name: resume.name })}><Eye className="mr-2 h-4 w-4" /> View</Button><Button className="flex-1 bg-primary border-none h-12 rounded-xl" asChild><a href={resume.fileUrl} download={resume.fileName} target="_blank" rel="noopener noreferrer"><Download className="mr-2 h-4 w-4" /> Get</a></Button></> : <Button className="w-full bg-primary h-12 rounded-xl" asChild><a href={resume.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-2 h-4 w-4" /> Visit CV</a></Button>}</div></div>
+        <div className="flex items-center justify-between mb-4">
+          <Badge variant="outline" className={resume.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}>
+            {resume.isPublic ? <Globe className="h-3 w-3 mr-1.5" /> : <Lock className="h-3 w-3 mr-1.5" />}
+            {resume.visibility || (resume.isPublic ? 'Public' : 'Private')}
+          </Badge>
+          <button onClick={() => onDelete(resume)} className="text-gray-500 hover:text-destructive transition-colors">
+            <Trash2 className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex flex-col gap-6">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+            {resume.type === 'file' ? <FileText className="h-8 w-8" /> : <Globe className="h-8 w-8" />}
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-2xl font-bold truncate leading-tight">{resume.name}</h3>
+            <p className="text-[10px] uppercase font-bold text-gray-500 tracking-[0.2em]">
+              {resume.type === 'file' ? 'PDF DOCUMENT' : 'EXTERNAL LINK'}
+            </p>
+          </div>
+          <div className="flex gap-4">
+            {resume.type === 'file' ? (
+              <>
+                <Button variant="outline" className="flex-1 bg-[#1a1c21] border-none h-12 rounded-xl text-xs font-bold gap-2" onClick={() => onPreview({ url: resume.fileUrl, name: resume.name })}>
+                  <Eye className="h-4 w-4" /> View
+                </Button>
+                <Button className="flex-1 bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
+                  <a href={resume.fileUrl} download={resume.fileName} target="_blank" rel="noopener noreferrer">
+                    <Download className="h-4 w-4" /> Get
+                  </a>
+                </Button>
+              </>
+            ) : (
+              <Button className="w-full bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
+                <a href={resume.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" /> Visit CV
+                </a>
+              </Button>
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   )
