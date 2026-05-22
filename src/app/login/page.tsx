@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { 
   signInWithEmailAndPassword, 
   signInWithPopup, 
-  GoogleAuthProvider 
+  GoogleAuthProvider,
+  sendPasswordResetEmail
 } from 'firebase/auth'
 import { useAuth } from '@/firebase'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
@@ -63,6 +64,31 @@ export default function LoginPage() {
     }
   }
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast({
+        variant: 'destructive',
+        title: 'Email Required',
+        description: 'Please enter your email address first to reset your password.'
+      })
+      return
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email)
+      toast({
+        title: 'Reset Email Sent',
+        description: 'Check your inbox for password reset instructions.'
+      })
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Reset Failed',
+        description: error.message
+      })
+    }
+  }
+
   if (!mounted) return null
 
   return (
@@ -98,7 +124,14 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <Button variant="link" className="px-0 text-xs text-primary font-bold">Forgot password?</Button>
+                  <Button 
+                    type="button"
+                    variant="link" 
+                    className="px-0 text-xs text-primary font-bold h-auto"
+                    onClick={handleForgotPassword}
+                  >
+                    Forgot password?
+                  </Button>
                 </div>
                 <div className="relative">
                   <Input 
@@ -144,7 +177,7 @@ export default function LoginPage() {
               Don't have an account? <Link href="/signup" className="text-primary font-bold hover:underline">Sign Up</Link>
             </p>
           </CardFooter>
-Card        </Card>
+        </Card>
       </div>
     </div>
   )
