@@ -28,7 +28,8 @@ export default function PublicProfilePage() {
   const { data: experience, loading: expLoading } = useCollection(expQuery)
   const { data: projects, loading: projectsLoading } = useCollection(projectsQuery)
 
-  if (profileLoading || (uid && !profile && !profileError)) {
+  // Only show full-screen loader while the profile metadata is still fetching
+  if (profileLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0a0a0c]">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -36,7 +37,7 @@ export default function PublicProfilePage() {
     )
   }
 
-  // Handle case where profile doesn't exist or visibility is turned off
+  // Handle case where profile doesn't exist, visibility is turned off, or a permission error occurred
   if (!profile || !profile.publicProfile || profileError) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0c] text-white p-6 text-center">
@@ -52,7 +53,7 @@ export default function PublicProfilePage() {
             <a href="/login">Create Your Own Hub</a>
           </Button>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest max-w-xs mt-4">
-            Note: In development mode, links are restricted by workstation security (401 errors).
+            Security Notice: If you are the owner, ensure "Public Profile Access" is enabled in your Share settings.
           </p>
         </div>
       </div>
