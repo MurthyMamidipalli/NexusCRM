@@ -3,10 +3,9 @@
 
 import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Search, Filter, Download, UserCheck, Loader2, Building2, Mail, ExternalLink, Phone, User } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Search, Filter, Download, UserCheck, Loader2, Building2, Mail, Phone } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'

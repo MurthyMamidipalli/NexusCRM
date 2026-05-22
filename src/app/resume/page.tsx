@@ -26,7 +26,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 import { format } from 'date-fns'
@@ -109,7 +108,6 @@ export default function ResumePage() {
       }
     }
 
-    // Optimistic UI close
     setIsDialogOpen(false)
 
     createRecord(db, collections.RESUMES, data, user.uid)

@@ -112,7 +112,6 @@ export default function DocumentsPage() {
       ownerId: user.uid
     }
 
-    // Optimistic UI close
     setIsDialogOpen(false)
     setEditingDoc(null)
     setSelectedFile(null)
@@ -157,7 +156,6 @@ export default function DocumentsPage() {
     })
   }, [documents, searchQuery, categoryFilter])
 
-  // Get unique categories for filter dropdown
   const categories = useMemo(() => {
     if (!documents) return []
     const set = new Set(documents.map((d: any) => d.category).filter(Boolean))
