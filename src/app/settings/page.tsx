@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useEffect, useState } from 'react'
@@ -90,7 +89,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground uppercase font-bold tracking-widest">Email Address</Label>
-                  <p className="font-medium">{user?.email}</p>
+                  <p className="font-medium lowercase">{user?.email}</p>
                 </div>
               </div>
             </CardContent>

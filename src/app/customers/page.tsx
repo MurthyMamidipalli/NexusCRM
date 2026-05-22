@@ -174,7 +174,7 @@ export default function ContactsPage() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[10px] uppercase font-bold text-muted-foreground">Email Address</span>
-                  <span className="text-sm font-medium">{selectedContact?.email}</span>
+                  <span className="text-sm font-medium lowercase">{selectedContact?.email}</span>
                 </div>
               </div>
 

@@ -114,7 +114,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
                       <span className="text-[11px] font-bold leading-tight truncate max-w-[120px]">
                         {user?.displayName || user?.email?.split('@')[0] || 'User'}
                       </span>
-                      <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[120px]">
+                      <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[120px] lowercase">
                         {user?.email || 'Not logged in'}
                       </span>
                     </div>

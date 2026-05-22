@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo } from 'react'
@@ -72,7 +71,7 @@ export default function PublicProfilePage() {
                 <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {profile.location}</span>
               )}
               {profile.email && (
-                <span className="flex items-center gap-1.5"><Mail className="h-4 w-4" /> {profile.email}</span>
+                <span className="flex items-center gap-1.5 lowercase"><Mail className="h-4 w-4" /> {profile.email}</span>
               )}
             </div>
           </div>
