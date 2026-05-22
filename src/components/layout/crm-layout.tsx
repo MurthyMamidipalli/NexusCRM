@@ -67,7 +67,7 @@ function PersistenceIndicator() {
 }
 
 export function CRMLayout({ children }: CRMLayoutProps) {
-  const { user, loading } = useUser()
+  const { user } = useUser()
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
 
@@ -78,7 +78,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
   const currentPageTitle = routeTitles[pathname] || 'Intelligence Hub'
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={true}>
       <div className="flex h-screen w-full overflow-hidden bg-background">
         <CRMSidebar />
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
@@ -100,8 +100,8 @@ export function CRMLayout({ children }: CRMLayoutProps) {
                 <div className="flex flex-col items-end hidden sm:flex">
                   {!mounted ? (
                     <div className="space-y-1">
-                      <div className="h-3 w-20 bg-muted animate-pulse rounded" />
-                      <div className="h-2 w-24 bg-muted animate-pulse rounded" />
+                      <div className="h-3 w-20 bg-muted/50 rounded" />
+                      <div className="h-2 w-24 bg-muted/30 rounded" />
                     </div>
                   ) : (
                     <>
@@ -109,13 +109,13 @@ export function CRMLayout({ children }: CRMLayoutProps) {
                         {user?.displayName || user?.email?.split('@')[0] || 'User'}
                       </span>
                       <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[120px] lowercase">
-                        {user?.email || 'Not logged in'}
+                        {user?.email || 'Cloud Profile'}
                       </span>
                     </>
                   )}
                 </div>
                 <Avatar className="h-8 w-8 md:h-9 md:w-9 border-2 border-primary/10 shrink-0">
-                  <AvatarImage src={user?.photoURL || `https://picsum.photos/seed/${user?.uid}/40/40`} />
+                  <AvatarImage src={user?.photoURL || `https://picsum.photos/seed/${user?.uid || 'default'}/40/40`} />
                   <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
                 </Avatar>
               </div>

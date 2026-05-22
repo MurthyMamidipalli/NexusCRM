@@ -41,6 +41,7 @@ export default function CertificationsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCert, setEditingCert] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<string>("study")
   
   const [category, setCategory] = useState<string>("Course Certificate")
   const [visibility, setVisibility] = useState<string>("Private")
@@ -117,6 +118,10 @@ export default function CertificationsPage() {
     setEditingCert(null)
     setDocumentData('')
     setVisibility("Private")
+    // Intelligently set default category based on active tab
+    if (activeTab === "grades") setCategory("Grade Sheet");
+    else if (activeTab === "study") setCategory("Study Certificate");
+    else setCategory("Course Certificate");
   }
 
   const handleDelete = (id: string) => {
@@ -145,10 +150,7 @@ export default function CertificationsPage() {
           if (!o) resetForm(); 
         }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => {
-              resetForm();
-              setCategory("Course Certificate");
-            }}>
+            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={resetForm}>
               <Plus className="h-4 w-4" />
               Add Record
             </Button>
@@ -250,7 +252,7 @@ export default function CertificationsPage() {
           <Loader2 className="animate-spin text-primary h-8 w-8" />
         </div>
       ) : (
-        <Tabs defaultValue="study" className="space-y-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
           <TabsList className="bg-card/30 p-1 rounded-2xl border border-border/50">
             <TabsTrigger value="study" className="px-8 rounded-xl font-bold">Study</TabsTrigger>
             <TabsTrigger value="course" className="px-8 rounded-xl font-bold">Course</TabsTrigger>
