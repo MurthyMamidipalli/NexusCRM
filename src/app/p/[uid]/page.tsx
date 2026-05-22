@@ -59,7 +59,6 @@ export default function PublicProfilePage() {
     [db, uid, isVisible]
   )
   
-  // Strictly filter for items marked as Public
   const certQuery = useMemo(() => 
     isVisible && uid && db ? query(collection(db, collections.CERTIFICATIONS), where('ownerId', '==', uid), where('isPublic', '==', true)) : null, 
     [db, uid, isVisible]

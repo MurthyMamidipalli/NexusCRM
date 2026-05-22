@@ -19,11 +19,9 @@ service cloud.firestore {
     }
 
     // Generic rule for all top-level user-owned collections
-    // This covers skills, experience, education, projects, achievements, certifications, resumes, documents, links, testimonials, contacts, leads, tasks, meetings.
     match /{collection}/{id} {
       // READ: Allow if user owns the record OR if it is explicitly marked as Public
-      allow read: if auth() && (resource == null || resource.data.ownerId == request.auth.uid);
-      allow read: if resource != null && resource.data.isPublic == true;
+      allow read: if (auth() && (resource == null || resource.data.ownerId == request.auth.uid)) || (resource != null && resource.data.isPublic == true);
       
       // WRITE: Allow if the user is authenticated and is setting themselves as the owner
       allow create: if auth() && request.resource.data.ownerId == request.auth.uid;

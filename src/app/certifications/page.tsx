@@ -33,7 +33,7 @@ import { Badge } from '@/components/ui/badge'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
-const MAX_FILE_SIZE = 1048576; // 1MB for base64 strings in Firestore
+const MAX_FILE_SIZE = 1048576; // 1MB
 
 export default function CertificationsPage() {
   const db = useFirestore()
@@ -97,7 +97,7 @@ export default function CertificationsPage() {
       ? updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data) 
       : createRecord(db, collections.CERTIFICATIONS, data, user.uid)
 
-    // Snappy UI: Immediate feedback
+    // Snappy UI: Optimistic immediate update
     toast({ title: editingCert ? 'Credential Updated' : 'Record Created' })
     setIsDialogOpen(false)
     resetForm()
@@ -118,7 +118,7 @@ export default function CertificationsPage() {
     setEditingCert(null)
     setDocumentData('')
     setVisibility("Private")
-    // Intelligently set default category based on active tab
+    // Intelligent defaulting based on tab
     if (activeTab === "grades") setCategory("Grade Sheet");
     else if (activeTab === "study") setCategory("Study Certificate");
     else setCategory("Course Certificate");
@@ -303,7 +303,6 @@ export default function CertificationsPage() {
         </Tabs>
       )}
 
-      {/* Preview Viewer */}
       <Dialog open={!!previewDoc} onOpenChange={(o) => !o && setPreviewDoc(null)}>
         <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col">
           <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
