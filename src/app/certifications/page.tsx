@@ -21,8 +21,9 @@ import {
   Lock,
   AlertCircle
 } from 'lucide-react'
-import { useFirestore, useCollection, useUser } from '@/firebase'
+import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -34,11 +35,11 @@ import { Badge } from '@/components/ui/badge'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
-// Safe limit for Base64 Firestore storage
-const MAX_FILE_SIZE = 700000; 
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
 export default function CertificationsPage() {
   const db = useFirestore()
+  const storage = useStorage()
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCert, setEditingCert] = useState<any>(null)
@@ -47,12 +48,11 @@ export default function CertificationsPage() {
   
   const [category, setCategory] = useState<string>("Study Certificate")
   const [visibility, setVisibility] = useState<string>("Private")
-  const [documentData, setDocumentData] = useState<string>('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Sync category with tab context when opening dialog
   useEffect(() => {
     if (isDialogOpen && !editingCert) {
       if (activeTab === "grades") setCategory("Grade Sheet");
@@ -81,75 +81,88 @@ export default function CertificationsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    
     if (file.size > MAX_FILE_SIZE) {
       toast({ 
         variant: 'destructive', 
         title: 'File Too Large', 
-        description: 'Database maximum is 700KB. Try a smaller PDF or image.' 
+        description: 'Limit is 500MB.' 
       })
       e.target.value = '';
       return
     }
-
-    const reader = new FileReader()
-    reader.onloadend = () => setDocumentData(reader.result as string)
-    reader.readAsDataURL(file)
+    setSelectedFile(file)
   }
 
   const handleSaveCert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db) return
+    if (!user || !db || !storage) return
     setLoading(true)
 
     const formData = new FormData(e.currentTarget)
-    const data = {
-      title: formData.get('title') as string,
-      issuer: formData.get('issuer') as string,
-      date: formData.get('date') as string,
-      category: category,
-      visibility: visibility,
-      isPublic: visibility === 'Public',
-      externalLink: formData.get('externalLink') as string,
-      documentUrl: documentData || editingCert?.documentUrl || '',
-      ownerId: user.uid
-    }
-
-    const wasEditing = !!editingCert;
-    const currentId = editingCert?.id;
-    
-    toast({ title: wasEditing ? 'Updating Credential...' : 'Saving Record...' })
-    setIsDialogOpen(false)
-    resetForm()
-    setLoading(false)
-
     try {
-      if (wasEditing) {
-        await updateRecord(db, collections.CERTIFICATIONS, currentId, data)
+      let documentUrl = editingCert?.documentUrl || ''
+      let filePath = editingCert?.filePath || ''
+
+      if (selectedFile) {
+        const path = `credentials/${user.uid}/${Date.now()}_${selectedFile.name}`
+        const storageRef = ref(storage, path)
+        const uploadResult = await uploadBytes(storageRef, selectedFile)
+        documentUrl = await getDownloadURL(uploadResult.ref)
+        filePath = path
+      }
+
+      const data = {
+        title: formData.get('title') as string,
+        issuer: formData.get('issuer') as string,
+        date: formData.get('date') as string,
+        category: category,
+        visibility: visibility,
+        isPublic: visibility === 'Public',
+        externalLink: formData.get('externalLink') as string,
+        documentUrl,
+        filePath,
+        ownerId: user.uid
+      }
+
+      if (editingCert) {
+        await updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
       } else {
         await createRecord(db, collections.CERTIFICATIONS, data, user.uid)
       }
-    } catch (serverError: any) {
+
+      toast({ title: editingCert ? 'Updated' : 'Saved' })
+      setIsDialogOpen(false)
+      resetForm()
+    } catch (err: any) {
       const permissionError = new FirestorePermissionError({
-        path: wasEditing ? `${collections.CERTIFICATIONS}/${currentId}` : collections.CERTIFICATIONS,
-        operation: wasEditing ? 'update' : 'create',
-        requestResourceData: data,
-        originalError: serverError
+        path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
+        operation: editingCert ? 'update' : 'create',
+        originalError: err
       } satisfies SecurityRuleContext);
       errorEmitter.emit('permission-error', permissionError);
+    } finally {
+      setLoading(false)
     }
   }
 
   const resetForm = () => {
     setEditingCert(null)
-    setDocumentData('')
+    setSelectedFile(null)
     setVisibility("Private")
   }
 
-  const handleDelete = (id: string) => {
-    if (!db) return
-    deleteRecord(db, collections.CERTIFICATIONS, id)
-    toast({ title: 'Record Removed' })
+  const handleDelete = async (cert: any) => {
+    if (!db || !storage) return
+    try {
+      if (cert.filePath) {
+        const storageRef = ref(storage, cert.filePath)
+        await deleteObject(storageRef).catch(console.warn)
+      }
+      await deleteRecord(db, collections.CERTIFICATIONS, cert.id)
+      toast({ title: 'Record Removed' })
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete.' })
+    }
   }
 
   return (
@@ -157,12 +170,9 @@ export default function CertificationsPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">🏆 Credentials & Grade Sheets</h1>
-          <p className="text-muted-foreground">Secure vault for multiple academic and professional records.</p>
+          <p className="text-muted-foreground">Secure vault for academic and professional records (Max 500MB).</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { 
-          setIsDialogOpen(o); 
-          if (!o) resetForm(); 
-        }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20" onClick={resetForm}>
               <Plus className="h-4 w-4" />
@@ -175,7 +185,7 @@ export default function CertificationsPage() {
                 {editingCert ? 'Edit Credential' : 'Add New Credential'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Store verification documents up to 700KB.
+                Support for large files up to 500MB.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveCert} className="space-y-6 pt-4">
@@ -232,21 +242,21 @@ export default function CertificationsPage() {
                 className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <input type="file" ref={fileInputRef} className="hidden" accept="application/pdf,image/*" onChange={handleFileChange} />
-                {documentData ? (
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                {selectedFile ? (
                   <div className="flex flex-col items-center gap-2">
                     <CheckCircle2 className="h-10 w-10 text-primary" />
-                    <span className="text-xs font-bold text-primary">File Attached</span>
+                    <span className="text-xs font-bold text-primary truncate max-w-[200px]">{selectedFile.name}</span>
                   </div>
                 ) : editingCert?.documentUrl ? (
                   <div className="flex flex-col items-center gap-2">
                     <ShieldCheck className="h-10 w-10 text-primary/50" />
-                    <span className="text-xs font-bold text-gray-400">Current File Safe</span>
+                    <span className="text-xs font-bold text-gray-400">File already stored</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <Upload className="h-10 w-10 text-gray-500 mb-2" />
-                    <span className="text-xs text-gray-500">Upload PDF or Image (Max 700KB)</span>
+                    <span className="text-xs text-gray-500">Upload PDF or Image (Max 500MB)</span>
                   </div>
                 )}
               </div>
@@ -372,7 +382,7 @@ function CertGrid({ items, onDelete, onEdit, onPreview }: any) {
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(c)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => onDelete(c.id)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => onDelete(c)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>

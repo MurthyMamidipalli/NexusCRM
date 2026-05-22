@@ -16,13 +16,13 @@ import {
   CheckCircle2,
   X,
   Globe,
-  Lock,
-  AlertTriangle
+  Lock
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { useFirestore, useCollection, useUser } from '@/firebase'
+import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -31,18 +31,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
-// Firestore Limit: 1MB. Base64 adds ~37%. 700KB is the safe maximum.
-const MAX_FILE_SIZE = 700000; 
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
 export default function DocumentsPage() {
   const db = useFirestore()
+  const storage = useStorage()
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingDoc, setEditingDoc] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [visibility, setVisibility] = useState<string>("Private")
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
-  const [fileData, setFileData] = useState<string>('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const docsQuery = useMemo(() => {
@@ -54,7 +54,6 @@ export default function DocumentsPage() {
 
   const documents = useMemo(() => {
     if (!rawDocuments) return []
-    // Tiebreaker sorting to handle simultaneous timestamps
     return [...rawDocuments].sort((a: any, b: any) => {
       const timeA = a.updatedAt?.seconds || 0;
       const timeB = b.updatedAt?.seconds || 0;
@@ -66,68 +65,92 @@ export default function DocumentsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    
     if (file.size > MAX_FILE_SIZE) {
       toast({ 
         variant: 'destructive', 
         title: 'File Too Large', 
-        description: 'Database limit is 700KB. For larger files, please use external links.' 
+        description: 'Maximum limit is 500MB.' 
       })
       e.target.value = '';
       return
     }
-
-    const reader = new FileReader()
-    reader.onloadend = () => setFileData(reader.result as string)
-    reader.readAsDataURL(file)
+    setSelectedFile(file)
   }
 
   const handleSaveDoc = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db) return
+    if (!user || !db || !storage) return
     setLoading(true)
 
     const formData = new FormData(e.currentTarget)
-    const data = {
-      name: formData.get('name') as string,
-      category: formData.get('category') as string,
-      status: formData.get('status') as string || 'Active',
-      visibility: visibility,
-      isPublic: visibility === 'Public',
-      fileUrl: fileData || editingDoc?.fileUrl || '',
-      fileName: editingDoc?.fileName || 'document.pdf',
-      ownerId: user.uid
-    }
-    
-    // Snappy UI: Close immediately
-    const wasEditing = !!editingDoc;
-    const currentId = editingDoc?.id;
-    
-    toast({ title: wasEditing ? 'Updating Document...' : 'Saving to Vault...' })
-    setIsDialogOpen(false)
-    reset()
-    setLoading(false)
+    const name = formData.get('name') as string
+    const category = formData.get('category') as string
+    const status = formData.get('status') as string || 'Active'
 
     try {
-      if (wasEditing) {
-        await updateRecord(db, collections.DOCUMENTS, currentId, data)
+      let fileUrl = editingDoc?.fileUrl || ''
+      let fileName = editingDoc?.fileName || 'document'
+      let filePath = editingDoc?.filePath || ''
+
+      if (selectedFile) {
+        const path = `vault/${user.uid}/${Date.now()}_${selectedFile.name}`
+        const storageRef = ref(storage, path)
+        const uploadResult = await uploadBytes(storageRef, selectedFile)
+        fileUrl = await getDownloadURL(uploadResult.ref)
+        fileName = selectedFile.name
+        filePath = path
+      }
+
+      const data = {
+        name,
+        category,
+        status,
+        visibility,
+        isPublic: visibility === 'Public',
+        fileUrl,
+        fileName,
+        filePath,
+        ownerId: user.uid
+      }
+
+      if (editingDoc) {
+        await updateRecord(db, collections.DOCUMENTS, editingDoc.id, data)
       } else {
         await createRecord(db, collections.DOCUMENTS, data, user.uid)
       }
+
+      toast({ title: editingDoc ? 'Document Updated' : 'Document Secured' })
+      setIsDialogOpen(false)
+      reset()
     } catch (err: any) {
       const permissionError = new FirestorePermissionError({
-        path: wasEditing ? `${collections.DOCUMENTS}/${currentId}` : collections.DOCUMENTS,
-        operation: wasEditing ? 'update' : 'create',
-        requestResourceData: data,
+        path: editingDoc ? `${collections.DOCUMENTS}/${editingDoc.id}` : collections.DOCUMENTS,
+        operation: editingDoc ? 'update' : 'create',
         originalError: err
       } satisfies SecurityRuleContext);
       errorEmitter.emit('permission-error', permissionError);
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async (docItem: any) => {
+    if (!db || !storage) return
+    try {
+      if (docItem.filePath) {
+        const storageRef = ref(storage, docItem.filePath)
+        await deleteObject(storageRef).catch(console.warn)
+      }
+      await deleteRecord(db, collections.DOCUMENTS, docItem.id)
+      toast({ title: 'Document Removed' })
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete record.' })
     }
   }
 
   const reset = () => { 
     setEditingDoc(null); 
-    setFileData(''); 
+    setSelectedFile(null); 
     setVisibility("Private"); 
   }
 
@@ -136,7 +159,7 @@ export default function DocumentsPage() {
       <div className="mb-8 flex justify-between items-center">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">📁 Document Vault</h1>
-          <p className="text-muted-foreground">Secure storage for multiple professional assets.</p>
+          <p className="text-muted-foreground">Secure storage for multiple professional assets (Max 500MB).</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) reset(); }}>
           <DialogTrigger asChild>
@@ -150,7 +173,7 @@ export default function DocumentsPage() {
                 {editingDoc ? 'Edit Metadata' : 'Upload to Vault'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Max 700KB per file. Items marked Public will appear on your Hub.
+                Max 500MB per file. Public items appear on your Hub.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveDoc} className="space-y-6 pt-4">
@@ -195,21 +218,21 @@ export default function DocumentsPage() {
                 className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
                 onClick={() => fileInputRef.current?.click()}
               >
-                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept="application/pdf,image/*" />
-                {fileData ? (
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                {selectedFile ? (
                   <div className="flex flex-col items-center gap-2">
                     <CheckCircle2 className="text-primary h-12 w-12" />
-                    <span className="text-xs font-bold text-primary">New File Ready</span>
+                    <span className="text-xs font-bold text-primary truncate max-w-[300px]">{selectedFile.name}</span>
                   </div>
                 ) : editingDoc?.fileUrl ? (
                   <div className="flex flex-col items-center gap-2">
                     <FileText className="text-primary/50 h-12 w-12" />
-                    <span className="text-xs font-bold text-gray-500">File Already Stored</span>
+                    <span className="text-xs font-bold text-gray-500">Update Existing File?</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <Upload className="text-gray-500 h-12 w-12 mb-2" />
-                    <span className="text-xs text-gray-500">Click to Upload (Max 700KB)</span>
+                    <span className="text-xs text-gray-500">Click to Upload (Max 500MB)</span>
                   </div>
                 )}
               </div>
@@ -246,10 +269,7 @@ export default function DocumentsPage() {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      onClick={() => {
-                        deleteRecord(db, collections.DOCUMENTS, doc.id)
-                        toast({ title: 'Document Removed' })
-                      }} 
+                      onClick={() => handleDelete(doc)} 
                       className="bg-background/80 text-destructive h-8 w-8 rounded-lg hover:bg-destructive/10"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -263,7 +283,7 @@ export default function DocumentsPage() {
                     <Badge variant="secondary" className="text-[9px] uppercase">{doc.status}</Badge>
                     <div className="flex gap-2">
                       <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" asChild>
-                        <a href={doc.fileUrl} download={doc.fileName || 'document.pdf'}>
+                        <a href={doc.fileUrl} download={doc.fileName || 'document.pdf'} target="_blank" rel="noopener noreferrer">
                           <Download className="h-4 w-4" />
                         </a>
                       </Button>

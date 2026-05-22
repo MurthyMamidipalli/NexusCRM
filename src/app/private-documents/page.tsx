@@ -52,6 +52,8 @@ const CATEGORIES = [
   "Other Documents"
 ]
 
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+
 export default function PrivateDocumentsPage() {
   const db = useFirestore()
   const storage = useStorage()
@@ -65,7 +67,6 @@ export default function PrivateDocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
-  // Use a simple query to avoid Index requirements
   const docsQuery = useMemo(() => {
     if (!db || !user) return null
     return query(
@@ -78,15 +79,12 @@ export default function PrivateDocumentsPage() {
 
   const documents = useMemo(() => {
     if (!rawDocuments) return []
-    
-    // 1. Sort in-memory to prevent Firebase Index errors
     const sorted = [...rawDocuments].sort((a: any, b: any) => {
       const timeA = a.createdAt?.seconds || 0;
       const timeB = b.createdAt?.seconds || 0;
       return timeB - timeA;
     });
 
-    // 2. Apply filtering
     return sorted.filter((doc: any) => {
       const matchesSearch = (doc.documentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           doc.tags?.some((t: string) => t.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -97,7 +95,13 @@ export default function PrivateDocumentsPage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) setSelectedFile(file)
+    if (file) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast({ variant: 'destructive', title: 'File Too Large', description: 'Limit is 500MB.' })
+        return
+      }
+      setSelectedFile(file)
+    }
   }
 
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -110,13 +114,11 @@ export default function PrivateDocumentsPage() {
     const category = formData.get('category') as string
     
     try {
-      // 1. Upload to Firebase Storage
       const filePath = `private_vault/${user.uid}/${Date.now()}_${selectedFile.name}`
       const storageRef = ref(storage, filePath)
       const uploadResult = await uploadBytes(storageRef, selectedFile)
       const fileUrl = await getDownloadURL(uploadResult.ref)
 
-      // 2. Create Firestore Record
       const data = {
         documentName: fileName,
         category: category,
@@ -131,7 +133,7 @@ export default function PrivateDocumentsPage() {
 
       await createRecord(db, collections.PRIVATE_DOCUMENTS, data, user.uid)
       
-      toast({ title: 'Document Secured', description: 'Your file has been encrypted and stored in the vault.' })
+      toast({ title: 'Document Secured', description: 'Encrypted and stored in the vault.' })
       setIsDialogOpen(false)
       setSelectedFile(null)
     } catch (err: any) {
@@ -145,13 +147,10 @@ export default function PrivateDocumentsPage() {
     if (!db || !storage || !confirm('Are you sure you want to permanently delete this document?')) return
     
     try {
-      // Delete from Storage
       const storageRef = ref(storage, doc.filePath)
-      await deleteObject(storageRef).catch(e => console.warn("Storage deletion error (might not exist):", e))
-      
-      // Delete from Firestore
+      await deleteObject(storageRef).catch(console.warn)
       await deleteRecord(db, collections.PRIVATE_DOCUMENTS, doc.id)
-      toast({ title: 'Document Removed', description: 'The record has been purged from the vault.' })
+      toast({ title: 'Document Removed' })
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Deletion Failed', description: err.message })
     }
@@ -175,7 +174,7 @@ export default function PrivateDocumentsPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight flex items-center gap-3">
             <Lock className="h-8 w-8 text-primary" /> Private Vault
           </h1>
-          <p className="text-muted-foreground">Secure, encrypted storage for your most sensitive documents.</p>
+          <p className="text-muted-foreground">Secure, encrypted storage (Up to 500MB per file).</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o) setSelectedFile(null); }}>
           <DialogTrigger asChild>
@@ -186,7 +185,7 @@ export default function PrivateDocumentsPage() {
           <DialogContent className="sm:max-w-[600px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden">
             <DialogHeader className="p-8 pb-0">
               <DialogTitle className="text-2xl font-bold font-headline">Secure Upload</DialogTitle>
-              <DialogDescription className="text-gray-400">Items in this vault are never visible to the public.</DialogDescription>
+              <DialogDescription className="text-gray-400">Supported up to 500MB.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleUpload} className="p-8 pt-6 space-y-6 max-h-[80vh] overflow-y-auto">
               <div className="space-y-2">
@@ -225,7 +224,7 @@ export default function PrivateDocumentsPage() {
 
               <div className="space-y-2">
                 <Label>Description</Label>
-                <Textarea name="description" className="bg-[#1c1c1f] border-none rounded-xl min-h-[80px]" placeholder="Brief context about this document..." />
+                <Textarea name="description" className="bg-[#1c1c1f] border-none rounded-xl min-h-[80px]" placeholder="Brief context..." />
               </div>
 
               <div 
@@ -234,14 +233,14 @@ export default function PrivateDocumentsPage() {
               >
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} required />
                 {selectedFile ? (
-                  <div className="flex flex-col items-center gap-2">
+                  <div className="flex flex-col items-center gap-2 text-center">
                     <ShieldCheck className="text-primary h-12 w-12" />
                     <span className="text-sm font-bold text-primary truncate max-w-[300px]">{selectedFile.name}</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <Upload className="text-gray-500 h-12 w-12 mb-2" />
-                    <span className="text-xs text-gray-500">Click to Select File</span>
+                    <span className="text-xs text-gray-500">Select File (Max 500MB)</span>
                   </div>
                 )}
               </div>
@@ -260,7 +259,7 @@ export default function PrivateDocumentsPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
-            placeholder="Search vault by name or tags..." 
+            placeholder="Search vault..." 
             className="pl-10 h-11 bg-card/50 border-none rounded-xl" 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -334,7 +333,7 @@ export default function PrivateDocumentsPage() {
                       <Eye className="h-3.5 w-3.5" /> View
                     </Button>
                     <Button variant="outline" className="flex-1 h-9 text-[11px] font-bold rounded-xl gap-2" asChild>
-                      <a href={doc.fileUrl} download={doc.documentName}>
+                      <a href={doc.fileUrl} download={doc.documentName} target="_blank" rel="noopener noreferrer">
                         <Download className="h-3.5 w-3.5" /> Get
                       </a>
                     </Button>
@@ -351,7 +350,7 @@ export default function PrivateDocumentsPage() {
           </div>
           <div className="text-center">
             <p className="font-headline text-xl font-bold text-foreground">Vault is Empty</p>
-            <p className="text-sm mt-1 max-w-[250px] mx-auto">Start securing your identity and property documents today.</p>
+            <p className="text-sm mt-1 max-w-[250px] mx-auto">Secure your sensitive records with Storage support up to 500MB.</p>
           </div>
           <Button onClick={() => setIsDialogOpen(true)} variant="outline" className="mt-4 gap-2 rounded-xl">
             <Plus className="h-4 w-4" /> Upload First Item

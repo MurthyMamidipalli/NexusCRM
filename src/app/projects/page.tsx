@@ -20,8 +20,9 @@ import {
   X,
   Calendar
 } from 'lucide-react'
-import { useFirestore, useCollection, useUser } from '@/firebase'
+import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -32,10 +33,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
-const MAX_FILE_SIZE = 1048576; // 1MB
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
 export default function ProjectsPage() {
   const db = useFirestore()
+  const storage = useStorage()
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingProj, setEditingProj] = useState<any>(null)
@@ -43,9 +45,9 @@ export default function ProjectsPage() {
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('Project')
 
-  const [imageFile, setImageFile] = useState<string>('')
-  const [docFile, setDocFile] = useState<string>('')
-  const [docName, setDocName] = useState<string>('')
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [selectedDoc, setSelectedDoc] = useState<File | null>(null)
+  
   const imageInputRef = useRef<HTMLInputElement>(null)
   const docInputRef = useRef<HTMLInputElement>(null)
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
@@ -68,59 +70,94 @@ export default function ProjectsPage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > MAX_FILE_SIZE) {
-      toast({ variant: 'destructive', title: 'File Too Large', description: 'Maximum size is 1MB.' })
+      toast({ variant: 'destructive', title: 'File Too Large', description: 'Maximum size is 500MB.' })
       return
     }
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      if (type === 'image') setImageFile(reader.result as string)
-      else { setDocFile(reader.result as string); setDocName(file.name); }
-    }
-    reader.readAsDataURL(file)
+    if (type === 'image') setSelectedImage(file)
+    else setSelectedDoc(file)
   }
 
-  const handleSaveProject = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db) return
+    if (!user || !db || !storage) return
     setLoading(true)
+
     const formData = new FormData(e.currentTarget)
-    const data = {
-      title: formData.get('title') as string,
-      description: formData.get('description') as string,
-      url: formData.get('url') as string,
-      date: formData.get('date') as string,
-      category: activeTab,
-      imageUrl: imageFile || editingProj?.imageUrl || '',
-      documentUrl: docFile || editingProj?.documentUrl || '',
-      documentName: docName || editingProj?.documentName || '',
-    }
-    const mutation = editingProj 
-      ? updateRecord(db, collections.PROJECTS, editingProj.id, data)
-      : createRecord(db, collections.PROJECTS, data, user.uid)
+    try {
+      let imageUrl = editingProj?.imageUrl || ''
+      let imagePath = editingProj?.imagePath || ''
+      let documentUrl = editingProj?.documentUrl || ''
+      let documentPath = editingProj?.documentPath || ''
+      let documentName = editingProj?.documentName || ''
 
-    // Optimistic Snappy UI
-    toast({ title: editingProj ? 'Updated' : 'Created' })
-    setIsDialogOpen(false)
-    resetForm()
-    setLoading(false)
+      if (selectedImage) {
+        const path = `projects/${user.uid}/images/${Date.now()}_${selectedImage.name}`
+        const storageRef = ref(storage, path)
+        const uploadResult = await uploadBytes(storageRef, selectedImage)
+        imageUrl = await getDownloadURL(uploadResult.ref)
+        imagePath = path
+      }
 
-    mutation.catch(async (err) => {
+      if (selectedDoc) {
+        const path = `projects/${user.uid}/docs/${Date.now()}_${selectedDoc.name}`
+        const storageRef = ref(storage, path)
+        const uploadResult = await uploadBytes(storageRef, selectedDoc)
+        documentUrl = await getDownloadURL(uploadResult.ref)
+        documentPath = path
+        documentName = selectedDoc.name
+      }
+
+      const data = {
+        title: formData.get('title') as string,
+        description: formData.get('description') as string,
+        url: formData.get('url') as string,
+        date: formData.get('date') as string,
+        category: activeTab,
+        imageUrl,
+        imagePath,
+        documentUrl,
+        documentPath,
+        documentName: documentName || formData.get('title'),
+        ownerId: user.uid
+      }
+
+      if (editingProj) {
+        await updateRecord(db, collections.PROJECTS, editingProj.id, data)
+      } else {
+        await createRecord(db, collections.PROJECTS, data, user.uid)
+      }
+
+      toast({ title: editingProj ? 'Updated' : 'Created' })
+      setIsDialogOpen(false)
+      resetForm()
+    } catch (err: any) {
       const permissionError = new FirestorePermissionError({
         path: editingProj ? `${collections.PROJECTS}/${editingProj.id}` : collections.PROJECTS,
         operation: editingProj ? 'update' : 'create',
-        requestResourceData: data,
         originalError: err
       } satisfies SecurityRuleContext);
       errorEmitter.emit('permission-error', permissionError);
-    })
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const resetForm = () => { setEditingProj(null); setImageFile(''); setDocFile(''); setDocName(''); }
+  const resetForm = () => { 
+    setEditingProj(null); 
+    setSelectedImage(null); 
+    setSelectedDoc(null); 
+  }
 
-  const handleDelete = (id: string) => {
-    if (!db) return
-    deleteRecord(db, collections.PROJECTS, id).catch(() => {})
-    toast({ title: 'Removed' })
+  const handleDelete = async (proj: any) => {
+    if (!db || !storage) return
+    try {
+      if (proj.imagePath) await deleteObject(ref(storage, proj.imagePath)).catch(console.warn)
+      if (proj.documentPath) await deleteObject(ref(storage, proj.documentPath)).catch(console.warn)
+      await deleteRecord(db, collections.PROJECTS, proj.id)
+      toast({ title: 'Removed' })
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete project.' })
+    }
   }
 
   return (
@@ -146,8 +183,22 @@ export default function ProjectsPage() {
               </div>
               <div className="space-y-2"><Label htmlFor="description">Description</Label><Textarea id="description" name="description" defaultValue={editingProj?.description || ''} required className="bg-[#1c1c1f] border-none min-h-[120px] rounded-xl" /></div>
               <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2"><Label>Visual Cover</Label><div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => imageInputRef.current?.click()}><input type="file" ref={imageInputRef} className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'image')} />{imageFile || editingProj?.imageUrl ? <CheckCircle2 className="text-primary" /> : <ImageIcon className="text-gray-500" />}</div></div>
-                <div className="space-y-2"><Label>Documentation (PDF)</Label><div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => docInputRef.current?.click()}><input type="file" ref={docInputRef} className="hidden" accept=".pdf" onChange={(e) => handleFileChange(e, 'pdf')} />{docFile || editingProj?.documentUrl ? <FileText className="text-primary" /> : <Paperclip className="text-gray-500" />}</div></div>
+                <div className="space-y-2">
+                  <Label>Visual Cover</Label>
+                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => imageInputRef.current?.click()}>
+                    <input type="file" ref={imageInputRef} className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'image')} />
+                    {selectedImage ? <CheckCircle2 className="text-primary" /> : <ImageIcon className="text-gray-500" />}
+                    <span className="text-[10px] text-gray-500 mt-2">{selectedImage?.name || 'Change Image'}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Documentation (PDF)</Label>
+                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => docInputRef.current?.click()}>
+                    <input type="file" ref={docInputRef} className="hidden" accept=".pdf" onChange={(e) => handleFileChange(e, 'pdf')} />
+                    {selectedDoc ? <FileText className="text-primary" /> : <Paperclip className="text-gray-500" />}
+                    <span className="text-[10px] text-gray-500 mt-2">{selectedDoc?.name || 'Change PDF'}</span>
+                  </div>
+                </div>
               </div>
               <DialogFooter><Button type="submit" disabled={loading} className="bg-[#7299f0] hover:bg-[#6387d9] h-12 px-8 rounded-xl">{loading && <Loader2 className="animate-spin mr-2" />}{editingProj ? 'Update' : 'Add'}</Button></DialogFooter>
             </form>
@@ -166,7 +217,7 @@ export default function ProjectsPage() {
   )
 }
 
-function ProjectGrid({ items, onDelete, onEdit, onPreview }: { items: any[], onDelete: (id: string) => void, onEdit: (item: any) => void, onPreview: (u: string, n: string) => void }) {
+function ProjectGrid({ items, onDelete, onEdit, onPreview }: { items: any[], onDelete: (proj: any) => void, onEdit: (item: any) => void, onPreview: (u: string, n: string) => void }) {
   if (items.length === 0) return <div className="flex h-64 items-center justify-center border-2 border-dashed border-border/50 rounded-2xl italic text-muted-foreground">No entries found.</div>
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -174,13 +225,13 @@ function ProjectGrid({ items, onDelete, onEdit, onPreview }: { items: any[], onD
         <Card key={proj.id} className="group overflow-hidden border-none bg-[#121214] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-[24px]">
           <div className="relative aspect-[16/10] overflow-hidden bg-[#1c1c1f]">
             {proj.imageUrl ? <img src={proj.imageUrl} alt={proj.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-10"><Rocket className="h-16 w-16" /></div>}
-            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="secondary" size="icon" onClick={() => onEdit(proj)} className="bg-black/60"><Pencil className="h-4 w-4" /></Button><Button variant="secondary" size="icon" onClick={() => onDelete(proj.id)} className="bg-black/60 hover:bg-destructive"><Trash2 className="h-4 w-4" /></Button></div>
+            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="secondary" size="icon" onClick={() => onEdit(proj)} className="bg-black/60"><Pencil className="h-4 w-4" /></Button><Button variant="secondary" size="icon" onClick={() => onDelete(proj)} className="bg-black/60 hover:bg-destructive"><Trash2 className="h-4 w-4" /></Button></div>
           </div>
           <div className="p-8 space-y-4">
             <div className="space-y-2"><h3 className="font-headline text-2xl font-bold">{proj.title}</h3>{proj.date && <div className="flex items-center gap-2 text-sm text-gray-500 font-medium"><Calendar className="h-4 w-4" />{new Date(proj.date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</div>}</div>
             <p className="text-sm text-gray-400 line-clamp-3 leading-relaxed">{proj.description}</p>
             <div className="pt-4 flex gap-3">
-              {proj.url && <Button variant="outline" className="bg-[#1c1c1f] border-none text-white text-[11px] font-bold h-10 px-4 rounded-xl gap-2 hover:bg-primary" asChild><a href={proj.url} target="_blank"><Globe className="h-3.5 w-3.5" /> Live Link</a></Button>}
+              {proj.url && <Button variant="outline" className="bg-[#1c1c1f] border-none text-white text-[11px] font-bold h-10 px-4 rounded-xl gap-2 hover:bg-primary" asChild><a href={proj.url} target="_blank" rel="noopener noreferrer"><Globe className="h-3.5 w-3.5" /> Live Link</a></Button>}
               {proj.documentUrl && <Button variant="outline" className="bg-[#1c1c1f] border-none text-white text-[11px] font-bold h-10 px-4 rounded-xl gap-2 hover:bg-accent" onClick={() => onPreview(proj.documentUrl, proj.documentName || 'Documentation')}><FileText className="h-3.5 w-3.5" /> Docs</Button>}
             </div>
           </div>
