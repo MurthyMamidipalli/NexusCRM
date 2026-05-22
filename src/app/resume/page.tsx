@@ -17,7 +17,8 @@ import {
   Link as LinkIcon,
   Globe,
   ExternalLink,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
@@ -43,6 +44,9 @@ export default function ResumePage() {
   const [fileData, setFileData] = useState<string>('')
   const [activeTab, setActiveTab] = useState('PDF')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Preview State
+  const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -107,7 +111,6 @@ export default function ResumePage() {
       data.url = formData.get('url') as string;
     }
 
-    // NON-BLOCKING MUTATION: Initiate save but don't await for UI close
     createRecord(db, collections.RESUMES, data, user.uid)
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
@@ -118,7 +121,6 @@ export default function ResumePage() {
         errorEmitter.emit('permission-error', permissionError);
       });
 
-    // Instant UI feedback
     toast({ 
       title: type === 'file' ? 'Resume Storing' : 'Link Added', 
       description: 'Synchronizing with your cloud vault...' 
@@ -163,7 +165,7 @@ export default function ResumePage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">📜 Resume Vault</h1>
-          <p className="text-muted-foreground">Manage multiple versions of your CVs and live professional links across all devices.</p>
+          <p className="text-muted-foreground">Manage your CVs and live professional links.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
@@ -184,7 +186,7 @@ export default function ResumePage() {
                 {activeTab === 'PDF' ? 'Upload Resume PDF' : 'Add Resume Link'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                {activeTab === 'PDF' ? 'Files under 1MB will be synced to your global profile.' : 'Add a link to your online portfolio or CV builder.'}
+                {activeTab === 'PDF' ? 'Files under 1MB for database sync.' : 'Add a link to your online portfolio.'}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSave} className="space-y-6">
@@ -215,7 +217,7 @@ export default function ResumePage() {
                       <div className="flex flex-col items-center">
                         <Upload className="h-10 w-10 text-gray-500 group-hover:text-primary transition-colors mb-2" />
                         <span className="text-sm font-semibold text-gray-400">Select PDF</span>
-                        <span className="text-[10px] text-muted-foreground mt-2 uppercase tracking-widest">Max 1MB for Sync</span>
+                        <span className="text-[10px] text-muted-foreground mt-2 uppercase tracking-widest">Max 1MB</span>
                       </div>
                     )}
                   </div>
@@ -242,7 +244,7 @@ export default function ResumePage() {
                   disabled={loading} 
                   className="bg-[#7299f0] hover:bg-[#6387d9] text-white font-bold h-12 px-8 rounded-xl border-none ml-auto"
                 >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (activeTab === 'PDF' ? 'Store in Vault' : 'Save Link')}
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Record'}
                 </Button>
               </DialogFooter>
             </form>
@@ -252,144 +254,112 @@ export default function ResumePage() {
 
       <Tabs defaultValue="PDF" onValueChange={setActiveTab} className="space-y-8">
         <TabsList className="bg-card/30 p-1 flex h-auto w-fit rounded-2xl border border-border/50">
-          <TabsTrigger 
-            value="PDF" 
-            className="gap-2 px-8 py-2.5 rounded-xl data-[state=active]:bg-[#7299f0] data-[state=active]:text-white transition-all font-bold text-sm"
-          >
+          <TabsTrigger value="PDF" className="gap-2 px-8 py-2.5 rounded-xl data-[state=active]:bg-[#7299f0] data-[state=active]:text-white font-bold text-sm">
             <FileText className="h-4 w-4" /> PDF Vault
           </TabsTrigger>
-          <TabsTrigger 
-            value="Link" 
-            className="gap-2 px-8 py-2.5 rounded-xl data-[state=active]:bg-[#7299f0] data-[state=active]:text-white transition-all font-bold text-sm"
-          >
+          <TabsTrigger value="Link" className="gap-2 px-8 py-2.5 rounded-xl data-[state=active]:bg-[#7299f0] data-[state=active]:text-white font-bold text-sm">
             <LinkIcon className="h-4 w-4" /> CV Links
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="PDF" className="mt-0">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredItems('file').length > 0 ? (
-              filteredItems('file').map((resume: any) => (
-                <Card key={resume.id} className="relative group border-none bg-[#0f1115] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden">
-                  <CardContent className="p-8">
-                    <button 
-                      className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      onClick={() => handleDelete(resume.id)}
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-
-                    <div className="flex flex-col gap-6">
-                      <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">
-                        <FileText className="h-8 w-8 text-primary" />
-                      </div>
-
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-bold tracking-tight truncate" title={resume.name}>
-                          {resume.name}
-                        </h3>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
-                          UPLOADED {resume.createdAt ? format(new Date(resume.createdAt.seconds * 1000), 'M/d/yyyy') : format(new Date(), 'M/d/yyyy')}
-                        </p>
-                      </div>
-
-                      <div className="flex gap-4 mt-2">
-                        <Button 
-                          variant="outline" 
-                          className="flex-1 bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-white/10 rounded-xl"
-                          disabled={!resume.fileUrl}
-                          asChild={!!resume.fileUrl}
-                        >
-                          {resume.fileUrl ? (
-                            <a href={resume.fileUrl} download={resume.fileName || 'resume.pdf'}>
-                              <Download className="h-4 w-4" /> Download
-                            </a>
-                          ) : (
-                            <span><Download className="h-4 w-4" /> Download</span>
-                          )}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="flex-1 bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-white/10 rounded-xl"
-                          disabled={!resume.fileUrl}
-                          asChild={!!resume.fileUrl}
-                        >
-                          {resume.fileUrl ? (
-                            <a href={resume.fileUrl} target="_blank">
-                              <Eye className="h-4 w-4" /> View
-                            </a>
-                          ) : (
-                            <span><Eye className="h-4 w-4" /> View</span>
-                          )}
-                        </Button>
-                      </div>
+            {filteredItems('file').map((resume: any) => (
+              <Card key={resume.id} className="relative group border-none bg-[#0f1115] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden">
+                <CardContent className="p-8">
+                  <button 
+                    className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:text-destructive transition-colors"
+                    onClick={() => handleDelete(resume.id)}
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                  <div className="flex flex-col gap-6">
+                    <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">
+                      <FileText className="h-8 w-8 text-primary" />
                     </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <EmptyState icon={FileText} message="No resumes stored in your vault yet." />
-            )}
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-bold tracking-tight truncate" title={resume.name}>{resume.name}</h3>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+                        {resume.createdAt ? format(new Date(resume.createdAt.seconds * 1000), 'M/d/yyyy') : 'Pending'}
+                      </p>
+                    </div>
+                    <div className="flex gap-4 mt-2">
+                      <Button variant="outline" className="flex-1 bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-white/10 rounded-xl" asChild>
+                        <a href={resume.fileUrl} download={resume.fileName || 'resume.pdf'}><Download className="h-4 w-4" /></a>
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="flex-1 bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-white/10 rounded-xl"
+                        onClick={() => setPreviewFile({ url: resume.fileUrl, name: resume.name })}
+                      >
+                        <Eye className="h-4 w-4" /> View
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </TabsContent>
 
         <TabsContent value="Link" className="mt-0">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredItems('link').length > 0 ? (
-              filteredItems('link').map((resume: any) => (
-                <Card key={resume.id} className="relative group border-none bg-[#0f1115] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden">
-                  <CardContent className="p-8">
-                    <button 
-                      className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      onClick={() => handleDelete(resume.id)}
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-
-                    <div className="flex flex-col gap-6">
-                      <div className="w-16 h-16 rounded-2xl bg-[#7299f0]/20 flex items-center justify-center">
-                        <Globe className="h-8 w-8 text-[#7299f0]" />
-                      </div>
-
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-bold tracking-tight truncate" title={resume.name}>
-                          {resume.name}
-                        </h3>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
-                          LINKED {resume.createdAt ? format(new Date(resume.createdAt.seconds * 1000), 'M/d/yyyy') : format(new Date(), 'M/d/yyyy')}
-                        </p>
-                      </div>
-
-                      <div className="mt-2">
-                        <Button 
-                          variant="outline" 
-                          className="w-full bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-[#7299f0] rounded-xl transition-all" 
-                          asChild
-                        >
-                          <a href={resume.url} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-4 w-4" /> Visit Live CV
-                          </a>
-                        </Button>
-                      </div>
+            {filteredItems('link').map((resume: any) => (
+              <Card key={resume.id} className="relative group border-none bg-[#0f1115] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden">
+                <CardContent className="p-8">
+                  <button 
+                    className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:text-destructive transition-colors"
+                    onClick={() => handleDelete(resume.id)}
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                  <div className="flex flex-col gap-6">
+                    <div className="w-16 h-16 rounded-2xl bg-[#7299f0]/20 flex items-center justify-center">
+                      <Globe className="h-8 w-8 text-[#7299f0]" />
                     </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <EmptyState icon={LinkIcon} message="No professional links added yet." />
-            )}
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-bold tracking-tight truncate" title={resume.name}>{resume.name}</h3>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">EXTERNAL LINK</p>
+                    </div>
+                    <Button variant="outline" className="w-full bg-[#1a1c21] border-none text-white font-bold h-12 gap-3 hover:bg-[#7299f0] rounded-xl" asChild>
+                      <a href={resume.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /> Visit Live CV</a>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </TabsContent>
       </Tabs>
-    </CRMLayout>
-  )
-}
 
-function EmptyState({ icon: Icon, message }: { icon: any, message: string }) {
-  return (
-    <div className="col-span-full flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border/50 bg-card/10 text-muted-foreground italic">
-      <Icon className="h-12 w-12 opacity-10 mb-4" />
-      {message}
-    </div>
+      {/* Professional File Previewer Dialog */}
+      <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
+        <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col">
+          <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
+            <div className="flex items-center gap-3">
+              <FileText className="h-5 w-5 text-primary" />
+              <h3 className="font-bold text-sm truncate max-w-[200px] md:max-w-md">{previewFile?.name}</h3>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setPreviewFile(null)} className="h-8 w-8 hover:bg-white/5">
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          <div className="flex-1 bg-black/40">
+            {previewFile?.url && (
+              <iframe 
+                src={previewFile.url} 
+                className="w-full h-full border-none"
+                title={previewFile.name}
+              />
+            )}
+          </div>
+          <div className="h-14 border-t border-white/5 flex items-center justify-center bg-[#1a1c21]">
+            <Button variant="link" className="text-primary font-bold" asChild>
+              <a href={previewFile?.url} download={previewFile?.name}>Download to Device</a>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </CRMLayout>
   )
 }
