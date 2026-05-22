@@ -29,7 +29,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 export default function PublicProfilePage() {
   const params = useParams()
@@ -59,7 +59,7 @@ export default function PublicProfilePage() {
     [db, uid, isVisible]
   )
   
-  // Restricted visibility queries
+  // Strictly filter for items marked as Public
   const certQuery = useMemo(() => 
     isVisible && uid && db ? query(collection(db, collections.CERTIFICATIONS), where('ownerId', '==', uid), where('isPublic', '==', true)) : null, 
     [db, uid, isVisible]
