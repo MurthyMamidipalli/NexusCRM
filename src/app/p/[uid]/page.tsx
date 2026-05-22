@@ -35,23 +35,32 @@ export default function PublicProfilePage() {
   // Diagnostic Logic: Broad search for existing profiles
   useEffect(() => {
     async function performDiagnostic() {
-      if (!db) return;
+      if (!db || !uid) return;
       
       console.group('🔍 Public Hub Diagnostic');
       console.log('Target UID (from URL):', uid);
+      console.log('Collection:', collections.PROFILES);
+      console.log('Direct Path:', `${collections.PROFILES}/${uid}`);
       
+      if (profileDoc) {
+        console.log('✅ Document Found Directly');
+        console.log('Data:', profileDoc);
+        console.log('isPublic Value:', profileDoc.isPublic);
+      } else if (!profileLoading) {
+        console.warn('❌ Document Not Found at Direct Path');
+      }
+
       try {
-        // 1. Check all profiles for debugging
-        const qAll = query(collection(db, collections.PROFILES), limit(20));
+        // 1. Check all profiles for debugging (will only work if rules allow)
+        const qAll = query(collection(db, collections.PROFILES), limit(10));
         const allDocs = await getDocs(qAll);
         const profileList = allDocs.docs.map(d => ({
           docId: d.id,
           ownerId: d.data().ownerId,
           isPublic: d.data().isPublic,
-          firstName: d.data().firstName,
-          lastName: d.data().lastName
+          firstName: d.data().firstName
         }));
-        console.log('📋 Existing Profiles in Collection:', profileList);
+        console.log('📋 Document IDs in Collection:', profileList);
 
         // 2. Perform fallback search if direct lookup fails
         if (!profileDoc && !profileLoading) {
@@ -67,7 +76,7 @@ export default function PublicProfilePage() {
           }
         }
       } catch (err: any) {
-        console.error('❌ Diagnostic error:', err.message);
+        console.error('❌ Diagnostic query failed (likely rules):', err.message);
       } finally {
         setSearchingFallback(false);
         console.groupEnd();
@@ -108,8 +117,8 @@ export default function PublicProfilePage() {
         </h1>
         <p className="text-muted-foreground max-w-md text-lg leading-relaxed">
           {isPermissionDenied 
-            ? "This professional hub is protected by database rules. If you are the owner, please check your Public Share settings."
-            : "This professional hub is currently private or does not exist. Please contact the owner for access."}
+            ? "This professional hub is protected by database rules. Please check your Public Share settings."
+            : "This professional hub is currently private or does not exist. Enable Public Share to view."}
         </p>
         <div className="mt-8">
           <Button variant="outline" className="border-white/10 text-white h-12 px-8 rounded-xl font-bold" asChild>
