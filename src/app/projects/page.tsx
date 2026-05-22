@@ -20,7 +20,8 @@ import {
   FileText,
   CheckCircle2,
   Upload,
-  X
+  X,
+  Calendar
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -411,71 +412,79 @@ function ProjectGrid({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
       {items.map((proj: any) => (
-        <Card key={proj.id} className="group overflow-hidden border-none bg-card/40 backdrop-blur-md shadow-lg hover:shadow-2xl transition-all duration-300">
-          <CardContent className="p-0">
-            <div className="h-48 bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center border-b border-border/30 relative">
+        <Card key={proj.id} className="group overflow-hidden border-none bg-[#121214] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-[24px]">
+          <CardContent className="p-0 flex flex-col h-full">
+            {/* Visual Cover Header */}
+            <div className="relative aspect-[16/10] overflow-hidden bg-[#1c1c1f]">
               {proj.imageUrl ? (
-                <img src={proj.imageUrl} alt={proj.title} className="w-full h-full object-cover" />
+                <img src={proj.imageUrl} alt={proj.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
               ) : (
-                <Rocket className="h-10 w-10 text-primary opacity-20 group-hover:scale-110 transition-transform" />
-              )}
-              {proj.date && (
-                <div className="absolute top-4 right-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-background/80 backdrop-blur-sm px-2.5 py-1 rounded-md border border-border/50">
-                  {proj.date}
+                <div className="w-full h-full flex items-center justify-center opacity-10">
+                  <Rocket className="h-16 w-16" />
                 </div>
               )}
-            </div>
-            <div className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <h3 className="font-headline text-2xl font-bold group-hover:text-[#7299f0] transition-colors">{proj.title}</h3>
-                  <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{proj.description}</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="text-muted-foreground hover:text-primary h-8 w-8" 
-                    onClick={() => onEdit(proj)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="text-muted-foreground hover:text-destructive h-8 w-8" 
-                    onClick={() => onDelete(proj.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
               
-              <div className="mt-6 pt-4 border-t border-border/20 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  {proj.url && (
-                    <Button variant="outline" size="sm" className="gap-2 text-[11px] h-8 font-bold border-border/50 bg-card/50 rounded-lg" asChild>
-                      <a href={proj.url} target="_blank" rel="noopener noreferrer">
-                        <Globe className="h-3.5 w-3.5 text-primary" /> Live Link
-                      </a>
-                    </Button>
-                  )}
-                  {proj.documentUrl && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="gap-2 text-[11px] h-8 font-bold border-border/50 bg-card/50 rounded-lg"
-                      onClick={() => onPreview(proj.documentUrl, proj.documentName || 'Documentation')}
-                    >
-                      <FileText className="h-3.5 w-3.5 text-accent" /> Documentation
-                    </Button>
-                  )}
-                </div>
-                <div className="text-[10px] font-bold uppercase text-muted-foreground/50 tracking-widest">
-                  {proj.category}
-                </div>
+              {/* Management Controls - Overlay */}
+              <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button 
+                  variant="secondary" 
+                  size="icon" 
+                  className="h-9 w-9 bg-black/60 backdrop-blur-md border-none text-white hover:bg-primary" 
+                  onClick={() => onEdit(proj)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="icon" 
+                  className="h-9 w-9 bg-black/60 backdrop-blur-md border-none text-white hover:bg-destructive" 
+                  onClick={() => onDelete(proj.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Metadata Section - Matching User Image */}
+            <div className="p-8 flex flex-col flex-1 space-y-4">
+              <div className="space-y-2">
+                <h3 className="font-headline text-2xl font-bold leading-tight line-clamp-2">
+                  {proj.title}
+                </h3>
+                
+                {proj.date && (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+                    <Calendar className="h-4 w-4" />
+                    <span>{new Date(proj.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-sm text-gray-400 leading-relaxed line-clamp-3">
+                {proj.description}
+              </p>
+
+              {/* Action Footer */}
+              <div className="pt-4 mt-auto flex items-center gap-3">
+                {proj.url && (
+                  <Button variant="outline" size="sm" className="bg-[#1c1c1f] border-none text-white text-[11px] font-bold h-10 px-4 rounded-xl gap-2 hover:bg-primary transition-colors" asChild>
+                    <a href={proj.url} target="_blank" rel="noopener noreferrer">
+                      <Globe className="h-3.5 w-3.5" /> Live Link
+                    </a>
+                  </Button>
+                )}
+                {proj.documentUrl && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="bg-[#1c1c1f] border-none text-white text-[11px] font-bold h-10 px-4 rounded-xl gap-2 hover:bg-accent transition-colors"
+                    onClick={() => onPreview(proj.documentUrl, proj.documentName || 'Documentation')}
+                  >
+                    <FileText className="h-3.5 w-3.5" /> Documentation
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
