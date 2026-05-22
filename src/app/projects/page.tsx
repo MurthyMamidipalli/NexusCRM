@@ -98,18 +98,21 @@ export default function ProjectsPage() {
       ? updateRecord(db, collections.PROJECTS, editingProj.id, data)
       : createRecord(db, collections.PROJECTS, data, user.uid)
 
-    mutation.catch(async (err) => {
-      const permissionError = new FirestorePermissionError({
-        path: editingProj ? `${collections.PROJECTS}/${editingProj.id}` : collections.PROJECTS,
-        operation: editingProj ? 'update' : 'create',
-      } satisfies SecurityRuleContext);
-      errorEmitter.emit('permission-error', permissionError);
-    })
-
+    // Optimistic Snappy UI
     toast({ title: editingProj ? 'Updated' : 'Created' })
     setIsDialogOpen(false)
     resetForm()
     setLoading(false)
+
+    mutation.catch(async (err) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingProj ? `${collections.PROJECTS}/${editingProj.id}` : collections.PROJECTS,
+        operation: editingProj ? 'update' : 'create',
+        requestResourceData: data,
+        originalError: err
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
   }
 
   const resetForm = () => { setEditingProj(null); setImageFile(''); setDocFile(''); setDocName(''); }

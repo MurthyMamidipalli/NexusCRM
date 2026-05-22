@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect } from 'react'
@@ -89,27 +88,23 @@ export default function ExperiencePage() {
       ? updateRecord(db, collections.EXPERIENCE, editingExp.id, data)
       : createRecord(db, collections.EXPERIENCE, data, user.uid)
 
+    // Snappy UI: Optimistic immediate closure
+    toast({ title: editingExp ? 'Experience Updated' : 'Experience Added' })
+    setIsDialogOpen(false)
+    setEditingExp(null)
+    setProjectLinks([])
+    setLoading(false)
+
     mutation
-      .then(() => {
-        toast({ title: editingExp ? 'Experience Updated' : 'Experience Added' })
-        setIsDialogOpen(false)
-      })
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
           path: editingExp ? `${collections.EXPERIENCE}/${editingExp.id}` : collections.EXPERIENCE,
           operation: editingExp ? 'update' : 'create',
           requestResourceData: data,
+          originalError: err
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       })
-      .finally(() => {
-        setLoading(false)
-      })
-
-    // Optimistic UI close
-    setIsDialogOpen(false)
-    setEditingExp(null)
-    setProjectLinks([])
   }
 
   const handleDelete = (id: string) => {
@@ -119,6 +114,7 @@ export default function ExperiencePage() {
         const permissionError = new FirestorePermissionError({
           path: `${collections.EXPERIENCE}/${id}`,
           operation: 'delete',
+          originalError: err
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       })

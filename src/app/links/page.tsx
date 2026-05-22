@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect } from 'react'
@@ -57,26 +56,28 @@ export default function LinksPage() {
     const data = {
       label: formData.get('label') as string,
       url: formData.get('url') as string,
-      type: formData.get('type') || 'Other',
+      type: 'Other',
     }
 
     const mutation = editingLink 
       ? updateRecord(db, collections.LINKS, editingLink.id, data)
       : createRecord(db, collections.LINKS, data, user.uid)
 
+    // Optimistic Snappy UI Update
+    toast({ title: editingLink ? 'Link Updated' : 'Link Saved' })
+    setIsDialogOpen(false)
+    setEditingLink(null)
+    setLoading(false)
+
     mutation.catch(async (err) => {
       const permissionError = new FirestorePermissionError({
         path: editingLink ? `${collections.LINKS}/${editingLink.id}` : collections.LINKS,
         operation: editingLink ? 'update' : 'create',
         requestResourceData: data,
+        originalError: err
       } satisfies SecurityRuleContext);
       errorEmitter.emit('permission-error', permissionError);
     })
-
-    toast({ title: editingLink ? 'Link Updated' : 'Link Saved' })
-    setIsDialogOpen(false)
-    setEditingLink(null)
-    setLoading(false)
   }
 
   const handleDelete = (id: string) => {
@@ -86,6 +87,7 @@ export default function LinksPage() {
         const permissionError = new FirestorePermissionError({
           path: `${collections.LINKS}/${id}`,
           operation: 'delete',
+          originalError: err
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       })

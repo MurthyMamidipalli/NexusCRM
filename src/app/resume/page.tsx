@@ -31,7 +31,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
-import { format } from 'date-fns'
 
 const MAX_FIRESTORE_SIZE = 1048576; // 1MB
 
@@ -41,7 +40,6 @@ export default function ResumePage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [fileData, setFileData] = useState<string>('')
   const [activeTab, setActiveTab] = useState('PDF')
   const [visibility, setVisibility] = useState<string>("Private")
@@ -90,12 +88,26 @@ export default function ResumePage() {
     if (type === 'file') {
       if (!fileData) { setLoading(false); return; }
       data.fileUrl = fileData;
-      data.fileName = selectedFile?.name || 'resume.pdf';
+      data.fileName = 'resume.pdf';
     } else data.url = formData.get('url') as string;
 
-    createRecord(db, collections.RESUMES, data, user.uid).catch(() => {})
-    toast({ title: 'Resume Stored' });
-    setIsDialogOpen(false); setLoading(false);
+    const mutation = createRecord(db, collections.RESUMES, data, user.uid)
+    
+    // Snappy UI: Optimistic update
+    toast({ title: 'Resume Stored' })
+    setIsDialogOpen(false)
+    setLoading(false)
+    setFileData('')
+
+    mutation.catch(async (err: any) => {
+      const permissionError = new FirestorePermissionError({
+        path: collections.RESUMES,
+        operation: 'create',
+        requestResourceData: data,
+        originalError: err
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
   }
 
   return (
@@ -131,7 +143,17 @@ function ResumeCard({ resume, onDelete, onPreview }: { resume: any, onDelete: an
   return (
     <Card className="relative group border-none bg-[#0f1115] text-white shadow-xl rounded-3xl overflow-hidden">
       <CardContent className="p-8">
-        <div className="flex items-center justify-between mb-4"><Badge variant="outline" className={resume.isPublic ? 'border-green-500/20 text-green-500' : 'border-gray-500/20 text-gray-500'}>{resume.isPublic ? <Globe className="h-3 w-3 mr-1" /> : <Lock className="h-3 w-3 mr-1" />}{resume.visibility || (resume.isPublic ? 'Public' : 'Private')}</Badge><button onClick={() => onDelete(db, collections.RESUMES, resume.id)} className="text-gray-500 hover:text-destructive"><Trash2 className="h-5 w-5" /></button></div>
+        <div className="flex items-center justify-between mb-4"><Badge variant="outline" className={resume.isPublic ? 'border-green-500/20 text-green-500' : 'border-gray-500/20 text-gray-500'}>{resume.isPublic ? <Globe className="h-3 w-3 mr-1" /> : <Lock className="h-3 w-3 mr-1" />}{resume.visibility || (resume.isPublic ? 'Public' : 'Private')}</Badge><button onClick={() => {
+          onDelete(db, collections.RESUMES, resume.id).catch(async (err: any) => {
+            const permissionError = new FirestorePermissionError({
+              path: `${collections.RESUMES}/${resume.id}`,
+              operation: 'delete',
+              originalError: err
+            } satisfies SecurityRuleContext);
+            errorEmitter.emit('permission-error', permissionError);
+          })
+          toast({ title: 'Removed' })
+        }} className="text-gray-500 hover:text-destructive"><Trash2 className="h-5 w-5" /></button></div>
         <div className="flex flex-col gap-6"><div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">{resume.type === 'file' ? <FileText className="text-primary" /> : <Globe className="text-primary" />}</div><div className="space-y-2"><h3 className="text-2xl font-bold truncate">{resume.name}</h3><p className="text-[10px] uppercase font-bold text-gray-500">{resume.type === 'file' ? 'PDF DOCUMENT' : 'EXTERNAL LINK'}</p></div><div className="flex gap-4">{resume.type === 'file' ? <><Button variant="outline" className="flex-1 bg-[#1a1c21] border-none h-12 rounded-xl" onClick={() => onPreview({ url: resume.fileUrl, name: resume.name })}><Eye className="mr-2 h-4 w-4" /> View</Button><Button className="flex-1 bg-primary border-none h-12 rounded-xl" asChild><a href={resume.fileUrl} download><Download className="mr-2 h-4 w-4" /> Download</a></Button></> : <Button className="w-full bg-primary h-12 rounded-xl" asChild><a href={resume.url} target="_blank"><ExternalLink className="mr-2 h-4 w-4" /> Visit CV</a></Button>}</div></div>
       </CardContent>
     </Card>

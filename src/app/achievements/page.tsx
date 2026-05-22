@@ -64,36 +64,33 @@ export default function AchievementsPage() {
       ? updateRecord(db, collections.ACHIEVEMENTS, editingAch.id, data)
       : createRecord(db, collections.ACHIEVEMENTS, data, user.uid)
 
-    mutation.catch((serverError: any) => {
-      if (serverError.code === 'permission-denied') {
-        const permissionError = new FirestorePermissionError({
-          path: editingAch ? `${collections.ACHIEVEMENTS}/${editingAch.id}` : collections.ACHIEVEMENTS,
-          operation: editingAch ? 'update' : 'create',
-          requestResourceData: data,
-          originalError: serverError
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      }
-    })
-
+    // Snappy UI: Immediate Feedback
     toast({ title: editingAch ? 'Achievement Updated' : 'Achievement Recorded' })
     setIsDialogOpen(false)
     setEditingAch(null)
     setLoading(false)
+
+    mutation.catch(async (serverError: any) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingAch ? `${collections.ACHIEVEMENTS}/${editingAch.id}` : collections.ACHIEVEMENTS,
+        operation: editingAch ? 'update' : 'create',
+        requestResourceData: data,
+        originalError: serverError
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
   }
 
   const handleDelete = (id: string) => {
     if (!db) return
     deleteRecord(db, collections.ACHIEVEMENTS, id)
       .catch((err: any) => {
-        if (err.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: `${collections.ACHIEVEMENTS}/${id}`,
-            operation: 'delete',
-            originalError: err
-          } satisfies SecurityRuleContext);
-          errorEmitter.emit('permission-error', permissionError);
-        }
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.ACHIEVEMENTS}/${id}`,
+          operation: 'delete',
+          originalError: err
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
       })
     toast({ title: 'Record Removed' })
   }

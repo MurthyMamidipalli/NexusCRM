@@ -97,29 +97,27 @@ export default function CertificationsPage() {
       ? updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data) 
       : createRecord(db, collections.CERTIFICATIONS, data, user.uid)
 
-    mutation
-      .then(() => {
-        toast({ title: editingCert ? 'Credential Updated' : 'Record Created' })
-        setIsDialogOpen(false)
-        resetForm()
-      })
-      .catch(async (serverError: any) => {
-        const permissionError = new FirestorePermissionError({
-          path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
-          operation: editingCert ? 'update' : 'create',
-          requestResourceData: data,
-          originalError: serverError
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      })
-      .finally(() => setLoading(false))
+    // Snappy UI: Immediate feedback
+    toast({ title: editingCert ? 'Credential Updated' : 'Record Created' })
+    setIsDialogOpen(false)
+    resetForm()
+    setLoading(false)
+
+    mutation.catch(async (serverError: any) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
+        operation: editingCert ? 'update' : 'create',
+        requestResourceData: data,
+        originalError: serverError
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
   }
 
   const resetForm = () => {
     setEditingCert(null)
     setDocumentData('')
     setVisibility("Private")
-    // Note: Category reset happens in Add trigger to match current tab
   }
 
   const handleDelete = (id: string) => {
@@ -150,7 +148,6 @@ export default function CertificationsPage() {
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => {
               resetForm();
-              // Default to current logical context
               setCategory("Course Certificate");
             }}>
               <Plus className="h-4 w-4" />

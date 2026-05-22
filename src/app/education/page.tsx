@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,11 @@ export default function EducationPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingEdu, setEditingEdu] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const eduQuery = useMemo(() => {
     if (!db || !user) return null
@@ -65,20 +70,21 @@ export default function EducationPage() {
       ? updateRecord(db, collections.EDUCATION, editingEdu.id, data)
       : createRecord(db, collections.EDUCATION, data, user.uid)
 
+    // Snappy UI: Optimistic immediate feedback
+    toast({ title: editingEdu ? 'Education Updated' : 'Education Added' })
+    setIsDialogOpen(false)
+    setEditingEdu(null)
+    setLoading(false)
+
     mutation
-      .then(() => toast({ title: editingEdu ? 'Education Updated' : 'Education Added' }))
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
           path: editingEdu ? `${collections.EDUCATION}/${editingEdu.id}` : collections.EDUCATION,
           operation: editingEdu ? 'update' : 'create',
           requestResourceData: data,
+          originalError: err
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
-      })
-      .finally(() => {
-        setLoading(false)
-        setIsDialogOpen(false)
-        setEditingEdu(null)
       })
   }
 
@@ -89,6 +95,7 @@ export default function EducationPage() {
         const permissionError = new FirestorePermissionError({
           path: `${collections.EDUCATION}/${id}`,
           operation: 'delete',
+          originalError: err
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       });
@@ -200,7 +207,7 @@ export default function EducationPage() {
         </Alert>
       )}
 
-      {eduLoading ? (
+      {!mounted || eduLoading ? (
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>

@@ -28,6 +28,8 @@ import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function DocumentsPage() {
   const db = useFirestore()
@@ -35,10 +37,8 @@ export default function DocumentsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingDoc, setEditingDoc] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [categoryFilter, setCategoryFilter] = useState('All Documents')
   const [visibility, setVisibility] = useState<string>("Private")
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [fileData, setFileData] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -78,11 +78,29 @@ export default function DocumentsPage() {
       visibility: visibility,
       isPublic: visibility === 'Public',
       fileUrl: fileData || editingDoc?.fileUrl || '',
-      fileName: selectedFile?.name || editingDoc?.fileName || '',
+      fileName: editingDoc?.fileName || 'document.pdf',
       ownerId: user.uid
     }
-    const mutation = editingDoc ? updateRecord(db, collections.DOCUMENTS, editingDoc.id, data) : createRecord(db, collections.DOCUMENTS, data, user.uid)
-    mutation.then(() => { toast({ title: 'Saved' }); setIsDialogOpen(false); reset(); }).finally(() => setLoading(false))
+    
+    const mutation = editingDoc 
+      ? updateRecord(db, collections.DOCUMENTS, editingDoc.id, data) 
+      : createRecord(db, collections.DOCUMENTS, data, user.uid)
+    
+    // Snappy UI Optimization
+    toast({ title: 'Saved' })
+    setIsDialogOpen(false)
+    reset()
+    setLoading(false)
+
+    mutation.catch(async (err: any) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingDoc ? `${collections.DOCUMENTS}/${editingDoc.id}` : collections.DOCUMENTS,
+        operation: editingDoc ? 'update' : 'create',
+        requestResourceData: data,
+        originalError: err
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
   }
 
   const reset = () => { setEditingDoc(null); setFileData(''); setVisibility("Private"); }
@@ -114,7 +132,17 @@ export default function DocumentsPage() {
                 <div className="h-32 bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center relative">
                   <Badge variant="outline" className="absolute top-4 left-4 bg-black/40">{doc.isPublic ? '🌍 Public' : '🔒 Private'}</Badge>
                   <FileText className="h-12 w-12 text-primary opacity-20" />
-                  <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" onClick={() => { setEditingDoc(doc); setIsDialogOpen(true); setVisibility(doc.visibility || "Private"); }} className="bg-background/80"><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => deleteRecord(db, collections.DOCUMENTS, doc.id)} className="bg-background/80 text-destructive"><Trash2 className="h-4 w-4" /></Button></div>
+                  <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" onClick={() => { setEditingDoc(doc); setIsDialogOpen(true); setVisibility(doc.visibility || "Private"); }} className="bg-background/80"><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => {
+                    deleteRecord(db, collections.DOCUMENTS, doc.id).catch(async (err: any) => {
+                      const permissionError = new FirestorePermissionError({
+                        path: `${collections.DOCUMENTS}/${doc.id}`,
+                        operation: 'delete',
+                        originalError: err
+                      } satisfies SecurityRuleContext);
+                      errorEmitter.emit('permission-error', permissionError);
+                    })
+                    toast({ title: 'Removed' })
+                  }} className="bg-background/80 text-destructive"><Trash2 className="h-4 w-4" /></Button></div>
                 </div>
                 <div className="p-5"><h4 className="font-bold truncate">{doc.name}</h4><p className="text-[10px] text-muted-foreground uppercase mt-1">{doc.category}</p><div className="flex justify-between items-center mt-4 border-t pt-4"><Badge variant="outline">{doc.status}</Badge><div className="flex gap-2"><Button variant="outline" size="icon" className="h-7 w-7 rounded-full" asChild><a href={doc.fileUrl} download><Download className="h-3.5 w-3.5" /></a></Button><Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={() => setPreviewDoc({ url: doc.fileUrl, name: doc.name })}><Eye className="h-3.5 w-3.5" /></Button></div></div></div>
               </CardContent>
