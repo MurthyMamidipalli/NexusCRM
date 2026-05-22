@@ -5,7 +5,7 @@ import React, { useMemo, useEffect, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Globe, Copy, Share2, Loader2, Eye, ShieldCheck, Lock, AlertTriangle, Rocket } from 'lucide-react'
+import { Globe, Copy, Share2, Loader2, Eye, ShieldCheck, Lock, CheckCircle2 } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { useUser, useFirestore, useDoc } from '@/firebase'
@@ -103,17 +103,13 @@ export default function PublicSharePage() {
 
               {settings.publicProfile ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
-                  <div className="p-5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex gap-4">
-                    <AlertTriangle className="h-6 w-6 text-yellow-500 shrink-0 mt-0.5" />
+                  <div className="p-5 rounded-xl bg-primary/10 border border-primary/20 flex gap-4">
+                    <CheckCircle2 className="h-6 w-6 text-primary shrink-0 mt-0.5" />
                     <div className="space-y-2">
-                      <h4 className="text-sm font-bold text-yellow-500 uppercase tracking-wider">Cloud Environment Restriction</h4>
+                      <h4 className="text-sm font-bold text-primary uppercase tracking-wider">Public Profile</h4>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        In this development workstation, your link is protected by a secondary security layer. It will work perfectly for you, but others will only be able to see it once you <strong>Deploy to Production</strong>.
+                        Your professional profile is publicly accessible through the generated URL. Share it with recruiters, clients, and networking contacts.
                       </p>
-                      <div className="flex items-center gap-2 pt-2">
-                        <Rocket className="h-3 w-3 text-primary" />
-                        <p className="text-[10px] font-bold text-primary uppercase">Production URL will be fully public</p>
-                      </div>
                     </div>
                   </div>
 
