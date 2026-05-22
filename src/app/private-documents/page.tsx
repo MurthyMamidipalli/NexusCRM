@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
@@ -78,7 +79,6 @@ export default function PrivateDocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   
-  // Controlled form states
   const [docName, setDocName] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('Other Documents')
   const [selectedTag, setSelectedTag] = useState('My self')
@@ -126,7 +126,6 @@ export default function PrivateDocumentsPage() {
         return
       }
       setSelectedFile(file)
-      console.log("File selected:", file.name)
       if (!docName) setDocName(file.name.split('.')[0])
     }
   }
@@ -135,13 +134,12 @@ export default function PrivateDocumentsPage() {
     e.preventDefault()
     if (!user || !db || !storage) return
     if (!editingDoc && !selectedFile) {
-      toast({ variant: 'destructive', title: 'File Required', description: 'Please select a document to upload.' })
+      toast({ variant: 'destructive', title: 'File Required', description: 'Select a file to upload.' })
       return
     }
 
     setLoading(true)
     setUploadProgress(0)
-    console.log("--- STARTING UPLOAD PIPELINE ---")
 
     try {
       let fileUrl = editingDoc?.fileUrl || ''
@@ -152,43 +150,21 @@ export default function PrivateDocumentsPage() {
       if (selectedFile) {
         const storagePath = `privateDocuments/${user.uid}/${Date.now()}_${selectedFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`
         const storageRef = ref(storage, storagePath)
-        
-        console.log("Upload started")
         const uploadTask = uploadBytesResumable(storageRef, selectedFile)
 
-        const uploadResult: any = await new Promise((resolve, reject) => {
-          const timeoutId = setTimeout(() => {
-            uploadTask.cancel()
-            reject(new Error("Upload timed out after 60 seconds."))
-          }, 60000)
-
+        await new Promise((resolve, reject) => {
           uploadTask.on('state_changed', 
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
               setUploadProgress(progress)
-              console.log("Upload progress", progress.toFixed(0) + "%")
             },
-            (error) => {
-              clearTimeout(timeoutId)
-              console.error("Storage upload failed", error)
-              reject(error)
-            },
-            async () => {
-              clearTimeout(timeoutId)
-              console.log("Upload completed successfully")
-              try {
-                const url = await getDownloadURL(uploadTask.snapshot.ref)
-                console.log("Download URL generated")
-                resolve({ url, fullPath: uploadTask.snapshot.ref.fullPath })
-              } catch (err) {
-                reject(err)
-              }
-            }
+            (error) => reject(error),
+            () => resolve(null)
           )
         })
 
-        fileUrl = uploadResult.url
-        filePath = uploadResult.fullPath
+        fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
+        filePath = uploadTask.snapshot.ref.fullPath
         fileType = selectedFile.type
         fileSize = selectedFile.size
       }
@@ -198,40 +174,38 @@ export default function PrivateDocumentsPage() {
         documentName: docName,
         category: selectedCategory,
         description: description,
-        fileUrl: fileUrl,
-        filePath: filePath,
-        fileType: fileType,
-        fileSize: fileSize,
-        issueDate: issueDate,
-        expiryDate: expiryDate,
+        fileUrl,
+        filePath,
+        fileType,
+        fileSize,
+        issueDate,
+        expiryDate,
         tags: [selectedTag],
       }
 
-      if (editingDoc) {
-        await updateRecord(db, collections.PRIVATE_DOCUMENTS, editingDoc.id, data)
-        console.log("Firestore document updated")
-        toast({ title: 'Metadata Updated' })
-      } else {
-        await createRecord(db, collections.PRIVATE_DOCUMENTS, data, user.uid)
-        console.log("Firestore document created")
-        toast({ title: 'Document Secured' })
-      }
+      // NON-BLOCKING MUTATION: Start the database save and close the UI immediately
+      const mutation = editingDoc
+        ? updateRecord(db, collections.PRIVATE_DOCUMENTS, editingDoc.id, data)
+        : createRecord(db, collections.PRIVATE_DOCUMENTS, data, user.uid);
+
+      toast({ title: editingDoc ? 'Details Updated' : 'Document Secured' });
+      setIsDialogOpen(false);
+      resetForm();
+
+      mutation.catch(async (err: any) => {
+        const permissionError = new FirestorePermissionError({
+          path: editingDoc ? `${collections.PRIVATE_DOCUMENTS}/${editingDoc.id}` : collections.PRIVATE_DOCUMENTS,
+          operation: 'write',
+          requestResourceData: data,
+          originalError: err
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      });
       
-      setIsDialogOpen(false)
-      resetForm()
     } catch (err: any) {
-      console.error("Pipeline failure", err)
-      const permissionError = new FirestorePermissionError({
-        path: editingDoc ? `${collections.PRIVATE_DOCUMENTS}/${editingDoc.id}` : collections.PRIVATE_DOCUMENTS,
-        operation: editingDoc ? 'update' : 'create',
-        requestResourceData: { documentName: docName },
-        originalError: err
-      } satisfies SecurityRuleContext);
-      
-      errorEmitter.emit('permission-error', permissionError);
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
     } finally {
       setLoading(false)
-      console.log("--- UPLOAD PIPELINE FINISHED ---")
     }
   }
 
@@ -264,21 +238,22 @@ export default function PrivateDocumentsPage() {
     if (!db || !storage) return
     if (!window.confirm('Permanently delete this document from the secure vault?')) return
     
-    try {
-      if (docItem.filePath) {
-        const storageRef = ref(storage, docItem.filePath)
-        await deleteObject(storageRef).catch(e => console.warn('Storage deletion failed:', e))
-      }
-      await deleteRecord(db, collections.PRIVATE_DOCUMENTS, docItem.id)
-      toast({ title: 'Document Removed' })
-    } catch (err: any) {
-      const permissionError = new FirestorePermissionError({
-        path: `${collections.PRIVATE_DOCUMENTS}/${docItem.id}`,
-        operation: 'delete',
-        originalError: err
-      } satisfies SecurityRuleContext);
-      errorEmitter.emit('permission-error', permissionError);
+    deleteRecord(db, collections.PRIVATE_DOCUMENTS, docItem.id)
+      .catch(async (err: any) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.PRIVATE_DOCUMENTS}/${docItem.id}`,
+          operation: 'delete',
+          originalError: err
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      });
+
+    if (docItem.filePath) {
+      const storageRef = ref(storage, docItem.filePath)
+      deleteObject(storageRef).catch(e => console.warn('Cloud cleanup deferred:', e))
     }
+    
+    toast({ title: 'Document Removed' })
   }
 
   const getCategoryIcon = (category: string) => {
@@ -313,7 +288,7 @@ export default function PrivateDocumentsPage() {
                 {editingDoc ? 'Update Metadata' : 'Secure Vault Upload'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                {editingDoc ? 'Modify document details in your private registry.' : 'Files are stored on dedicated secure cloud infrastructure.'}
+                Files are strictly private and stored on dedicated cloud infrastructure.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSave} className="p-8 pt-6 space-y-6 max-h-[80vh] overflow-y-auto">
@@ -373,14 +348,13 @@ export default function PrivateDocumentsPage() {
                 ) : editingDoc?.fileUrl ? (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <FileText className="text-primary/40 h-12 w-12" />
-                    <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Update Cloud Asset?</span>
-                    <span className="text-[10px] text-gray-600">Selecting a new file replaces the old one.</span>
+                    <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Update Asset?</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <Upload className="text-gray-500 h-12 w-12 mb-2" />
                     <span className="text-xs text-gray-500">Select Document (PDF/Image)</span>
-                    <span className="text-[10px] text-gray-600">Strictly private, encrypted at rest.</span>
+                    <span className="text-[10px] text-gray-600">Strictly private. Max 500MB.</span>
                   </div>
                 )}
               </div>
@@ -390,12 +364,12 @@ export default function PrivateDocumentsPage() {
                   {loading ? (
                     <div className="flex items-center gap-3">
                       <RefreshCw className="animate-spin h-4 w-4" />
-                      <span>{uploadProgress > 0 ? `Uploading ${uploadProgress.toFixed(0)}%` : 'Initializing...'}</span>
+                      <span>{uploadProgress > 0 ? `Syncing ${uploadProgress.toFixed(0)}%` : 'Syncing...'}</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <ShieldCheck className="h-4 w-4" />
-                      <span>{editingDoc ? 'Save Metadata Changes' : 'Securly Upload to Vault'}</span>
+                      <span>{editingDoc ? 'Save Metadata' : 'Securely Upload to Vault'}</span>
                     </div>
                   )}
                 </Button>
@@ -450,7 +424,7 @@ export default function PrivateDocumentsPage() {
           <ShieldCheck className="h-16 w-16 opacity-20 text-primary" />
           <div className="text-center space-y-2">
             <p className="font-headline text-xl font-bold text-foreground">Secure Vault Empty</p>
-            <p className="text-sm max-w-xs mx-auto">Digitize and secure your important documents here. They are only visible to you.</p>
+            <p className="text-sm max-w-xs mx-auto">Digitize and secure your important documents here. They are strictly private.</p>
           </div>
           <Button onClick={() => setIsDialogOpen(true)} variant="outline" className="gap-2 rounded-xl px-8 h-12">Initialize First Upload</Button>
         </div>

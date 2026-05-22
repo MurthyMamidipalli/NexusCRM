@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useRef, useEffect } from 'react'
@@ -121,22 +122,27 @@ export default function CertificationsPage() {
         ownerId: user.uid
       }
 
-      if (editingCert) {
-        await updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
-      } else {
-        await createRecord(db, collections.CERTIFICATIONS, data, user.uid)
-      }
+      // NON-BLOCKING: Save to Firestore instantly in background
+      const mutation = editingCert
+        ? updateRecord(db, collections.CERTIFICATIONS, editingCert.id, data)
+        : createRecord(db, collections.CERTIFICATIONS, data, user.uid);
 
       toast({ title: editingCert ? 'Updated' : 'Saved' })
       setIsDialogOpen(false)
       resetForm()
+
+      mutation.catch(async (err: any) => {
+        const permissionError = new FirestorePermissionError({
+          path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
+          operation: 'write',
+          requestResourceData: data,
+          originalError: err
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+
     } catch (err: any) {
-      const permissionError = new FirestorePermissionError({
-        path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
-        operation: editingCert ? 'update' : 'create',
-        originalError: err
-      } satisfies SecurityRuleContext);
-      errorEmitter.emit('permission-error', permissionError);
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
     } finally {
       setLoading(false)
     }
@@ -150,16 +156,15 @@ export default function CertificationsPage() {
 
   const handleDelete = async (cert: any) => {
     if (!db || !storage) return
-    try {
-      if (cert.filePath) {
-        const storageRef = ref(storage, cert.filePath)
-        await deleteObject(storageRef).catch(console.warn)
-      }
-      await deleteRecord(db, collections.CERTIFICATIONS, cert.id)
-      toast({ title: 'Record Removed' })
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete.' })
+    
+    deleteRecord(db, collections.CERTIFICATIONS, cert.id).catch(console.error);
+    
+    if (cert.filePath) {
+      const storageRef = ref(storage, cert.filePath)
+      deleteObject(storageRef).catch(console.warn)
     }
+    
+    toast({ title: 'Record Removed' })
   }
 
   return (
