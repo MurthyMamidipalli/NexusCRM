@@ -2,85 +2,43 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper: Is the current user the owner of the document?
+    // Helper: Basic Authentication
+    function auth() {
+      return request.auth != null;
+    }
+
+    // Helper: Ownership check
     function isOwner(data) {
-      return request.auth != null && data != null && request.auth.uid == data.ownerId;
+      return auth() && data != null && data.ownerId == request.auth.uid;
     }
 
-    // Helper: Is the profile explicitly marked as public?
-    function isPublicProfile(ownerId) {
-      let path = /databases/$(database)/documents/profiles/$(ownerId);
-      return exists(path) && get(path).data.isPublic == true;
-    }
-
-    // Profiles: Anyone can view a specific profile, but only the owner can list or write.
+    // Profiles: Anyone can view a specific profile, only owner can list or write.
     match /profiles/{uid} {
       allow get: if true;
-      allow list: if request.auth != null && request.auth.uid == uid;
-      allow write: if request.auth != null && request.auth.uid == uid;
+      allow list, write: if auth() && request.auth.uid == uid;
     }
 
-    // Public Collections: Owner has full access, visitors have READ access if the profile is public.
-    match /skills/{id} {
-      allow read: if isOwner(resource.data) || isPublicProfile(resource.data.ownerId);
-      allow write: if isOwner(request.resource.data) || isOwner(resource.data);
-    }
-    match /experience/{id} {
-      allow read: if isOwner(resource.data) || isPublicProfile(resource.data.ownerId);
-      allow write: if isOwner(request.resource.data) || isOwner(resource.data);
-    }
-    match /education/{id} {
-      allow read: if isOwner(resource.data) || isPublicProfile(resource.data.ownerId);
-      allow write: if isOwner(request.resource.data) || isOwner(resource.data);
-    }
-    match /projects/{id} {
-      allow read: if isOwner(resource.data) || isPublicProfile(resource.data.ownerId);
-      allow write: if isOwner(request.resource.data) || isOwner(resource.data);
-    }
-    match /achievements/{id} {
-      allow read: if isOwner(resource.data) || isPublicProfile(resource.data.ownerId);
-      allow write: if isOwner(request.resource.data) || isOwner(resource.data);
-    }
-    match /certifications/{id} {
-      allow read: if isOwner(resource.data) || (isPublicProfile(resource.data.ownerId) && resource.data.isPublic == true);
-      allow write: if isOwner(request.resource.data) || isOwner(resource.data);
-    }
-    match /links/{id} {
-      allow read: if isOwner(resource.data) || isPublicProfile(resource.data.ownerId);
-      allow write: if isOwner(request.resource.data) || isOwner(resource.data);
-    }
-    match /resumes/{id} {
-      allow read: if isOwner(resource.data) || (isPublicProfile(resource.data.ownerId) && resource.data.isPublic == true);
-      allow write: if isOwner(request.resource.data) || isOwner(resource.data);
-    }
-    match /testimonials/{id} {
-      allow read: if isOwner(resource.data) || isPublicProfile(resource.data.ownerId);
-      allow write: if isOwner(request.resource.data) || isOwner(resource.data);
+    // Shared collections with item-level visibility
+    // Logic: Owner has full access. Visitors can READ only if isPublic is true.
+    match /{collection}/{id} {
+      allow read: if isOwner(resource.data);
+      allow read: if (collection in ['skills', 'experience', 'education', 'projects', 'achievements', 'certifications', 'resumes', 'documents', 'links', 'testimonials'])
+                   && resource.data.isPublic == true;
+      
+      // Write access strictly for owners
+      allow create: if auth() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data);
     }
 
-    // Vault Collections: Owner-only by default, public-read if specifically enabled per document.
-    match /documents/{id} {
-      allow read: if isOwner(resource.data) || (isPublicProfile(resource.data.ownerId) && resource.data.isPublic == true);
-      allow write: if isOwner(resource.data) || isOwner(request.resource.data);
-    }
-
-    // Strictly Private Vault Collections: Strictly owner-only access.
-    match /contacts/{id} {
-      allow read, write: if isOwner(resource.data) || isOwner(request.resource.data);
-    }
-    match /tasks/{id} {
-      allow read, write: if isOwner(resource.data) || isOwner(request.resource.data);
-    }
-    match /meetings/{id} {
-      allow read, write: if isOwner(resource.data) || isOwner(request.resource.data);
-    }
-    match /leads/{id} {
-      allow read, write: if isOwner(resource.data) || isOwner(request.resource.data);
-    }
-
-    // Drafts: Specialized ownership based on document ID prefix
+    // Strictly private collections
+    match /contacts/{id} { allow read, write: if isOwner(resource.data) || (auth() && request.resource.data.ownerId == request.auth.uid); }
+    match /leads/{id} { allow read, write: if isOwner(resource.data) || (auth() && request.resource.data.ownerId == request.auth.uid); }
+    match /tasks/{id} { allow read, write: if isOwner(resource.data) || (auth() && request.resource.data.ownerId == request.auth.uid); }
+    match /meetings/{id} { allow read, write: if isOwner(resource.data) || (auth() && request.resource.data.ownerId == request.auth.uid); }
+    
+    // Drafts
     match /drafts/{id} {
-      allow read, write: if request.auth != null && id.startsWith('lead-draft-' + request.auth.uid);
+      allow read, write: if auth() && id.startsWith('lead-draft-' + request.auth.uid);
     }
   }
 }

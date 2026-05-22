@@ -98,7 +98,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
               </Button>
               <div className="flex items-center gap-3 pl-2 border-l border-border/50">
                 <div className="flex flex-col items-end hidden sm:flex">
-                  {loading || !mounted ? (
+                  {!mounted ? (
                     <div className="space-y-1">
                       <div className="h-3 w-20 bg-muted animate-pulse rounded" />
                       <div className="h-2 w-24 bg-muted animate-pulse rounded" />

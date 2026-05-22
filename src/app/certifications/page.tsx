@@ -42,7 +42,6 @@ export default function CertificationsPage() {
   const [editingCert, setEditingCert] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   
-  // Explicitly manage form state for consistency
   const [category, setCategory] = useState<string>("Course Certificate")
   const [visibility, setVisibility] = useState<string>("Private")
   const [documentData, setDocumentData] = useState<string>('')
