@@ -5,6 +5,7 @@ export type SecurityRuleContext = {
   path: string;
   operation: 'get' | 'list' | 'create' | 'update' | 'delete' | 'write';
   requestResourceData?: any;
+  originalError?: any;
 };
 
 /**
@@ -15,7 +16,8 @@ export class FirestorePermissionError extends Error {
   context: SecurityRuleContext;
 
   constructor(context: SecurityRuleContext) {
-    const message = `Firestore Permission Denied: ${context.operation} at ${context.path}`;
+    const originalMsg = context.originalError?.message || '';
+    const message = `Firestore Permission Denied: ${context.operation} at ${context.path}. ${originalMsg}`;
     super(message);
     this.name = 'FirestorePermissionError';
     this.context = context;
@@ -24,8 +26,9 @@ export class FirestorePermissionError extends Error {
     console.group('🔥 Firestore Security Rule Violation');
     console.error('Operation:', context.operation);
     console.error('Path:', context.path);
+    console.error('Original Error:', context.originalError);
     if (context.requestResourceData) {
-      console.error('Data:', context.requestResourceData);
+      console.error('Payload:', context.requestResourceData);
     }
     console.groupEnd();
   }

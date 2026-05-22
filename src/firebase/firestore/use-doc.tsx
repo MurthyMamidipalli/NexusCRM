@@ -39,11 +39,12 @@ export function useDoc<T = DocumentData>(
         setLoading(false);
       },
       async (err) => {
-        // Emit the error unless silent mode is requested
-        if (!options?.silent) {
+        // ONLY emit a permission error if the code matches.
+        if (!options?.silent && err.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
             path: ref.path,
             operation: 'get',
+            originalError: err
           } satisfies SecurityRuleContext);
           errorEmitter.emit('permission-error', permissionError);
         }

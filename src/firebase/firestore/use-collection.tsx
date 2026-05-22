@@ -43,11 +43,13 @@ export function useCollection<T = DocumentData>(
         setLoading(false);
       },
       async (err) => {
-        // Emit the error unless silent mode is requested
-        if (!options?.silent) {
+        // ONLY emit a permission error if the code matches. 
+        // Other errors (like missing indexes) should be handled by the component.
+        if (!options?.silent && err.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
-            path: (query as any)._query?.path?.toString() || 'collection',
+            path: 'collection_query',
             operation: 'list',
+            originalError: err
           } satisfies SecurityRuleContext);
           errorEmitter.emit('permission-error', permissionError);
         }

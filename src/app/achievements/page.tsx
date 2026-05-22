@@ -35,7 +35,6 @@ export default function AchievementsPage() {
 
   const { data: rawAchievements, loading: achLoading } = useCollection(achQuery)
 
-  // In-memory sorting for index resilience
   const achievements = useMemo(() => {
     if (!rawAchievements) return []
     return [...rawAchievements].sort((a: any, b: any) => {
@@ -66,13 +65,16 @@ export default function AchievementsPage() {
       ? updateRecord(db, collections.ACHIEVEMENTS, editingAch.id, data)
       : createRecord(db, collections.ACHIEVEMENTS, data, user.uid)
 
-    mutation.catch(async (serverError) => {
-      const permissionError = new FirestorePermissionError({
-        path: editingAch ? `${collections.ACHIEVEMENTS}/${editingAch.id}` : collections.ACHIEVEMENTS,
-        operation: editingAch ? 'update' : 'create',
-        requestResourceData: data,
-      } satisfies SecurityRuleContext);
-      errorEmitter.emit('permission-error', permissionError);
+    mutation.catch((serverError: any) => {
+      if (serverError.code === 'permission-denied') {
+        const permissionError = new FirestorePermissionError({
+          path: editingAch ? `${collections.ACHIEVEMENTS}/${editingAch.id}` : collections.ACHIEVEMENTS,
+          operation: editingAch ? 'update' : 'create',
+          requestResourceData: data,
+          originalError: serverError
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      }
     })
 
     toast({ title: editingAch ? 'Achievement Updated' : 'Achievement Recorded' })
@@ -84,12 +86,15 @@ export default function AchievementsPage() {
   const handleDelete = (id: string) => {
     if (!db) return
     deleteRecord(db, collections.ACHIEVEMENTS, id)
-      .catch(async (err) => {
-        const permissionError = new FirestorePermissionError({
-          path: `${collections.ACHIEVEMENTS}/${id}`,
-          operation: 'delete',
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
+      .catch((err: any) => {
+        if (err.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: `${collections.ACHIEVEMENTS}/${id}`,
+            operation: 'delete',
+            originalError: err
+          } satisfies SecurityRuleContext);
+          errorEmitter.emit('permission-error', permissionError);
+        }
       })
     toast({ title: 'Record Removed' })
   }
