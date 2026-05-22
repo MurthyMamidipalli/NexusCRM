@@ -24,7 +24,8 @@ import {
   Briefcase,
   AlertCircle,
   X,
-  Plus
+  Plus,
+  Users
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -52,6 +53,13 @@ const CATEGORIES = [
   "Other Documents"
 ]
 
+const TAG_OPTIONS = [
+  "My self",
+  "Family",
+  "Work",
+  "Other"
+]
+
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
 export default function PrivateDocumentsPage() {
@@ -66,6 +74,7 @@ export default function PrivateDocumentsPage() {
   
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedTag, setSelectedTag] = useState<string>("My self")
 
   const docsQuery = useMemo(() => {
     if (!db || !user) return null
@@ -106,7 +115,13 @@ export default function PrivateDocumentsPage() {
 
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db || !storage || !selectedFile) return
+    if (!user || !db || !storage) return
+    
+    if (!selectedFile) {
+      toast({ variant: 'destructive', title: 'Missing File', description: 'Please select a document to upload.' })
+      return
+    }
+
     setLoading(true)
 
     const formData = new FormData(e.currentTarget)
@@ -125,7 +140,7 @@ export default function PrivateDocumentsPage() {
         description: formData.get('description') as string,
         issueDate: formData.get('issueDate') as string,
         expiryDate: formData.get('expiryDate') as string,
-        tags: (formData.get('tags') as string).split(',').map(t => t.trim()).filter(t => t),
+        tags: [selectedTag],
         fileUrl: fileUrl,
         filePath: filePath,
         ownerId: user.uid
@@ -135,7 +150,7 @@ export default function PrivateDocumentsPage() {
       
       toast({ title: 'Document Secured', description: 'Encrypted and stored in the vault.' })
       setIsDialogOpen(false)
-      setSelectedFile(null)
+      resetForm()
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Upload Failed', description: err.message })
     } finally {
@@ -143,12 +158,20 @@ export default function PrivateDocumentsPage() {
     }
   }
 
+  const resetForm = () => {
+    setSelectedFile(null)
+    setSelectedTag("My self")
+    setLoading(false)
+  }
+
   const handleDelete = async (doc: any) => {
     if (!db || !storage || !confirm('Are you sure you want to permanently delete this document?')) return
     
     try {
-      const storageRef = ref(storage, doc.filePath)
-      await deleteObject(storageRef).catch(console.warn)
+      if (doc.filePath) {
+        const storageRef = ref(storage, doc.filePath)
+        await deleteObject(storageRef).catch(console.warn)
+      }
       await deleteRecord(db, collections.PRIVATE_DOCUMENTS, doc.id)
       toast({ title: 'Document Removed' })
     } catch (err: any) {
@@ -176,10 +199,10 @@ export default function PrivateDocumentsPage() {
           </h1>
           <p className="text-muted-foreground">Secure, encrypted storage (Up to 500MB per file).</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o) setSelectedFile(null); }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o) resetForm(); }}>
           <DialogTrigger asChild>
             <Button className="gap-2 bg-primary shadow-lg shadow-primary/20 h-12 px-6 rounded-xl">
-              <Upload className="h-4 w-4" /> Add Document
+              <Plus className="h-4 w-4" /> Add Document
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden">
@@ -206,19 +229,26 @@ export default function PrivateDocumentsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Issue Date (Optional)</Label>
-                  <Input name="issueDate" type="date" className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark]" />
+                  <Label>Tag (Owner)</Label>
+                  <Select value={selectedTag} onValueChange={setSelectedTag}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                      {TAG_OPTIONS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Expiry Date (Optional)</Label>
-                  <Input name="expiryDate" type="date" className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark]" />
+                  <Label>Issue Date (Optional)</Label>
+                  <Input name="issueDate" type="date" className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark]" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Tags (Comma separated)</Label>
-                  <Input name="tags" placeholder="important, personal" className="bg-[#1c1c1f] border-none h-12 rounded-xl" />
+                  <Label>Expiry Date (Optional)</Label>
+                  <Input name="expiryDate" type="date" className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark]" />
                 </div>
               </div>
 
@@ -231,7 +261,12 @@ export default function PrivateDocumentsPage() {
                 className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
                 onClick={() => fileInputRef.current?.click()}
               >
-                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} required />
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  onChange={handleFileChange} 
+                />
                 {selectedFile ? (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <ShieldCheck className="text-primary h-12 w-12" />
@@ -247,7 +282,8 @@ export default function PrivateDocumentsPage() {
 
               <DialogFooter className="pb-4">
                 <Button type="submit" disabled={loading} className="w-full h-12 bg-primary hover:bg-primary/90 font-bold rounded-xl border-none">
-                  {loading ? <Loader2 className="animate-spin h-4 w-4" /> : 'Securely Upload'}
+                  {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                  Securely Upload
                 </Button>
               </DialogFooter>
             </form>
@@ -311,8 +347,8 @@ export default function PrivateDocumentsPage() {
 
                   <div className="flex flex-wrap gap-1.5">
                     {doc.tags?.map((tag: string) => (
-                      <Badge key={tag} variant="secondary" className="text-[9px] px-1.5 h-4 bg-primary/5 text-primary border-none">
-                        <Tag className="h-2 w-2 mr-1" /> {tag}
+                      <Badge key={tag} variant="secondary" className="text-[9px] px-2 h-5 bg-primary/10 text-primary border-none font-bold">
+                        <Users className="h-2.5 w-2.5 mr-1" /> {tag}
                       </Badge>
                     ))}
                   </div>

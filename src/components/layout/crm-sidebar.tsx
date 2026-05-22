@@ -1,6 +1,6 @@
 "use client"
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
@@ -63,6 +63,11 @@ export function CRMSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const auth = useAuth()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleLogout = async () => {
     try {
@@ -71,6 +76,22 @@ export function CRMSidebar() {
     } catch (error) {
       console.error('Logout failed:', error)
     }
+  }
+
+  if (!mounted) {
+    return (
+      <Sidebar className="border-r bg-card">
+        <SidebarHeader className="p-4 mb-2">
+          <div className="flex items-center gap-2 px-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shrink-0">
+              <Zap className="h-5 w-5 fill-current" />
+            </div>
+            <span className="font-headline text-xl font-bold tracking-tight text-foreground">NexusCRM</span>
+          </div>
+        </SidebarHeader>
+        <SidebarContent />
+      </Sidebar>
+    )
   }
 
   return (
@@ -123,6 +144,7 @@ export function CRMSidebar() {
             <SidebarMenuButton 
               onClick={handleLogout}
               className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              suppressHydrationWarning
             >
               <LogOut className="h-4 w-4" />
               <span className="text-xs font-medium">Logout</span>
