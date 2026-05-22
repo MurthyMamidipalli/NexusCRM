@@ -28,7 +28,7 @@ import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -191,6 +191,7 @@ export default function DocumentsPage() {
             <DialogContent className="sm:max-w-[550px]">
               <DialogHeader>
                 <DialogTitle>{editingDoc ? 'Edit Metadata' : 'Upload to Vault'}</DialogTitle>
+                <DialogDescription>Store your important documents securely in the cloud.</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSaveDoc} className="space-y-6 py-4">
                 <div className="space-y-2">
@@ -321,8 +322,13 @@ export default function DocumentsPage() {
           <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
             <div className="flex items-center gap-3">
               <FileText className="h-5 w-5 text-primary" />
-              <h3 className="font-bold text-sm truncate max-w-[200px] md:max-w-md">{previewDoc?.name}</h3>
+              <DialogTitle className="font-bold text-sm truncate max-w-[200px] md:max-w-md">
+                {previewDoc?.name || 'Document Preview'}
+              </DialogTitle>
             </div>
+            <DialogDescription className="sr-only">
+              Securely previewing document in full screen mode.
+            </DialogDescription>
             <Button variant="ghost" size="icon" onClick={() => setPreviewDoc(null)} className="h-8 w-8 hover:bg-white/5">
               <X className="h-5 w-5" />
             </Button>

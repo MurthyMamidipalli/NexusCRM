@@ -356,8 +356,13 @@ export default function ProjectsPage() {
           <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]">
             <div className="flex items-center gap-3">
               <FileText className="h-5 w-5 text-primary" />
-              <h3 className="font-bold text-sm truncate max-w-[200px] md:max-w-md">{previewDoc?.name}</h3>
+              <DialogTitle className="font-bold text-sm truncate max-w-[200px] md:max-w-md">
+                {previewDoc?.name || 'Project Documentation'}
+              </DialogTitle>
             </div>
+            <DialogDescription className="sr-only">
+              Full screen technical documentation preview.
+            </DialogDescription>
             <Button variant="ghost" size="icon" onClick={() => setPreviewDoc(null)} className="h-8 w-8 hover:bg-white/5">
               <X className="h-5 w-5" />
             </Button>
