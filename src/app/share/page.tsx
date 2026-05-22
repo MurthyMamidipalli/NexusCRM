@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useEffect, useState } from 'react'
@@ -23,9 +22,9 @@ export default function PublicSharePage() {
     setMounted(true)
   }, [])
 
-  // Explicitly reference the profile by Auth UID
+  // Explicitly reference the profile by Auth UID with silent error handling
   const profileRef = useMemo(() => user ? doc(db, collections.PROFILES, user.uid) : null, [db, user])
-  const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
+  const { data: profileDoc, loading: profileLoading } = useDoc(profileRef, { silent: true })
 
   // Wait for doc to load to avoid flickering 'isPublic' to false
   const initialData = useMemo(() => {
@@ -92,7 +91,6 @@ export default function PublicSharePage() {
                   checked={settings?.isPublic || false} 
                   onCheckedChange={(val) => {
                     updateField('isPublic', val);
-                    // Critical: Trigger immediate save to cloud to bypass debounce for instant link availability
                     save();
                     toast({ 
                       title: val ? 'Hub Published' : 'Hub Private', 

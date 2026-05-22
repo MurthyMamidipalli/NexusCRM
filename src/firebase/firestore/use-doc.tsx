@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -16,7 +15,7 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/e
  * Hook to listen to a single document.
  * @param ref - The document reference.
  * @param options - Configuration options.
- * @param options.silent - If true, prevents emitting global permission errors (useful for public pages).
+ * @param options.silent - If true, prevents emitting global permission errors.
  */
 export function useDoc<T = DocumentData>(
   ref: DocumentReference<T> | null, 
@@ -37,10 +36,12 @@ export function useDoc<T = DocumentData>(
       (snapshot: DocumentSnapshot<T>) => {
         setData(snapshot.exists() ? { ...snapshot.data()!, id: snapshot.id } : null);
         setLoading(false);
+        setError(null);
       },
       async (err) => {
-        // ONLY emit a permission error if the code matches.
-        if (!options?.silent && err.code === 'permission-denied') {
+        const isPermissionDenied = err.code === 'permission-denied';
+
+        if (!options?.silent && isPermissionDenied) {
           const permissionError = new FirestorePermissionError({
             path: ref.path,
             operation: 'get',

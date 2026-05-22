@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -41,11 +40,13 @@ export function useCollection<T = DocumentData>(
         }));
         setData(items);
         setLoading(false);
+        setError(null);
       },
       async (err) => {
-        // ONLY emit a permission error if the code matches. 
-        // Other errors (like missing indexes) should be handled by the component.
-        if (!options?.silent && err.code === 'permission-denied') {
+        // Distinguish between genuine security violations and missing indexes
+        const isPermissionDenied = err.code === 'permission-denied';
+        
+        if (!options?.silent && isPermissionDenied) {
           const permissionError = new FirestorePermissionError({
             path: 'collection_query',
             operation: 'list',

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect } from 'react';
@@ -22,13 +21,13 @@ export function FirebaseErrorListener() {
         toast({
           variant: 'destructive',
           title: 'Database Index Required',
-          description: 'This view requires a specific database index. Please open your browser console and click the provided setup link.',
+          description: 'A composite index is missing for this view. Please open the browser console and follow the provided link to create it.',
         });
       } else {
         toast({
           variant: 'destructive',
           title: 'Access Restricted',
-          description: `Security violation at: ${error.context.path}. Ensure you are logged in and have permission to perform this action.`,
+          description: `You do not have permission to access these records at: ${error.context.path}. Please ensure you are correctly logged in.`,
         });
       }
     };
