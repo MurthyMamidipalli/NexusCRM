@@ -28,10 +28,9 @@ export default function PublicProfilePage() {
   const { data: experience } = useCollection(expQuery)
   const { data: projects } = useCollection(projectsQuery)
 
-  // Determine visibility state
-  // Check both isPublic (new) and publicProfile (legacy) for robustness
-  const isVisible = profile && (profile.isPublic === true || profile.publicProfile === true);
-  const isPrivate = !isVisible;
+  // Explicitly check isPublic field
+  const isVisible = profile && profile.isPublic === true;
+  const isPrivate = profile && !isVisible;
   const isPermissionDenied = !!profileError;
 
   if (profileLoading) {
@@ -42,7 +41,8 @@ export default function PublicProfilePage() {
     )
   }
 
-  if (isPrivate || isPermissionDenied) {
+  // Handle case where profile doc exists but visibility is off OR permission was denied by security rules
+  if (isPrivate || isPermissionDenied || !profile) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0c] text-white p-6 text-center">
         <div className="p-6 rounded-full bg-muted/10 mb-6">
@@ -58,7 +58,7 @@ export default function PublicProfilePage() {
         <p className="text-muted-foreground max-w-md text-lg leading-relaxed">
           {isPermissionDenied 
             ? "This professional hub is protected by security rules. If you are the owner, please check your Public Share settings."
-            : "This professional hub is currently private. Please contact the owner for access."}
+            : "This professional hub is currently private or does not exist. Please contact the owner for access."}
         </p>
         <div className="mt-8 flex flex-col gap-4">
           <Button variant="outline" className="border-white/10 text-white h-12 px-8 rounded-xl font-bold" asChild>

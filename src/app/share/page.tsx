@@ -31,7 +31,7 @@ export default function PublicSharePage() {
   const { data: profileDoc, loading: profileLoading } = useDoc(profileRef)
 
   const initialData = useMemo(() => ({
-    isPublic: profileDoc?.isPublic ?? profileDoc?.publicProfile ?? false
+    isPublic: profileDoc?.isPublic ?? false
   }), [profileDoc]);
 
   const { data: settings, updateField, save } = usePersistentDocument(
@@ -91,8 +91,7 @@ export default function PublicSharePage() {
                   checked={settings.isPublic} 
                   onCheckedChange={(val) => {
                     updateField('isPublic', val);
-                    // Also update legacy field for compatibility
-                    updateField('publicProfile' as any, val);
+                    // Explicit manual save to ensure visibility is updated immediately for the preview
                     save();
                     toast({ 
                       title: val ? 'Hub Published' : 'Hub Private', 
