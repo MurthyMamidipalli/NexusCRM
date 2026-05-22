@@ -121,11 +121,6 @@ export default function ProjectsPage() {
       : createRecord(db, collections.PROJECTS, data, user.uid)
 
     mutation
-      .then(() => {
-        toast({ title: editingProj ? 'Record Updated' : 'Record Added' })
-        setIsDialogOpen(false)
-        resetForm()
-      })
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
           path: editingProj ? `${collections.PROJECTS}/${editingProj.id}` : collections.PROJECTS,
@@ -134,9 +129,12 @@ export default function ProjectsPage() {
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       })
-      .finally(() => {
-        setLoading(false)
-      })
+
+    // Optimistic UI updates
+    toast({ title: editingProj ? 'Record Updated' : 'Record Added' })
+    setIsDialogOpen(false)
+    resetForm()
+    setLoading(false)
   }
 
   const resetForm = () => {
