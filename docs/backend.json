@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "Profile": {
@@ -50,7 +49,9 @@
         "fieldOfStudy": { "type": "string" },
         "startDate": { "type": "string", "format": "date" },
         "endDate": { "type": "string", "format": "date" },
-        "grade": { "type": "string" }
+        "cgpa": { "type": "string" },
+        "percentage": { "type": "string" },
+        "description": { "type": "string" }
       }
     },
     "Project": {
