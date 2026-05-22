@@ -39,14 +39,14 @@ const navItems = [
   { label: 'Experience', icon: Briefcase, href: '/experience', emoji: '💼' },
   { label: 'Current Job', icon: Building2, href: '/career', emoji: '🏢' },
   { label: 'Projects & Products', icon: Rocket, href: '/projects', emoji: '🚀' },
-  { label: 'Achievements & Awards', icon: Target, href: '/achievements', emoji: '🎯' },
-  { label: 'Testimonials', icon: Quote, href: '/testimonials', emoji: '🌟' },
   { label: 'Resume / CV', icon: FileText, href: '/resume', emoji: '📜' },
   { label: 'Documents', icon: Database, href: '/documents', emoji: '📁' },
   { label: 'Portfolios & Links', icon: LinkIcon, href: '/links', emoji: '🔗' },
   { label: 'Career Timeline', icon: Milestone, href: '/timeline', emoji: '📈' },
   { label: 'Contacts', icon: Phone, href: '/customers', emoji: '📞' },
   { label: 'Public Share', icon: Globe, href: '/share', emoji: '🌐' },
+  { label: 'Achievements & Awards', icon: Target, href: '/achievements', emoji: '🎯' },
+  { label: 'Testimonials', icon: Quote, href: '/testimonials', emoji: '🌟' },
 ]
 
 export function CRMSidebar() {
