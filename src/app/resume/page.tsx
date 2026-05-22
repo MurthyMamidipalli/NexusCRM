@@ -25,7 +25,7 @@ import { collection, query, where } from 'firebase/firestore'
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -51,11 +51,9 @@ export default function ResumePage() {
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState('PDF')
-  const [visibility, setVisibility] = useState<string>("Private")
-  const [docType, setDocType] = useState<string>("Resume")
   
-  // High-speed pending uploads
-  const [pendingUploads, setPendingUploads] = useState<{ [key: string]: PendingResumeUpload }>({})
+  // High-speed eager uploads
+  const [activeUploads, setActiveUploads] = useState<{ [key: string]: PendingResumeUpload }>({})
   
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null)
@@ -75,14 +73,14 @@ export default function ResumePage() {
       const getVal = (doc: any) => {
         if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
         if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
-        return Date.now() + 10000;
+        return Date.now();
       }
       return getVal(b) - getVal(a);
     })
   }, [rawResumes])
 
-  // INSTANT UPLOAD: Starts on selection
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // INSTANT UPLOAD: Starts the moment files are chosen
+  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (!files.length || !user || !storage) return
 
@@ -94,7 +92,7 @@ export default function ResumePage() {
       const storageRef = ref(storage, path)
       const uploadTask = uploadBytesResumable(storageRef, file)
 
-      setPendingUploads(prev => ({
+      setActiveUploads(prev => ({
         ...prev,
         [file.name]: { file, progress: 0, done: false }
       }))
@@ -103,7 +101,7 @@ export default function ResumePage() {
         'state_changed',
         (snap) => {
           const progress = (snap.bytesTransferred / snap.totalBytes) * 100
-          setPendingUploads(prev => ({
+          setActiveUploads(prev => ({
             ...prev,
             [file.name]: { ...prev[file.name], progress }
           }))
@@ -111,7 +109,7 @@ export default function ResumePage() {
         console.error,
         async () => {
           const url = await getDownloadURL(uploadTask.snapshot.ref)
-          setPendingUploads(prev => ({
+          setActiveUploads(prev => ({
             ...prev,
             [file.name]: { ...prev[file.name], url, path, done: true, progress: 100 }
           }))
@@ -120,37 +118,60 @@ export default function ResumePage() {
     })
   }
 
-  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user || !db) return
     
     const formData = new FormData(e.currentTarget)
     const baseName = formData.get('name') as string
+    const docType = formData.get('docType') as string || 'Resume'
+    const visibility = formData.get('visibility') as string || 'Private'
 
-    // NON-BLOCKING UI CLOSURE
-    toast({ title: 'Syncing to Vault', description: 'Your records are being secured in the background.' })
+    // INSTANT UI CLOSURE
+    toast({ title: 'Syncing to Vault', description: 'Records are being secured in the background.' })
     setIsDialogOpen(false)
 
     if (activeTab === 'PDF') {
-      const uploads = Object.values(pendingUploads)
+      const uploads = Object.values(activeUploads)
       uploads.forEach((upload) => {
+        const finalize = async (u: PendingResumeUpload) => {
+          if (!u.url) return;
+          const data: any = {
+            name: uploads.length > 1 ? `${baseName} - ${u.file.name}` : baseName,
+            type: 'file',
+            docType: docType,
+            visibility,
+            isPublic: visibility === 'Public',
+            ownerId: user.uid,
+            fileUrl: u.url,
+            fileName: u.file.name,
+            filePath: u.path,
+            fileSize: u.file.size,
+            fileType: u.file.type
+          }
+          await createRecord(db, collections.RESUMES, data, user.uid).catch(console.error)
+          
+          setActiveUploads(prev => {
+            const next = { ...prev }
+            delete next[u.file.name]
+            return next
+          })
+        }
+
         if (upload.done && upload.url) {
-          saveResumeRecord(upload, baseName)
+          finalize(upload)
         } else {
-          // Background wait
+          // Direct background promise handling
           const itv = setInterval(() => {
-            setPendingUploads(curr => {
+            setActiveUploads(curr => {
               const current = curr[upload.file.name]
               if (current?.done && current.url) {
-                saveResumeRecord(current, baseName)
+                finalize(current)
                 clearInterval(itv)
-                const next = { ...curr }
-                delete next[upload.file.name]
-                return next
               }
               return curr
             })
-          }, 500)
+          }, 300)
         }
       })
     } else {
@@ -165,30 +186,7 @@ export default function ResumePage() {
       createRecord(db, collections.RESUMES, data, user.uid).catch(console.error)
     }
 
-    resetForm()
-  }
-
-  const saveResumeRecord = (upload: PendingResumeUpload, baseName: string) => {
-    if (!user || !db) return
-    const data: any = {
-      name: Object.keys(pendingUploads).length > 1 ? `${baseName} - ${upload.file.name}` : baseName,
-      type: 'file',
-      docType: docType,
-      visibility,
-      isPublic: visibility === 'Public',
-      ownerId: user.uid,
-      fileUrl: upload.url,
-      fileName: upload.file.name,
-      filePath: upload.path,
-      fileSize: upload.file.size,
-      fileType: upload.file.type
-    }
-    createRecord(db, collections.RESUMES, data, user.uid).catch(console.error)
-  }
-
-  const resetForm = () => {
-    setPendingUploads({})
-    setLoading(false)
+    setActiveUploads({})
   }
 
   const handleDelete = async (resume: any) => {
@@ -200,8 +198,8 @@ export default function ResumePage() {
     toast({ title: 'Removed' })
   }
 
-  const overallProgress = Object.values(pendingUploads).length > 0
-    ? Object.values(pendingUploads).reduce((a, b) => a + b.progress, 0) / Object.values(pendingUploads).length
+  const overallProgress = Object.values(activeUploads).length > 0
+    ? Object.values(activeUploads).reduce((a, b) => a + b.progress, 0) / Object.values(activeUploads).length
     : 0
 
   return (
@@ -211,7 +209,7 @@ export default function ResumePage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">📜 Resume & Links Vault</h1>
           <p className="text-muted-foreground">High-speed secure storage for your Resumes, CV'S and Professional Links.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => setIsDialogOpen(o)}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o) setActiveUploads({}); }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white">
               <Plus className="h-4 w-4" /> {activeTab === 'PDF' ? 'Upload Resumes & CV\'S' : 'Add Link'}
@@ -226,16 +224,16 @@ export default function ResumePage() {
                 Securely store files up to 500MB with instant cloud sync.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSave} className="space-y-6">
+            <form onSubmit={handleFinalSave} className="space-y-6">
               <div className="space-y-2">
                 <Label>Record Name / Folder Label</Label>
-                <Input id="name" name="name" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="e.g. Senior Software Engineer CV" />
+                <Input name="name" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="e.g. Senior Software Engineer CV" />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Document Type</Label>
-                  <Select value={docType} onValueChange={setDocType}>
+                  <Select name="docType" defaultValue="Resume">
                     <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
@@ -247,7 +245,7 @@ export default function ResumePage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Visibility</Label>
-                  <Select value={visibility} onValueChange={setVisibility}>
+                  <Select name="visibility" defaultValue="Private">
                     <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
@@ -262,7 +260,7 @@ export default function ResumePage() {
               {activeTab === 'PDF' ? (
                 <div 
                   className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
-                  onClick={() => !loading && fileInputRef.current?.click()}
+                  onClick={() => fileInputRef.current?.click()}
                 >
                   <input 
                     type="file" 
@@ -270,12 +268,12 @@ export default function ResumePage() {
                     className="hidden" 
                     accept=".pdf,.doc,.docx" 
                     multiple 
-                    onChange={handleFileChange} 
+                    onChange={handleFileSelection} 
                   />
-                  {Object.keys(pendingUploads).length > 0 ? (
+                  {Object.keys(activeUploads).length > 0 ? (
                     <div className="text-primary text-center">
                       <Files className="mx-auto mb-2 h-10 w-10" />
-                      <span className="text-xs font-bold">{Object.keys(pendingUploads).length} Files Selected</span>
+                      <span className="text-xs font-bold">{Object.keys(activeUploads).length} Files Selected</span>
                     </div>
                   ) : (
                     <div className="text-center">
@@ -291,7 +289,7 @@ export default function ResumePage() {
                 </div>
               )}
               
-              {activeTab === 'PDF' && Object.keys(pendingUploads).length > 0 && (
+              {activeTab === 'PDF' && Object.keys(activeUploads).length > 0 && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
                     <span>Securing Vault...</span>
@@ -302,8 +300,8 @@ export default function ResumePage() {
               )}
 
               <DialogFooter>
-                <Button type="submit" disabled={loading || (activeTab === 'PDF' && Object.keys(pendingUploads).length === 0)} className="w-full bg-primary h-12 rounded-xl font-bold">
-                  {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : 'Secure in Vault'}
+                <Button type="submit" disabled={loading || (activeTab === 'PDF' && Object.keys(activeUploads).length === 0)} className="w-full bg-primary h-12 rounded-xl font-bold">
+                  Secure in Vault
                 </Button>
               </DialogFooter>
             </form>
