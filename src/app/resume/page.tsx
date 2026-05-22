@@ -107,13 +107,8 @@ export default function ResumePage() {
       data.url = formData.get('url') as string;
     }
 
+    // NON-BLOCKING MUTATION: Initiate save but don't await for UI close
     createRecord(db, collections.RESUMES, data, user.uid)
-      .then(() => {
-        toast({ title: type === 'file' ? 'Resume Uploaded' : 'Link Added', description: 'Successfully synced to your cloud vault.' });
-        setIsDialogOpen(false);
-        setSelectedFile(null);
-        setFileData('');
-      })
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
           path: collections.RESUMES,
@@ -121,10 +116,18 @@ export default function ResumePage() {
           requestResourceData: data,
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
-      })
-      .finally(() => {
-        setLoading(false)
-      })
+      });
+
+    // Instant UI feedback
+    toast({ 
+      title: type === 'file' ? 'Resume Storing' : 'Link Added', 
+      description: 'Synchronizing with your cloud vault...' 
+    });
+    
+    setIsDialogOpen(false);
+    setSelectedFile(null);
+    setFileData('');
+    setLoading(false);
   }
 
   const handleDelete = (id: string) => {
