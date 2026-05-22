@@ -28,7 +28,6 @@ const routeTitles: Record<string, string> = {
   '/achievements': '🎯 Achievements',
   '/testimonials': '🌟 Testimonials',
   '/resume': '📜 Resume Vault',
-  '/documents': '📁 Document Vault',
   '/links': '🔗 Portfolios & Links',
   '/timeline': '📈 Career Timeline',
   '/customers': '📞 Contact Hub',

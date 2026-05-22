@@ -147,7 +147,7 @@ export default function PublicSharePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm opacity-90 leading-relaxed">
-              When public access is enabled, your **Bio**, **Skills**, **Experience**, and **Projects** will be visible to anyone with access to the link. **Contacts** and **Private Documents** always remain secure.
+              When public access is enabled, your **Bio**, **Skills**, **Experience**, and **Projects** will be visible to anyone with access to the link. **Contacts** always remain secure.
             </CardContent>
           </Card>
         </div>
