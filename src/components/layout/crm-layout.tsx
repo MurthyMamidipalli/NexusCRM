@@ -19,6 +19,7 @@ interface CRMLayoutProps {
 const routeTitles: Record<string, string> = {
   '/dashboard': '🏠 Overview',
   '/profile': '👤 Personal Profile',
+  '/documents': '📂 Document Vault',
   '/skills': '🛠 Skills & Expertise',
   '/education': '🎓 Education',
   '/certifications': '🏆 Certifications',

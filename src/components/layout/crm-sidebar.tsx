@@ -21,7 +21,8 @@ import {
   Globe,
   Settings,
   LogOut,
-  Zap
+  Zap,
+  FolderLock
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -40,6 +41,7 @@ import {
 const navItems = [
   { label: 'Overview', icon: LayoutDashboard, href: '/dashboard', emoji: '🏠' },
   { label: 'Personal Profile', icon: User, href: '/profile', emoji: '👤' },
+  { label: 'Document Vault', icon: FolderLock, href: '/documents', emoji: '📂' },
   { label: 'Skills & Expertise', icon: Hammer, href: '/skills', emoji: '🛠' },
   { label: 'Education', icon: GraduationCap, href: '/education', emoji: '🎓' },
   { label: 'Certifications', icon: Trophy, href: '/certifications', emoji: '🏆' },
