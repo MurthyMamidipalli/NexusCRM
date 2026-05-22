@@ -48,6 +48,7 @@ export function createRecord(db: Firestore, collectionName: string, data: any, u
     throw new Error(`Record creation failed: ownerId is required for cloud synchronization in ${collectionName}.`);
   }
 
+  // NON-BLOCKING: Return promise but allow UI to continue
   return addDoc(colRef, payload);
 }
 
