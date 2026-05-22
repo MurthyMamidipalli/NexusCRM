@@ -163,15 +163,15 @@
   },
   "firestore": {
     "/profiles/{uid}": { "schema": "#/entities/Profile", "description": "User profile data. READ access should be public if publicProfile is true." },
-    "/skills/{skillId}": { "schema": "#/entities/Skill", "description": "User skills." },
-    "/experience/{expId}": { "schema": "#/entities/Experience", "description": "Work history." },
-    "/education/{eduId}": { "schema": "#/entities/Education", "description": "Education history." },
-    "/projects/{projectId}": { "schema": "#/entities/Project", "description": "Portfolio projects." },
-    "/contacts/{contactId}": { "schema": "#/entities/Contact", "description": "Network contacts." },
-    "/documents/{docId}": { "schema": "#/entities/Document", "description": "Vault documents." },
-    "/resumes/{resId}": { "schema": "#/entities/Resume", "description": "Resume records." },
-    "/leads/{leadId}": { "schema": "#/entities/Lead", "description": "Sales leads." },
-    "/achievements/{achId}": { "schema": "#/entities/Achievement", "description": "Awards and honors." },
-    "/certifications/{certId}": { "schema": "#/entities/Certification", "description": "Credentials." }
+    "/skills/{skillId}": { "schema": "#/entities/Skill", "description": "User skills. READ access is public for any visitor viewing a public profile hub." },
+    "/experience/{expId}": { "schema": "#/entities/Experience", "description": "Work history. READ access is public for any visitor viewing a public profile hub." },
+    "/education/{eduId}": { "schema": "#/entities/Education", "description": "Education history. READ access is public for any visitor viewing a public profile hub." },
+    "/projects/{projectId}": { "schema": "#/entities/Project", "description": "Portfolio projects. READ access is public for any visitor viewing a public profile hub." },
+    "/contacts/{contactId}": { "schema": "#/entities/Contact", "description": "Network contacts. PRIVATE: Only owner can access." },
+    "/documents/{docId}": { "schema": "#/entities/Document", "description": "Vault documents. PRIVATE: Only owner can access." },
+    "/resumes/{resId}": { "schema": "#/entities/Resume", "description": "Resume records. PRIVATE: Only owner can access." },
+    "/leads/{leadId}": { "schema": "#/entities/Lead", "description": "Sales leads. PRIVATE: Only owner can access." },
+    "/achievements/{achId}": { "schema": "#/entities/Achievement", "description": "Awards and honors. READ access is public for any visitor viewing a public profile hub." },
+    "/certifications/{certId}": { "schema": "#/entities/Certification", "description": "Credentials. PRIVATE: Only owner can access." }
   }
 }
