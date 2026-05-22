@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useRef, useEffect, useState } from 'react'
@@ -69,10 +68,8 @@ export default function ProfilePage() {
   const handleFullProfileSave = async () => {
     setIsSaving(true)
     try {
-      // 1. Save to Firestore (via hook)
       save()
 
-      // 2. Sync with Firebase Auth Display Name if it changed
       if (user && (profile as any)?.fullName) {
         await updateProfile(user, {
           displayName: (profile as any).fullName
@@ -129,7 +126,6 @@ export default function ProfilePage() {
       </div>
 
       <div className="max-w-4xl space-y-8 pb-20">
-        {/* Profile Identity Header */}
         <Card className="border-none bg-card/50 backdrop-blur-md shadow-xl overflow-hidden">
           <div className="h-32 bg-gradient-to-r from-primary/20 via-accent/10 to-primary/20" />
           <CardContent className="relative pt-0 px-8 pb-8">
@@ -164,7 +160,6 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Identity Section */}
         <Card className="border-none bg-card/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="font-headline text-xl flex items-center gap-2">
@@ -184,7 +179,6 @@ export default function ProfilePage() {
                   placeholder="e.g. Johnathan Doe" 
                 />
               </div>
-              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest pl-1"> This is your primary identity name used throughout the application. </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-border/50">
@@ -210,7 +204,6 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Contact Details */}
         <Card className="border-none bg-card/50 backdrop-blur-md shadow-xl">
           <CardHeader><CardTitle className="font-headline text-xl">Contact Information</CardTitle></CardHeader>
           <CardContent className="space-y-6">

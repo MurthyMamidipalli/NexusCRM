@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * A global listener component that catches Firebase errors emitted
- * from anywhere in the application and surfaces them as toasts.
+ * from anywhere in the application and surfaces them as intelligent toasts.
  */
 export function FirebaseErrorListener() {
   const { toast } = useToast();
@@ -21,13 +21,13 @@ export function FirebaseErrorListener() {
         toast({
           variant: 'destructive',
           title: 'Database Index Required',
-          description: 'A composite index is missing for this view. Please open the browser console and follow the provided link to create it.',
+          description: 'This view requires a composite index. Please check the browser console and follow the provided link to create it.',
         });
       } else {
         toast({
           variant: 'destructive',
           title: 'Access Restricted',
-          description: `You do not have permission to access these records at: ${error.context.path}. Please ensure you are correctly logged in.`,
+          description: `Security violation at: ${error.context.path}. Please verify you have permission to view these records.`,
         });
       }
     };

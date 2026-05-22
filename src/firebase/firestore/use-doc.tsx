@@ -12,10 +12,7 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
 /**
- * Hook to listen to a single document.
- * @param ref - The document reference.
- * @param options - Configuration options.
- * @param options.silent - If true, prevents emitting global permission errors.
+ * Hook to listen to a single document with intelligent error handling.
  */
 export function useDoc<T = DocumentData>(
   ref: DocumentReference<T> | null, 

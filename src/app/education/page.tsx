@@ -2,9 +2,9 @@
 
 import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, GraduationCap, Loader2, Trash2, Calendar, BookOpen, Award, Pencil, AlertCircle, Fingerprint } from 'lucide-react'
+import { Plus, GraduationCap, Loader2, Trash2, Calendar, Award, Pencil, AlertCircle, Fingerprint } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
@@ -34,7 +34,6 @@ export default function EducationPage() {
 
   const { data: rawEducation, loading: eduLoading, error: eduError } = useCollection(eduQuery)
 
-  // Sort in memory to avoid index requirements
   const education = useMemo(() => {
     if (!rawEducation) return []
     return [...rawEducation].sort((a: any, b: any) => {
@@ -62,38 +61,29 @@ export default function EducationPage() {
       description: formData.get('description') as string,
     }
 
-    if (editingEdu) {
-      updateRecord(db, collections.EDUCATION, editingEdu.id, data)
-        .catch(async (err) => {
-          const permissionError = new FirestorePermissionError({
-            path: `${collections.EDUCATION}/${editingEdu.id}`,
-            operation: 'update',
-            requestResourceData: data,
-          } satisfies SecurityRuleContext);
-          errorEmitter.emit('permission-error', permissionError);
-        });
-      toast({ title: 'Education Updated' })
-    } else {
-      createRecord(db, collections.EDUCATION, data, user.uid)
-        .catch(async (err) => {
-          const permissionError = new FirestorePermissionError({
-            path: collections.EDUCATION,
-            operation: 'create',
-            requestResourceData: { ...data, ownerId: user.uid },
-          } satisfies SecurityRuleContext);
-          errorEmitter.emit('permission-error', permissionError);
-        });
-      toast({ title: 'Education Added' })
-    }
+    const mutation = editingEdu
+      ? updateRecord(db, collections.EDUCATION, editingEdu.id, data)
+      : createRecord(db, collections.EDUCATION, data, user.uid)
 
-    setIsDialogOpen(false)
-    setEditingEdu(null)
-    setLoading(false)
+    mutation
+      .then(() => toast({ title: editingEdu ? 'Education Updated' : 'Education Added' }))
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: editingEdu ? `${collections.EDUCATION}/${editingEdu.id}` : collections.EDUCATION,
+          operation: editingEdu ? 'update' : 'create',
+          requestResourceData: data,
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
+        setLoading(false)
+        setIsDialogOpen(false)
+        setEditingEdu(null)
+      })
   }
 
   const handleDelete = (id: string) => {
     if (!db) return
-    
     deleteRecord(db, collections.EDUCATION, id)
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
@@ -103,16 +93,6 @@ export default function EducationPage() {
         errorEmitter.emit('permission-error', permissionError);
       });
     toast({ title: 'Record Removed' })
-  }
-
-  if (eduLoading) {
-    return (
-      <CRMLayout>
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </CRMLayout>
-    )
   }
 
   return (
@@ -213,14 +193,18 @@ export default function EducationPage() {
       {eduError && (
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error Loading Records</AlertTitle>
+          <AlertTitle>System Alert</AlertTitle>
           <AlertDescription>
-            The system is optimizing your data view. Please try refreshing if records don't appear.
+            Loading optimized view. Please refresh if records do not appear instantly.
           </AlertDescription>
         </Alert>
       )}
 
-      {education && education.length > 0 ? (
+      {eduLoading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : education && education.length > 0 ? (
         <div className="space-y-4">
           {education.map((edu: any) => (
             <Card key={edu.id} className="group border-none bg-card/50 backdrop-blur-md shadow-md hover:shadow-lg transition-all">
@@ -277,25 +261,8 @@ export default function EducationPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="text-muted-foreground hover:text-primary" 
-                      onClick={() => {
-                        setEditingEdu(edu);
-                        setIsDialogOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="text-muted-foreground hover:text-destructive" 
-                      onClick={() => handleDelete(edu.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => { setEditingEdu(edu); setIsDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(edu.id)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
               </CardContent>

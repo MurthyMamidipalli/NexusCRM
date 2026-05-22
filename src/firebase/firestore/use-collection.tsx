@@ -13,9 +13,7 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/e
 
 /**
  * Hook to listen to a collection or query.
- * @param query - The Firestore query.
- * @param options - Configuration options.
- * @param options.silent - If true, prevents emitting global permission errors.
+ * Distinguishes between Security Rule violations and Database Index requirements.
  */
 export function useCollection<T = DocumentData>(
   query: Query<T> | null,
@@ -43,7 +41,9 @@ export function useCollection<T = DocumentData>(
         setError(null);
       },
       async (err) => {
-        // Distinguish between genuine security violations and missing indexes
+        // Log original error for console diagnostics
+        console.error('Firestore Query Error:', err);
+
         const isPermissionDenied = err.code === 'permission-denied';
         
         if (!options?.silent && isPermissionDenied) {

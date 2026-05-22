@@ -1,11 +1,10 @@
-
 "use client"
 
 import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Hammer, Loader2, Trash2, Award, AlertCircle, Pencil } from 'lucide-react'
+import { Plus, Hammer, Loader2, Trash2, Award, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
@@ -14,7 +13,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 import { Badge } from '@/components/ui/badge'
@@ -26,19 +24,14 @@ export default function SkillsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingSkill, setEditingSkill] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-
-  // Proficiency Level State
   const [level, setLevel] = useState<string>("Medium")
 
   const skillsQuery = useMemo(() => {
     if (!db || !user) return null;
-    return query(
-      collection(db, collections.SKILLS), 
-      where('ownerId', '==', user.uid)
-    );
+    return query(collection(db, collections.SKILLS), where('ownerId', '==', user.uid));
   }, [db, user])
 
-  const { data: rawSkills, loading: skillsLoading, error } = useCollection(skillsQuery)
+  const { data: rawSkills, loading: skillsLoading } = useCollection(skillsQuery)
 
   const skills = useMemo(() => {
     if (!rawSkills) return []
@@ -110,40 +103,26 @@ export default function SkillsPage() {
           if (!open) setEditingSkill(null);
         }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => {
-              setEditingSkill(null);
-              setLevel("Medium");
-            }}>
+            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => { setEditingSkill(null); setLevel("Medium"); }}>
               <Plus className="h-4 w-4" />
               Add Skill
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-[#121214] text-white border-none rounded-2xl p-8">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-bold font-headline">
-                {editingSkill ? 'Edit Expertise' : 'Add New Expertise'}
-              </DialogTitle>
+              <DialogTitle className="text-2xl font-bold font-headline">{editingSkill ? 'Edit Expertise' : 'Add New Expertise'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSaveSkill} className="space-y-6 py-4">
               <div className="space-y-2">
                 <Label htmlFor="name" className="text-sm font-semibold">Skill Name</Label>
-                <Input 
-                  id="name" 
-                  name="name" 
-                  defaultValue={editingSkill?.name || ''} 
-                  placeholder="e.g. React.js, Sales Strategy" 
-                  required 
-                  className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"
-                />
+                <Input id="name" name="name" defaultValue={editingSkill?.name || ''} placeholder="e.g. React.js, Sales Strategy" required className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="category" className="text-sm font-semibold">Category</Label>
                   <Select name="category" defaultValue={editingSkill?.category || "Technical"}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl">
-                      <SelectValue placeholder="Select Category" />
-                    </SelectTrigger>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"><SelectValue placeholder="Category" /></SelectTrigger>
                     <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
                       <SelectItem value="Technical">Technical</SelectItem>
                       <SelectItem value="Soft Skills">Soft Skills</SelectItem>
@@ -155,9 +134,7 @@ export default function SkillsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="level" className="text-sm font-semibold">Proficiency Level</Label>
                   <Select onValueChange={setLevel} defaultValue={editingSkill?.level || "Medium"}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl">
-                      <SelectValue placeholder="Select Level" />
-                    </SelectTrigger>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"><SelectValue placeholder="Level" /></SelectTrigger>
                     <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
                       <SelectItem value="High">High</SelectItem>
                       <SelectItem value="Medium">Medium</SelectItem>
@@ -168,9 +145,8 @@ export default function SkillsPage() {
               </div>
 
               <DialogFooter>
-                <Button type="submit" disabled={loading} className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none shadow-lg shadow-primary/20 w-full sm:w-auto">
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Skill
+                <Button type="submit" disabled={loading} className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none w-full sm:w-auto">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Skill'}
                 </Button>
               </DialogFooter>
             </form>
@@ -178,63 +154,27 @@ export default function SkillsPage() {
         </Dialog>
       </div>
 
-      {error && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>
-            This view is optimizing. If error persists, please check your database connection.
-          </AlertDescription>
-        </Alert>
-      )}
-
       {skillsLoading ? (
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : skills && skills.length > 0 ? (
+        <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+      ) : skills.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {skills.map((skill: any) => (
             <Card key={skill.id} className="group border-none bg-card/50 backdrop-blur-md shadow-lg hover:shadow-xl transition-all">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                      <Award className="h-5 w-5" />
-                    </div>
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary"><Award className="h-5 w-5" /></div>
                     <div>
                       <h3 className="font-headline font-bold">{skill.name}</h3>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">{skill.category}</span>
-                        {skill.level && (
-                          <Badge variant="outline" className={cn("text-[9px] h-4 px-1.5 font-bold uppercase tracking-widest", getLevelColor(skill.level))}>
-                            {skill.level}
-                          </Badge>
-                        )}
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground">{skill.category}</span>
+                        {skill.level && <Badge variant="outline" className={cn("text-[9px] h-4 px-1.5 font-bold uppercase tracking-widest", getLevelColor(skill.level))}>{skill.level}</Badge>}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => {
-                        setEditingSkill(skill);
-                        setLevel(skill.level || "Medium");
-                        setIsDialogOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => handleDelete(skill.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" onClick={() => { setEditingSkill(skill); setLevel(skill.level || "Medium"); setIsDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(skill.id)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
               </CardContent>
@@ -242,10 +182,7 @@ export default function SkillsPage() {
           ))}
         </div>
       ) : (
-        <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30">
-          <Hammer className="h-12 w-12 text-muted-foreground/30 mb-4" />
-          <p className="text-muted-foreground font-headline">No skills mapped yet.</p>
-        </div>
+        <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30 text-muted-foreground"><Hammer className="h-12 w-12 opacity-20 mb-4" />No skills mapped yet.</div>
       )}
     </CRMLayout>
   )
