@@ -3,7 +3,7 @@
 
 import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
   Plus, 
@@ -29,6 +29,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function ProjectsPage() {
   const db = useFirestore()
@@ -48,47 +50,53 @@ export default function ProjectsPage() {
 
   const { data: projects, loading: projectsLoading } = useCollection(projectsQuery)
 
-  const handleSaveProject = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveProject = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !db) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
-      title: formData.get('title'),
-      description: formData.get('description'),
-      url: formData.get('url'),
-      date: formData.get('date'),
+      title: formData.get('title') as string,
+      description: formData.get('description') as string,
+      url: formData.get('url') as string,
+      date: formData.get('date') as string,
       category: formData.get('category') || 'Project',
       status: 'Active',
       visualCover: 'Pending Upload',
       documentationPath: 'Pending Attachment'
     }
 
-    try {
-      if (editingProj) {
-        await updateRecord(db, collections.PROJECTS, editingProj.id, data)
-        toast({ title: 'Record Updated' })
-      } else {
-        await createRecord(db, collections.PROJECTS, data, user.uid)
-        toast({ title: 'Record Added to Vault' })
-      }
-      setIsDialogOpen(false)
-      setEditingProj(null)
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    } finally {
-      setLoading(false)
-    }
+    const mutation = editingProj 
+      ? updateRecord(db, collections.PROJECTS, editingProj.id, data)
+      : createRecord(db, collections.PROJECTS, data, user.uid)
+
+    mutation.catch(async (err) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingProj ? `${collections.PROJECTS}/${editingProj.id}` : collections.PROJECTS,
+        operation: editingProj ? 'update' : 'create',
+        requestResourceData: data,
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
+
+    toast({ title: editingProj ? 'Record Updated' : 'Record Added' })
+    setIsDialogOpen(false)
+    setEditingProj(null)
+    setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteRecord(db, collections.PROJECTS, id)
-      toast({ title: 'Record Removed' })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    }
+  const handleDelete = (id: string) => {
+    if (!db) return
+    deleteRecord(db, collections.PROJECTS, id)
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.PROJECTS}/${id}`,
+          operation: 'delete',
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+    toast({ title: 'Record Removed' })
   }
 
   const filteredItems = (category: string) => {
@@ -196,23 +204,6 @@ export default function ProjectsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-white">Visual Identity</Label>
-                  <div className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-700 bg-[#1c1c1f] p-6 transition-all hover:border-primary/50 cursor-pointer text-center">
-                    <ImageIcon className="mb-2 h-5 w-5 text-gray-400 group-hover:text-primary" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 group-hover:text-gray-200">Upload Visual</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-white">Technical Docs</Label>
-                  <div className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-700 bg-[#1c1c1f] p-6 transition-all hover:border-primary/50 cursor-pointer text-center">
-                    <Paperclip className="mb-2 h-5 w-5 text-gray-400 group-hover:text-primary" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 group-hover:text-gray-200">Attach PDF</span>
-                  </div>
-                </div>
-              </div>
-
               <DialogFooter className="flex gap-3 pt-4">
                 <Button 
                   type="button" 
@@ -227,8 +218,7 @@ export default function ProjectsPage() {
                   disabled={loading} 
                   className="bg-[#7299f0] hover:bg-[#6387d9] text-white font-bold h-10 px-8"
                 >
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save to Vault
+                  Save Record
                 </Button>
               </DialogFooter>
             </form>

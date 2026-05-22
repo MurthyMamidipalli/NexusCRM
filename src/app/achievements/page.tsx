@@ -3,9 +3,9 @@
 
 import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Target, Loader2, Trash2, Calendar, Trophy, Pencil } from 'lucide-react'
+import { Plus, Loader2, Trash2, Calendar, Trophy, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function AchievementsPage() {
   const db = useFirestore()
@@ -38,43 +40,49 @@ export default function AchievementsPage() {
     setMounted(true)
   }, [])
 
-  const handleSaveAch = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveAch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !db) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
-      title: formData.get('title'),
-      issuer: formData.get('issuer'),
-      date: formData.get('date'),
-      description: formData.get('description'),
+      title: formData.get('title') as string,
+      issuer: formData.get('issuer') as string,
+      date: formData.get('date') as string,
+      description: formData.get('description') as string,
     }
 
-    try {
-      if (editingAch) {
-        await updateRecord(db, collections.ACHIEVEMENTS, editingAch.id, data)
-        toast({ title: 'Achievement Updated' })
-      } else {
-        await createRecord(db, collections.ACHIEVEMENTS, data, user.uid)
-        toast({ title: 'Achievement Recorded' })
-      }
-      setIsDialogOpen(false)
-      setEditingAch(null)
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    } finally {
-      setLoading(false)
-    }
+    const mutation = editingAch 
+      ? updateRecord(db, collections.ACHIEVEMENTS, editingAch.id, data)
+      : createRecord(db, collections.ACHIEVEMENTS, data, user.uid)
+
+    mutation.catch(async (serverError) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingAch ? `${collections.ACHIEVEMENTS}/${editingAch.id}` : collections.ACHIEVEMENTS,
+        operation: editingAch ? 'update' : 'create',
+        requestResourceData: data,
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
+
+    toast({ title: editingAch ? 'Achievement Updated' : 'Achievement Recorded' })
+    setIsDialogOpen(false)
+    setEditingAch(null)
+    setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteRecord(db, collections.ACHIEVEMENTS, id)
-      toast({ title: 'Record Removed' })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    }
+  const handleDelete = (id: string) => {
+    if (!db) return
+    deleteRecord(db, collections.ACHIEVEMENTS, id)
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.ACHIEVEMENTS}/${id}`,
+          operation: 'delete',
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+    toast({ title: 'Record Removed' })
   }
 
   if (!mounted || achLoading) {
@@ -127,7 +135,6 @@ export default function AchievementsPage() {
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Record
                 </Button>
               </DialogFooter>

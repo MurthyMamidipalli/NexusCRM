@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function ExperiencePage() {
   const db = useFirestore()
@@ -33,45 +35,51 @@ export default function ExperiencePage() {
 
   const { data: experience, loading: expLoading } = useCollection(expQuery)
 
-  const handleSaveExp = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveExp = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !db) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
-      role: formData.get('role'),
-      company: formData.get('company'),
-      location: formData.get('location'),
-      startDate: formData.get('startDate'),
-      endDate: formData.get('endDate'),
-      description: formData.get('description'),
+      role: formData.get('role') as string,
+      company: formData.get('company') as string,
+      location: formData.get('location') as string,
+      startDate: formData.get('startDate') as string,
+      endDate: formData.get('endDate') as string,
+      description: formData.get('description') as string,
     }
 
-    try {
-      if (editingExp) {
-        await updateRecord(db, collections.EXPERIENCE, editingExp.id, data)
-        toast({ title: 'Experience Updated' })
-      } else {
-        await createRecord(db, collections.EXPERIENCE, data, user.uid)
-        toast({ title: 'Experience Added' })
-      }
-      setIsDialogOpen(false)
-      setEditingExp(null)
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    } finally {
-      setLoading(false)
-    }
+    const mutation = editingExp 
+      ? updateRecord(db, collections.EXPERIENCE, editingExp.id, data)
+      : createRecord(db, collections.EXPERIENCE, data, user.uid)
+
+    mutation.catch(async (err) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingExp ? `${collections.EXPERIENCE}/${editingExp.id}` : collections.EXPERIENCE,
+        operation: editingExp ? 'update' : 'create',
+        requestResourceData: data,
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    });
+
+    toast({ title: editingExp ? 'Experience Updated' : 'Experience Added' })
+    setIsDialogOpen(false)
+    setEditingExp(null)
+    setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteRecord(db, collections.EXPERIENCE, id)
-      toast({ title: 'Experience Removed' })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    }
+  const handleDelete = (id: string) => {
+    if (!db) return
+    deleteRecord(db, collections.EXPERIENCE, id)
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.EXPERIENCE}/${id}`,
+          operation: 'delete',
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+    toast({ title: 'Experience Removed' })
   }
 
   if (expLoading) {
@@ -136,7 +144,6 @@ export default function ExperiencePage() {
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Experience
                 </Button>
               </DialogFooter>

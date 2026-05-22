@@ -3,7 +3,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Quote, Loader2, Trash2, User, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function TestimonialsPage() {
   const db = useFirestore()
@@ -39,44 +41,50 @@ export default function TestimonialsPage() {
     setMounted(true)
   }, [])
 
-  const handleSaveTest = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveTest = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !db) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
-      author: formData.get('author'),
-      role: formData.get('role'),
-      company: formData.get('company'),
-      content: formData.get('content'),
+      author: formData.get('author') as string,
+      role: formData.get('role') as string,
+      company: formData.get('company') as string,
+      content: formData.get('content') as string,
       date: editingTest?.date || new Date().toISOString().split('T')[0],
     }
 
-    try {
-      if (editingTest) {
-        await updateRecord(db, collections.TESTIMONIALS, editingTest.id, data)
-        toast({ title: 'Endorsement Updated' })
-      } else {
-        await createRecord(db, collections.TESTIMONIALS, data, user.uid)
-        toast({ title: 'Endorsement Added' })
-      }
-      setIsDialogOpen(false)
-      setEditingTest(null)
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    } finally {
-      setLoading(false)
-    }
+    const mutation = editingTest 
+      ? updateRecord(db, collections.TESTIMONIALS, editingTest.id, data)
+      : createRecord(db, collections.TESTIMONIALS, data, user.uid)
+
+    mutation.catch(async (err) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingTest ? `${collections.TESTIMONIALS}/${editingTest.id}` : collections.TESTIMONIALS,
+        operation: editingTest ? 'update' : 'create',
+        requestResourceData: data,
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
+
+    toast({ title: editingTest ? 'Endorsement Updated' : 'Endorsement Added' })
+    setIsDialogOpen(false)
+    setEditingTest(null)
+    setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteRecord(db, collections.TESTIMONIALS, id)
-      toast({ title: 'Testimonial Removed' })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    }
+  const handleDelete = (id: string) => {
+    if (!db) return
+    deleteRecord(db, collections.TESTIMONIALS, id)
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.TESTIMONIALS}/${id}`,
+          operation: 'delete',
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+    toast({ title: 'Testimonial Removed' })
   }
 
   if (!mounted || testLoading) {
@@ -131,7 +139,6 @@ export default function TestimonialsPage() {
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Endorsement
                 </Button>
               </DialogFooter>

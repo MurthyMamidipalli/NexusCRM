@@ -16,6 +16,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function SkillsPage() {
   const db = useFirestore()
@@ -35,42 +37,48 @@ export default function SkillsPage() {
 
   const { data: skills, loading: skillsLoading, error } = useCollection(skillsQuery)
 
-  const handleSaveSkill = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveSkill = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !db) return
     
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
-      name: formData.get('name'),
-      category: formData.get('category'),
+      name: formData.get('name') as string,
+      category: formData.get('category') as string,
       level: parseInt(formData.get('level') as string) || 0,
     }
 
-    try {
-      if (editingSkill) {
-        await updateRecord(db, collections.SKILLS, editingSkill.id, data)
-        toast({ title: 'Skill Updated' })
-      } else {
-        await createRecord(db, collections.SKILLS, data, user.uid)
-        toast({ title: 'Skill Created' })
-      }
-      setIsDialogOpen(false)
-      setEditingSkill(null)
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message })
-    } finally {
-      setLoading(false)
-    }
+    const mutation = editingSkill 
+      ? updateRecord(db, collections.SKILLS, editingSkill.id, data)
+      : createRecord(db, collections.SKILLS, data, user.uid)
+
+    mutation.catch(async (err) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingSkill ? `${collections.SKILLS}/${editingSkill.id}` : collections.SKILLS,
+        operation: editingSkill ? 'update' : 'create',
+        requestResourceData: data,
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
+
+    toast({ title: editingSkill ? 'Skill Updated' : 'Skill Created' })
+    setIsDialogOpen(false)
+    setEditingSkill(null)
+    setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteRecord(db, collections.SKILLS, id)
-      toast({ title: 'Skill Removed' })
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message })
-    }
+  const handleDelete = (id: string) => {
+    if (!db) return
+    deleteRecord(db, collections.SKILLS, id)
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.SKILLS}/${id}`,
+          operation: 'delete',
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+    toast({ title: 'Skill Removed' })
   }
 
   return (
@@ -119,7 +127,6 @@ export default function SkillsPage() {
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Skill
                 </Button>
               </DialogFooter>

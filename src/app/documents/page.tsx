@@ -10,7 +10,6 @@ import {
   Upload, 
   Download, 
   Trash2, 
-  ExternalLink,
   ShieldCheck,
   Search,
   Loader2,
@@ -31,6 +30,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function DocumentsPage() {
   const db = useFirestore()
@@ -57,45 +58,50 @@ export default function DocumentsPage() {
 
   const { data: documents, loading: docsLoading } = useCollection(docsQuery)
 
-  const handleSaveDoc = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveDoc = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user || !db) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
-      name: formData.get('name'),
-      category: formData.get('category'),
-      size: formData.get('size') || '1.2 MB',
-      status: formData.get('status') || 'Active',
+      name: formData.get('name') as string,
+      category: formData.get('category') as string,
+      size: (formData.get('size') as string) || '1.2 MB',
+      status: (formData.get('status') as string) || 'Active',
       url: editingDoc?.url || '#'
     }
 
-    try {
-      if (editingDoc) {
-        await updateRecord(db, collections.DOCUMENTS, editingDoc.id, data)
-        toast({ title: 'Document Updated' })
-      } else {
-        await createRecord(db, collections.DOCUMENTS, data, user.uid)
-        toast({ title: 'Document Added to Vault' })
-      }
-      setIsDialogOpen(false)
-      setEditingDoc(null)
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Persistence Error', description: error.message })
-    } finally {
-      setLoading(false)
-    }
+    const mutation = editingDoc 
+      ? updateRecord(db, collections.DOCUMENTS, editingDoc.id, data)
+      : createRecord(db, collections.DOCUMENTS, data, user.uid)
+
+    mutation.catch(async (err) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingDoc ? `${collections.DOCUMENTS}/${editingDoc.id}` : collections.DOCUMENTS,
+        operation: editingDoc ? 'update' : 'create',
+        requestResourceData: data,
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    });
+
+    toast({ title: editingDoc ? 'Document Updated' : 'Document Added to Vault' })
+    setIsDialogOpen(false)
+    setEditingDoc(null)
+    setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!db) return
-    try {
-      await deleteRecord(db, collections.DOCUMENTS, id)
-      toast({ title: 'Document Removed' })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    }
+    deleteRecord(db, collections.DOCUMENTS, id)
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.DOCUMENTS}/${id}`,
+          operation: 'delete',
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+    toast({ title: 'Document Removed' })
   }
 
   const filteredDocs = useMemo(() => {
@@ -190,7 +196,6 @@ export default function DocumentsPage() {
                 </div>
                 <DialogFooter>
                   <Button type="submit" disabled={loading} className="w-full">
-                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Save Record
                   </Button>
                 </DialogFooter>
@@ -220,16 +225,6 @@ export default function DocumentsPage() {
                   {cat}
                 </Button>
               ))}
-            </CardContent>
-          </Card>
-
-          <Card className="border-primary/20 bg-primary/5 text-primary">
-            <CardHeader className="pb-2">
-              <ShieldCheck className="h-8 w-8 mb-2" />
-              <CardTitle className="text-md text-primary font-bold">Encrypted Storage</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs leading-relaxed opacity-80">All files are end-to-end encrypted and stored in regional compliant buckets.</p>
             </CardContent>
           </Card>
         </div>

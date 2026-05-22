@@ -3,22 +3,25 @@
 
 import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Link as LinkIcon, Loader2, Trash2, Globe, Github, Linkedin, Twitter, ExternalLink } from 'lucide-react'
+import { Plus, Link as LinkIcon, Loader2, Trash2, Globe, Github, Linkedin, Twitter, ExternalLink, Pencil } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
-import { collections, deleteRecord, createRecord } from '@/lib/firestore-service'
+import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 export default function LinksPage() {
   const db = useFirestore()
   const { user } = useUser()
   const [mounted, setMounted] = useState(false)
-  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingLink, setEditingLink] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   const linksQuery = useMemo(() => {
@@ -36,37 +39,48 @@ export default function LinksPage() {
     setMounted(true)
   }, [])
 
-  const handleAddLink = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveLink = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !db) return
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     const data = {
-      label: formData.get('label'),
-      url: formData.get('url'),
+      label: formData.get('label') as string,
+      url: formData.get('url') as string,
       type: formData.get('type') || 'Other',
-      createdAt: new Date().toISOString()
     }
 
-    try {
-      await createRecord(db, collections.LINKS, data, user.uid)
-      toast({ title: 'Link Saved' })
-      setIsAddOpen(false)
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    } finally {
-      setLoading(false)
-    }
+    const mutation = editingLink 
+      ? updateRecord(db, collections.LINKS, editingLink.id, data)
+      : createRecord(db, collections.LINKS, data, user.uid)
+
+    mutation.catch(async (err) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingLink ? `${collections.LINKS}/${editingLink.id}` : collections.LINKS,
+        operation: editingLink ? 'update' : 'create',
+        requestResourceData: data,
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
+
+    toast({ title: editingLink ? 'Link Updated' : 'Link Saved' })
+    setIsDialogOpen(false)
+    setEditingLink(null)
+    setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteRecord(db, collections.LINKS, id)
-      toast({ title: 'Link Removed' })
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message })
-    }
+  const handleDelete = (id: string) => {
+    if (!db) return
+    deleteRecord(db, collections.LINKS, id)
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.LINKS}/${id}`,
+          operation: 'delete',
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+    toast({ title: 'Link Removed' })
   }
 
   const getIcon = (label: string) => {
@@ -94,29 +108,31 @@ export default function LinksPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">🔗 Portfolios & Links</h1>
           <p className="text-muted-foreground">Your digital footprint and professional social presence.</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setEditingLink(null);
+        }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20">
+            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingLink(null)}>
               <Plus className="h-4 w-4" />
               Add Link
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add External Presence</DialogTitle>
+              <DialogTitle>{editingLink ? 'Edit Link' : 'Add External Presence'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleAddLink} className="space-y-4 py-4">
+            <form onSubmit={handleSaveLink} className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="label">Link Label</Label>
-                <Input id="label" name="label" placeholder="GitHub Portfolio" required />
+                <Input id="label" name="label" defaultValue={editingLink?.label || ''} placeholder="GitHub Portfolio" required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="url">URL</Label>
-                <Input id="url" name="url" placeholder="https://github.com/username" required />
+                <Input id="url" name="url" defaultValue={editingLink?.url || ''} placeholder="https://github.com/username" required />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Link
                 </Button>
               </DialogFooter>
@@ -134,9 +150,27 @@ export default function LinksPage() {
                   <div className="p-3 rounded-2xl bg-primary/10 text-primary">
                     {getIcon(link.label)}
                   </div>
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100" onClick={() => handleDelete(link.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-muted-foreground hover:text-primary" 
+                      onClick={() => {
+                        setEditingLink(link);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-muted-foreground hover:text-destructive" 
+                      onClick={() => handleDelete(link.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="mt-4 space-y-1">
                   <h3 className="font-headline font-bold text-lg">{link.label}</h3>
