@@ -6,7 +6,6 @@ import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Hammer, Loader2, Trash2, Award, AlertCircle, Pencil } from 'lucide-react'
-import { Progress } from '@/components/ui/progress'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
@@ -31,7 +30,7 @@ export default function SkillsPage() {
     return query(
       collection(db, collections.SKILLS), 
       where('ownerId', '==', user.uid),
-      orderBy('level', 'desc')
+      orderBy('name', 'asc')
     );
   }, [db, user])
 
@@ -46,7 +45,6 @@ export default function SkillsPage() {
     const data = {
       name: formData.get('name') as string,
       category: formData.get('category') as string,
-      level: parseInt(formData.get('level') as string) || 0,
     }
 
     const mutation = editingSkill 
@@ -121,10 +119,6 @@ export default function SkillsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="level">Proficiency Level (0-100)</Label>
-                <Input id="level" name="level" type="number" min="0" max="100" defaultValue={editingSkill?.level || 80} required />
-              </div>
               <DialogFooter>
                 <Button type="submit" disabled={loading}>
                   Save Skill
@@ -154,7 +148,7 @@ export default function SkillsPage() {
           {skills.map((skill: any) => (
             <Card key={skill.id} className="group border-none bg-card/50 backdrop-blur-md shadow-lg hover:shadow-xl transition-all">
               <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-primary/10 text-primary">
                       <Award className="h-5 w-5" />
@@ -185,14 +179,6 @@ export default function SkillsPage() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                </div>
-                
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span>Proficiency</span>
-                    <span className="text-primary">{skill.level}%</span>
-                  </div>
-                  <Progress value={skill.level} className="h-1.5" />
                 </div>
               </CardContent>
             </Card>
