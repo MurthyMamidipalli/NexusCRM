@@ -111,14 +111,18 @@ export default function ContactsPage() {
       {/* View Contact Dialog */}
       <Dialog open={!!selectedContact} onOpenChange={(open) => !open && setSelectedContact(null)}>
         <DialogContent className="sm:max-w-[450px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{selectedContact?.name || 'Contact Profile'}</DialogTitle>
+            <DialogDescription>Detailed professional information for {selectedContact?.name}</DialogDescription>
+          </DialogHeader>
           <div className="h-32 bg-gradient-to-r from-primary/20 to-accent/20" />
           <div className="px-8 pb-8 -mt-12 space-y-6">
             <div className="flex flex-col items-center text-center space-y-2 pt-16">
               <div className="space-y-1">
-                <DialogTitle className="text-3xl font-bold font-headline">{selectedContact?.name}</DialogTitle>
-                <DialogDescription className="text-primary font-semibold">
+                <h2 className="text-3xl font-bold font-headline">{selectedContact?.name}</h2>
+                <p className="text-primary font-semibold">
                   {selectedContact?.company || 'Private Professional'}
-                </DialogDescription>
+                </p>
               </div>
             </div>
 

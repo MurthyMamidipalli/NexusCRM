@@ -10,7 +10,7 @@ import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, orderBy, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -117,6 +117,7 @@ export default function TestimonialsPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingTest ? 'Edit Endorsement' : 'Add New Endorsement'}</DialogTitle>
+              <DialogDescription>Share feedback from your colleagues and clients.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveTest} className="space-y-4 py-4">
               <div className="space-y-2">
