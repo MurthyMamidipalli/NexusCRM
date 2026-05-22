@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState } from 'react'
@@ -67,10 +68,6 @@ export default function PublicProfilePage() {
     isVisible && uid && db ? query(collection(db, collections.RESUMES), where('ownerId', '==', uid), where('isPublic', '==', true)) : null, 
     [db, uid, isVisible]
   )
-  const docsQuery = useMemo(() => 
-    isVisible && uid && db ? query(collection(db, collections.DOCUMENTS), where('ownerId', '==', uid), where('isPublic', '==', true)) : null, 
-    [db, uid, isVisible]
-  )
   const linksQuery = useMemo(() => 
     isVisible && uid && db ? query(collection(db, collections.LINKS), where('ownerId', '==', uid)) : null, 
     [db, uid, isVisible]
@@ -83,7 +80,6 @@ export default function PublicProfilePage() {
   const { data: certifications } = useCollection(certQuery, { silent: true })
   const { data: links } = useCollection(linksQuery, { silent: true })
   const { data: resumes } = useCollection(resumeQuery, { silent: true })
-  const { data: publicDocuments } = useCollection(docsQuery, { silent: true })
 
   const experience = useMemo(() => {
     if (!rawExp) return []
@@ -223,30 +219,6 @@ export default function PublicProfilePage() {
                             </Button>
                           )}
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {publicDocuments && publicDocuments.length > 0 && (
-              <section className="space-y-6">
-                <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground border-b border-white/5 pb-2">Public Documents</h2>
-                <div className="grid grid-cols-1 gap-4">
-                  {publicDocuments.map((doc: any) => (
-                    <Card key={doc.id} className="bg-[#121214] border-white/10 shadow-lg group hover:border-primary/50 transition-all">
-                      <CardContent className="p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <FileText className="h-5 w-5 text-primary/50" />
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-bold truncate text-white">{doc.name}</span>
-                            <span className="text-[8px] text-muted-foreground uppercase font-bold tracking-widest">{doc.category}</span>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-white/5" onClick={() => setPreviewFile({ url: doc.fileUrl, name: doc.name })}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
                       </CardContent>
                     </Card>
                   ))}

@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Profile": {
@@ -100,16 +101,19 @@
       }
     },
     "Document": {
-      "title": "Document",
-      "description": "Stored files and assets.",
+      "title": "Secure Document",
+      "description": "Encrypted-at-rest personal and professional documents.",
       "type": "object",
       "properties": {
-        "name": { "type": "string" },
-        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string", "enum": ["Aadhaar Card", "PAN Card", "Driving Licence", "Passport", "Voter ID", "Property Documents", "Insurance Documents", "Tax Documents", "Medical Records", "Other Documents"] },
+        "description": { "type": "string" },
         "fileUrl": { "type": "string" },
-        "fileName": { "type": "string" },
-        "ownerId": { "type": "string" },
-        "isPublic": { "type": "boolean", "description": "Mandatory: Allow public viewing of this specific document." }
+        "filePath": { "type": "string" },
+        "fileType": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "status": { "type": "string", "enum": ["active"] },
+        "ownerId": { "type": "string" }
       }
     },
     "Resume": {
@@ -174,7 +178,7 @@
     "/education/{eduId}": { "schema": "#/entities/Education", "description": "Education history. READ access is public for any visitor viewing a public profile hub." },
     "/projects/{projectId}": { "schema": "#/entities/Project", "description": "Portfolio projects. READ access is public for any visitor viewing a public profile hub." },
     "/contacts/{contactId}": { "schema": "#/entities/Contact", "description": "Network contacts. PRIVATE: Only owner can access." },
-    "/documents/{docId}": { "schema": "#/entities/Document", "description": "Vault documents. PRIVATE: Only owner can access unless explicitly marked public." },
+    "/documents/{docId}": { "schema": "#/entities/Document", "description": "PRIVATE: Secure personal document vault. Only owner can access." },
     "/resumes/{resId}": { "schema": "#/entities/Resume", "description": "Resume records. PRIVATE: Only owner can access unless explicitly marked public." },
     "/leads/{leadId}": { "schema": "#/entities/Lead", "description": "Sales leads. PRIVATE: Only owner can access." },
     "/achievements/{achId}": { "schema": "#/entities/Achievement", "description": "Awards and honors. READ access is public for any visitor viewing a public profile hub." },
