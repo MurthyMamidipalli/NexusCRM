@@ -91,9 +91,28 @@ export default function DocumentVaultPage() {
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db || !storage) return
+    
+    console.group('📁 [Vault] Save Execution Flow');
+    
+    // Step 1: User & Service Validation
+    console.log('Step 1: Validating Session & Services...');
+    if (!user) {
+      console.error('❌ Validation Failed: No authenticated user.');
+      console.groupEnd();
+      return;
+    }
+    if (!db) console.error('❌ Validation Failed: Firestore instance missing.');
+    if (!storage) console.error('❌ Validation Failed: Storage instance missing.');
+    
+    console.log('Auth UID:', user.uid);
+    console.log('Target Collection:', collections.DOCUMENTS);
+
+    // Step 2: File Validation
+    console.log('Step 2: Validating Files...');
     if (pendingFiles.length === 0) {
+      console.error('❌ Validation Failed: No files selected.');
       toast({ variant: 'destructive', title: 'File Missing', description: 'Please select a document to upload.' });
+      console.groupEnd();
       return
     }
 
@@ -104,13 +123,16 @@ export default function DocumentVaultPage() {
 
     try {
       for (const file of pendingFiles) {
+        console.group(`📄 Processing File: ${file.name}`);
+        
         const timestamp = Date.now()
         const storagePath = `documents/${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         const storageRef = ref(storage, storagePath)
         
-        console.log(`[Storage] Upload started for: ${file.name}`);
+        // Step 3: Storage Upload
+        console.log('Step 3: Initiating Firebase Storage Upload...');
+        console.log('Storage Path:', storagePath);
         
-        // Fix: Explicitly using uploadBytesResumable SDK method to handle CORS preflights correctly
         const uploadTask = uploadBytesResumable(storageRef, file);
 
         await new Promise((resolve, reject) => {
@@ -118,22 +140,26 @@ export default function DocumentVaultPage() {
             'state_changed',
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              console.log(`[Storage] Upload progress for ${file.name}: ${Math.round(progress)}%`);
+              console.log(`[Storage] Upload Progress: ${Math.round(progress)}%`);
             },
             (error) => {
-              console.error(`[Storage] Upload error for ${file.name}:`, error);
+              console.error('❌ Step 3 FAILED: Storage Upload Error', error);
               reject(error);
             },
             () => {
-              console.log(`[Storage] Upload completed for: ${file.name}`);
+              console.log('✅ Step 3 SUCCESS: Upload Task Completed.');
               resolve(null);
             }
           );
         });
 
+        // Step 4: URL Generation
+        console.log('Step 4: Generating Download URL...');
         const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
-        console.log(`[Storage] Download URL generated for ${file.name}:`, fileUrl);
+        console.log('✅ Step 4 SUCCESS:', fileUrl);
 
+        // Step 5: Firestore Persistence
+        console.log('Step 5: Initiating Firestore Record Creation...');
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
           file_name: file.name,
@@ -147,31 +173,38 @@ export default function DocumentVaultPage() {
           status: 'active'
         }
 
-        console.log(`[Firestore] Initiating record creation for: ${recordData.title}`);
-        createRecord(db, collections.DOCUMENTS, recordData, user.uid)
-          .catch(async (err: any) => {
-            const permissionError = new FirestorePermissionError({
-              path: collections.DOCUMENTS,
-              operation: 'create',
-              requestResourceData: recordData,
-              originalError: err
-            } satisfies SecurityRuleContext);
-            errorEmitter.emit('permission-error', permissionError);
-          });
+        const docPromise = createRecord(db, collections.DOCUMENTS, recordData, user.uid);
+        
+        docPromise.then((docRef) => {
+          console.log('✅ Step 6 SUCCESS: Firestore document created with ID:', docRef.id);
+        }).catch((err) => {
+          console.error('❌ Step 6 FAILED: Firestore Persistence Error', err);
+          
+          const permissionError = new FirestorePermissionError({
+            path: collections.DOCUMENTS,
+            operation: 'create',
+            requestResourceData: recordData,
+            originalError: err
+          } satisfies SecurityRuleContext);
+          errorEmitter.emit('permission-error', permissionError);
+        });
+
+        console.groupEnd();
       }
 
       toast({ title: 'Record Secured', description: 'Vault synchronized successfully.' })
       setIsDialogOpen(false)
       setPendingFiles([])
     } catch (err: any) {
-      console.error('[Storage] Critical error:', err)
+      console.error('🔥 Critical Execution Termination:', err);
       toast({ 
         variant: 'destructive', 
         title: 'Upload Failed', 
-        description: err.message || 'Check storage permissions and try again.'
+        description: err.message || 'The request was blocked or failed during synchronization.'
       });
     } finally {
       setIsSaving(false)
+      console.groupEnd();
     }
   }
 
