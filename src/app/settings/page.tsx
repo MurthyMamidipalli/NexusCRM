@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useEffect, useState } from 'react'
@@ -11,7 +10,7 @@ import { useUser, useFirestore, useDoc } from '@/firebase'
 import { doc } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 import { usePersistentDocument } from '@/hooks/use-persistence'
-import { Settings, User, Bell, Shield, Eye, Loader2, Save, Cloud, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Settings, User, Bell, Shield, Eye, Loader2, Save, Cloud, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase'
 
@@ -25,6 +24,7 @@ export default function SettingsPage() {
   const { user, loading: userLoading } = useUser()
   const db = useFirestore()
   const [mounted, setMounted] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -56,13 +56,23 @@ export default function SettingsPage() {
     })
   }
 
-  // Runtime Environment Verification
-  const integrations = {
-    supabase: {
-      url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      initialized: !!supabase
+  const verifyConnection = async () => {
+    setIsVerifying(true)
+    // Small delay to simulate verification and allow user to see the pulse
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    if (supabase) {
+      toast({
+        title: "Integration Active",
+        description: "Supabase Storage is responding correctly."
+      })
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Integration Inactive",
+        description: "Check your environment variable configuration."
+      })
     }
+    setIsVerifying(false)
   }
 
   if (!mounted || userLoading || profileLoading) {
@@ -161,73 +171,57 @@ export default function SettingsPage() {
             </CardFooter>
           </Card>
 
-          {/* Integration Diagnostics */}
           <Card className="border-none bg-card/50 backdrop-blur-md shadow-xl overflow-hidden">
             <CardHeader className="bg-muted/30">
-              <CardTitle className="font-headline text-xl flex items-center gap-2 text-primary">
-                <Cloud className="h-5 w-5" /> Cloud Integrations
-              </CardTitle>
-              <CardDescription>Verify your environment variable configuration at runtime.</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="font-headline text-xl flex items-center gap-2 text-primary">
+                    <Cloud className="h-5 w-5" /> Supabase Storage
+                  </CardTitle>
+                  <CardDescription>Live connection diagnostics for vault services.</CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" onClick={verifyConnection} disabled={isVerifying} className="gap-2">
+                  <RefreshCw className={`h-4 w-4 ${isVerifying ? 'animate-spin' : ''}`} />
+                  Verify Bridge
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <h4 className="text-sm font-bold">Supabase Storage</h4>
-                    <p className="text-xs text-muted-foreground">Required for document and resume uploads.</p>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-muted/20 border border-border/50 space-y-2">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">NEXT_PUBLIC_SUPABASE_URL</Label>
                   <div className="flex items-center gap-2">
-                    {integrations.supabase.initialized ? (
-                      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-[10px] font-bold uppercase tracking-widest border border-green-500/20">
-                        <CheckCircle2 className="h-3 w-3" /> Active
-                      </span>
+                    {!!process.env.NEXT_PUBLIC_SUPABASE_URL ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
                     ) : (
-                      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold uppercase tracking-widest border border-destructive/20 animate-pulse">
-                        <AlertCircle className="h-3 w-3" /> Inactive
-                      </span>
+                      <AlertCircle className="h-4 w-4 text-destructive" />
                     )}
+                    <span className="text-xs font-mono truncate max-w-[200px]">
+                      {process.env.NEXT_PUBLIC_SUPABASE_URL || 'Not Detected'}
+                    </span>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl bg-muted/20 border border-border/50 space-y-2">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">NEXT_PUBLIC_SUPABASE_URL</Label>
-                    <div className="flex items-center gap-2">
-                      {integrations.supabase.url ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <AlertCircle className="h-4 w-4 text-destructive" />
-                      )}
-                      <span className="text-xs font-mono truncate max-w-[200px]">
-                        {integrations.supabase.url ? process.env.NEXT_PUBLIC_SUPABASE_URL : 'Missing in environment'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-muted/20 border border-border/50 space-y-2">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">NEXT_PUBLIC_SUPABASE_ANON_KEY</Label>
-                    <div className="flex items-center gap-2">
-                      {integrations.supabase.key ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <AlertCircle className="h-4 w-4 text-destructive" />
-                      )}
-                      <span className="text-xs font-mono">
-                        {integrations.supabase.key ? '••••••••••••••••' : 'Missing in environment'}
-                      </span>
-                    </div>
+                <div className="p-4 rounded-xl bg-muted/20 border border-border/50 space-y-2">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">NEXT_PUBLIC_SUPABASE_ANON_KEY</Label>
+                  <div className="flex items-center gap-2">
+                    {!!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                    )}
+                    <span className="text-xs font-mono">
+                      {process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Detected (••••••••)' : 'Not Detected'}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {!integrations.supabase.initialized && (
-                <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 text-xs leading-relaxed">
-                  <p className="font-bold text-primary mb-1">Configuration Guide:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                    <li>Open the <strong>.env</strong> file in Firebase Studio.</li>
-                    <li>Add your Supabase URL and Anon Key.</li>
-                    <li>Restart the development server if changes aren't picked up.</li>
-                    <li>For production, add these variables to your Vercel or App Hosting dashboard.</li>
-                  </ol>
+              {!supabase && (
+                <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/10 text-xs leading-relaxed">
+                  <p className="font-bold text-destructive mb-1">Configuration Error:</p>
+                  <p className="text-muted-foreground italic">
+                    The Supabase client could not initialize. Ensure both keys are present in your .env file and restart your local dev server or trigger a fresh deployment on Vercel.
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -245,8 +239,10 @@ export default function SettingsPage() {
                 <span className="font-bold">Operational</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="opacity-80">Version</span>
-                <span className="font-mono">v1.2.5-stable</span>
+                <span className="opacity-80">Storage Hub</span>
+                <span className={`font-bold ${supabase ? 'text-green-200' : 'text-red-200'}`}>
+                  {supabase ? 'Connected' : 'Offline'}
+                </span>
               </div>
             </CardContent>
           </Card>

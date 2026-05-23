@@ -1,47 +1,36 @@
 import { createClient } from '@supabase/supabase-js'
 
+/**
+ * @fileOverview Supabase client initialization with enhanced diagnostics.
+ */
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Immediate diagnostics for Vercel deployment debugging
+// Immediate diagnostics for deployment debugging
 if (typeof window !== 'undefined') {
-  console.log('SUPABASE_URL detected:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
-  console.log('SUPABASE_ANON_KEY detected:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  console.group('📡 Supabase Bridge Status');
+  console.log('URL Detected:', !!supabaseUrl);
+  console.log('Key Detected:', !!supabaseAnonKey);
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn('Action Required: Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment.');
+  }
+  console.groupEnd();
 }
 
 /**
- * Supabase client for Storage integration.
- * Initialized exactly with NEXT_PUBLIC environment variables.
+ * Supabase client for high-performance Storage integration.
  */
 export const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ) 
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false // Using Firebase Auth as the primary authority
+      }
+    }) 
   : null;
-
-// Audit and report status to developer console
-if (typeof window !== 'undefined') {
-  const isUrlSet = !!supabaseUrl;
-  const isKeySet = !!supabaseAnonKey;
-  
-  if (!isUrlSet || !isKeySet) {
-    console.group('📡 Supabase Integration Status');
-    console.error('URL:', isUrlSet ? '✅ CONFIGURED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_URL)');
-    console.error('KEY:', isKeySet ? '✅ CONFIGURED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_ANON_KEY)');
-    console.info('Reason: URL or Key returned falsy from process.env.');
-    console.groupEnd();
-  } else {
-    console.log('🚀 Supabase Client Initialized Successfully');
-  }
-}
 
 /**
  * Utility to upload a file to Supabase Storage with progress tracking.
- * @param bucket Name of the storage bucket
- * @param path Destination path in the bucket
- * @param file File object to upload
- * @param onProgress Callback for percentage tracking
  */
 export async function uploadWithProgress(
   bucket: string,
@@ -50,7 +39,7 @@ export async function uploadWithProgress(
   onProgress: (percent: number) => void
 ): Promise<string> {
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase Configuration Missing. Verify NEXT_PUBLIC variables in Vercel.');
+    throw new Error('Supabase Configuration Missing. Verify environment variables.');
   }
 
   return new Promise((resolve, reject) => {
