@@ -4,7 +4,7 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, GraduationCap, Loader2, Trash2, Calendar, Award, Pencil, AlertCircle, Fingerprint } from 'lucide-react'
+import { Plus, GraduationCap, Loader2, Trash2, Calendar, Award, Pencil, AlertCircle, Fingerprint, X } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
@@ -70,7 +70,6 @@ export default function EducationPage() {
       ? updateRecord(db, collections.EDUCATION, editingEdu.id, data)
       : createRecord(db, collections.EDUCATION, data, user.uid)
 
-    // Snappy UI: Optimistic immediate feedback
     toast({ title: editingEdu ? 'Education Updated' : 'Education Added' })
     setIsDialogOpen(false)
     setEditingEdu(null)
@@ -114,80 +113,136 @@ export default function EducationPage() {
           if (!open) setEditingEdu(null);
         }}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => setEditingEdu(null)}>
+            <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white" onClick={() => setEditingEdu(null)}>
               <Plus className="h-4 w-4" />
               Add Record
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-bold font-headline">
+          <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-2xl p-8 overflow-hidden">
+            <DialogHeader className="mb-6">
+              <DialogTitle className="text-3xl font-bold font-headline">
                 {editingEdu ? 'Edit Education' : 'Add Education'}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-gray-400">
                 Enter the details of your educational institution.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSaveEdu} className="space-y-6 py-4">
+            
+            <form onSubmit={handleSaveEdu} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="institution">Institution</Label>
-                <Input id="institution" name="institution" defaultValue={editingEdu?.institution || ''} placeholder="e.g. Stanford University" required />
+                <Label htmlFor="institution" className="text-sm font-semibold text-white">Institution</Label>
+                <Input 
+                  id="institution" 
+                  name="institution" 
+                  defaultValue={editingEdu?.institution || ''} 
+                  placeholder="e.g. Stanford University" 
+                  required 
+                  className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"
+                />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="degree">Degree</Label>
-                  <Input id="degree" name="degree" defaultValue={editingEdu?.degree || ''} placeholder="e.g. Bachelor of Science" required />
+                  <Label htmlFor="degree" className="text-sm font-semibold text-white">Degree</Label>
+                  <Input 
+                    id="degree" 
+                    name="degree" 
+                    defaultValue={editingEdu?.degree || ''} 
+                    placeholder="e.g. Bachelor of Science" 
+                    required 
+                    className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="fieldOfStudy">Field of Study</Label>
-                  <Input id="fieldOfStudy" name="fieldOfStudy" defaultValue={editingEdu?.fieldOfStudy || ''} placeholder="e.g. Computer Science" />
+                  <Label htmlFor="fieldOfStudy" className="text-sm font-semibold text-white">Field of Study</Label>
+                  <Input 
+                    id="fieldOfStudy" 
+                    name="fieldOfStudy" 
+                    defaultValue={editingEdu?.fieldOfStudy || ''} 
+                    placeholder="e.g. Computer Science" 
+                    className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"
+                  />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="idNumber">ID Number / Enrollment No.</Label>
+                <Label htmlFor="idNumber" className="text-sm font-semibold text-white">ID Number / Enrollment No.</Label>
                 <div className="relative">
-                  <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="idNumber" name="idNumber" className="pl-10" defaultValue={editingEdu?.idNumber || ''} placeholder="e.g. STU-123456" />
+                  <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input 
+                    id="idNumber" 
+                    name="idNumber" 
+                    className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl" 
+                    defaultValue={editingEdu?.idNumber || ''} 
+                    placeholder="e.g. STU-123456" 
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="startDate">Start Date</Label>
-                  <Input id="startDate" name="startDate" type="date" defaultValue={editingEdu?.startDate || ''} required />
+                  <Label htmlFor="startDate" className="text-sm font-semibold text-white">Start Date</Label>
+                  <Input 
+                    id="startDate" 
+                    name="startDate" 
+                    type="date" 
+                    defaultValue={editingEdu?.startDate || ''} 
+                    required 
+                    className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl [color-scheme:dark]"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="endDate">End Date (Optional)</Label>
-                  <Input id="endDate" name="endDate" type="date" defaultValue={editingEdu?.endDate || ''} />
+                  <Label htmlFor="endDate" className="text-sm font-semibold text-white">End Date (Optional)</Label>
+                  <Input 
+                    id="endDate" 
+                    name="endDate" 
+                    type="date" 
+                    defaultValue={editingEdu?.endDate || ''} 
+                    className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl [color-scheme:dark]"
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="cgpa">CGPA</Label>
-                  <Input id="cgpa" name="cgpa" defaultValue={editingEdu?.cgpa || ''} placeholder="e.g. 3.8/4.0" />
+                  <Label htmlFor="cgpa" className="text-sm font-semibold text-white">CGPA</Label>
+                  <Input 
+                    id="cgpa" 
+                    name="cgpa" 
+                    defaultValue={editingEdu?.cgpa || ''} 
+                    placeholder="e.g. 3.8/4.0" 
+                    className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="percentage">Percentage</Label>
-                  <Input id="percentage" name="percentage" defaultValue={editingEdu?.percentage || ''} placeholder="e.g. 92%" />
+                  <Label htmlFor="percentage" className="text-sm font-semibold text-white">Percentage</Label>
+                  <Input 
+                    id="percentage" 
+                    name="percentage" 
+                    defaultValue={editingEdu?.percentage || ''} 
+                    placeholder="e.g. 92%" 
+                    className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"
+                  />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Achievements / Description</Label>
+                <Label htmlFor="description" className="text-sm font-semibold text-white">Achievements / Description</Label>
                 <Textarea 
                   id="description" 
                   name="description" 
                   defaultValue={editingEdu?.description || ''}
                   placeholder="Describe your major accomplishments..." 
-                  className="min-h-[120px]"
+                  className="bg-[#1c1c1f] border-none text-white min-h-[120px] rounded-xl focus:ring-1 focus:ring-primary"
                 />
               </div>
 
-              <DialogFooter>
-                <Button type="submit" disabled={loading}>
+              <DialogFooter className="pt-4">
+                <Button 
+                  type="submit" 
+                  disabled={loading} 
+                  className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none ml-auto"
+                >
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Record
                 </Button>
