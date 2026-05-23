@@ -104,7 +104,7 @@ export default function DocumentVaultPage() {
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
-        description: 'Verify NEXT_PUBLIC_SUPABASE_URL and ANON_KEY are set in environment variables.' 
+        description: 'Supabase URL or Anon Key is missing. Check Vercel logs.' 
       })
       return
     }

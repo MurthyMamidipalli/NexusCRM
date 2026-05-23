@@ -1,26 +1,35 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+// Immediate diagnostics for Vercel deployment debugging
+if (typeof window !== 'undefined') {
+  console.log('SUPABASE_URL detected:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+  console.log('SUPABASE_ANON_KEY detected:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+}
 
 /**
  * Supabase client for Storage integration.
- * Initialized safely to prevent runtime crashes if environment variables are missing.
+ * Initialized exactly with NEXT_PUBLIC environment variables.
  */
 export const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
+  ? createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ) 
   : null;
 
-// Diagnostics for the developer in the browser console
+// Audit and report status to developer console
 if (typeof window !== 'undefined') {
   const isUrlSet = !!supabaseUrl;
   const isKeySet = !!supabaseAnonKey;
   
   if (!isUrlSet || !isKeySet) {
     console.group('📡 Supabase Integration Status');
-    console.warn('URL:', isUrlSet ? '✅ CONFIGURED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_URL)');
-    console.warn('KEY:', isKeySet ? '✅ CONFIGURED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_ANON_KEY)');
-    console.info('Verify these variables are set in your Vercel/Hosting environment settings.');
+    console.error('URL:', isUrlSet ? '✅ CONFIGURED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_URL)');
+    console.error('KEY:', isKeySet ? '✅ CONFIGURED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_ANON_KEY)');
+    console.info('Reason: URL or Key returned falsy from process.env.');
     console.groupEnd();
   } else {
     console.log('🚀 Supabase Client Initialized Successfully');
@@ -41,7 +50,7 @@ export async function uploadWithProgress(
   onProgress: (percent: number) => void
 ): Promise<string> {
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(`Supabase Configuration Missing: ${!supabaseUrl ? 'URL ' : ''}${!supabaseAnonKey ? 'Anon Key' : ''}`);
+    throw new Error('Supabase Configuration Missing. Verify NEXT_PUBLIC variables in Vercel.');
   }
 
   return new Promise((resolve, reject) => {
@@ -58,12 +67,10 @@ export async function uploadWithProgress(
     xhr.onreadystatechange = () => {
       if (xhr.readyState === 4) {
         if (xhr.status === 200 || xhr.status === 201) {
-          // Success: Use the Supabase client to get the public URL if initialized
           if (supabase) {
             const { data } = supabase.storage.from(bucket).getPublicUrl(path)
             resolve(data.publicUrl)
           } else {
-            // Fallback URL generation
             resolve(`${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`)
           }
         } else {
