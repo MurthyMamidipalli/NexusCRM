@@ -67,13 +67,11 @@ export default function EducationPage() {
       ? updateRecord(db, collections.EDUCATION, editingEdu.id, data)
       : createRecord(db, collections.EDUCATION, data, user.uid)
 
-    // Snappy UI: Immediate Feedback and Close
     toast({ title: editingEdu ? 'Record Updated' : 'Record Created' })
     setIsDialogOpen(false)
     setEditingEdu(null)
     setLoading(false)
 
-    // Handle potential errors asynchronously
     mutation.catch(async (err) => {
       const permissionError = new FirestorePermissionError({
         path: editingEdu ? `${collections.EDUCATION}/${editingEdu.id}` : collections.EDUCATION,

@@ -102,7 +102,6 @@ export default function DocumentVaultPage() {
         
         const uploadTask = uploadBytesResumable(storageRef, file)
 
-        // Wait for storage upload only
         await new Promise((resolve, reject) => {
           uploadTask.on(
             'state_changed',
@@ -128,7 +127,6 @@ export default function DocumentVaultPage() {
           ownerId: user.uid,
         }
 
-        // NON-BLOCKING MUTATION: Optimistic update
         createRecord(db, collections.DOCUMENTS, recordData, user.uid)
           .catch(async (err: any) => {
             const permissionError = new FirestorePermissionError({
@@ -141,7 +139,6 @@ export default function DocumentVaultPage() {
           });
       }
 
-      // Snappy UI: Close immediately after initiating writes
       toast({ title: 'Record Secured', description: 'Vault synchronized successfully.' })
       setIsDialogOpen(false)
       setPendingFiles([])
@@ -165,7 +162,7 @@ export default function DocumentVaultPage() {
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-headline text-4xl font-bold tracking-tight">📂 Document Vault</h1>
+          <h1 className="font-headline text-4xl font-bold tracking-tight text-foreground">📂 Document Vault</h1>
           <p className="text-muted-foreground">Secure high-performance storage for sensitive professional records.</p>
         </div>
         <Button 
