@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -29,26 +30,28 @@ export default function LoginPage() {
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    // AUDIT LOG: Current user on mount
+    console.log("🔑 [Login Page] Mounted. Current User State:", auth.currentUser ? auth.currentUser.uid : "NULL");
+  }, [auth]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    
     console.group('🔑 LOGIN ATTEMPT: Email/Password');
-    console.log('Email:', email);
+    console.log('Target Email:', email);
+    console.log('Firebase Auth Instance Config:', auth.app.options);
     
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log('SUCCESS: Login call completed.');
-      console.log('CURRENT_USER_OBJECT:', auth.currentUser);
-      console.log('CREDENTIAL_UID:', userCredential.user.uid);
+      console.log('AUTH.CURRENT_USER AFTER LOGIN:', auth.currentUser ? auth.currentUser.uid : "STILL NULL");
       
       toast({
         title: 'Login Successful',
         description: `Welcome back, ${userCredential.user.email}`,
       });
 
-      console.log('REDIRECTING: To /dashboard...');
       router.push('/dashboard');
     } catch (error: any) {
       console.error('FAILURE: Login failed.', error);

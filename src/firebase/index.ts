@@ -36,6 +36,14 @@ export function initializeFirebase() {
       app = getApp();
     }
 
+    // AUDIT LOG: Print initialization options
+    console.log("🔥 Firebase App Initialized:", {
+      projectId: app.options.projectId,
+      appId: app.options.appId,
+      apiKeyPresent: !!app.options.apiKey,
+      authDomain: app.options.authDomain
+    });
+
     if (!db) {
       if (typeof window !== 'undefined') {
         try {
