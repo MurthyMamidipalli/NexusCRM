@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * Firebase configuration object.
- * Uses NEXT_PUBLIC environment variables for client-side access.
+ * @fileOverview Firebase Configuration Diagnostics
+ * This file maps environment variables to the Firebase SDK.
  */
+
 export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -14,25 +15,28 @@ export const firebaseConfig = {
 };
 
 /**
- * Validates the configuration to prevent initialization crashes.
+ * Performs a deep audit of the current Firebase configuration.
+ * Logs status to console to identify 'auth/api-key-not-valid' issues.
  */
 export function isFirebaseConfigValid() {
   const key = firebaseConfig.apiKey;
-  const isValid = !!(
-    key && 
-    key !== 'AIzaSyA_placeholder_key' &&
-    key !== 'undefined' &&
-    firebaseConfig.projectId &&
-    firebaseConfig.projectId !== 'undefined'
-  );
+  const pId = firebaseConfig.projectId;
   
-  if (!isValid && typeof window !== 'undefined') {
-    console.error('❌ Firebase Config Invalid or Missing. Current state:', {
-      hasApiKey: !!key,
-      keyPrefix: key ? key.substring(0, 5) + '...' : 'none',
-      projectId: firebaseConfig.projectId
-    });
+  const hasKey = !!(key && key !== 'undefined' && key.length > 10);
+  const hasProjectId = !!(pId && pId !== 'undefined');
+  
+  if (typeof window !== 'undefined') {
+    console.group('🔥 Firebase Configuration Audit');
+    console.log('API Key Status:', hasKey ? '✅ DETECTED' : '❌ MISSING/INVALID');
+    console.log('Project ID Status:', hasProjectId ? `✅ (${pId})` : '❌ MISSING');
+    console.log('Auth Domain:', firebaseConfig.authDomain || '❌ MISSING');
+    
+    if (!hasKey) {
+      console.error('CRITICAL: NEXT_PUBLIC_FIREBASE_API_KEY is not being read correctly.');
+      console.log('Current value starts with:', key ? key.substring(0, 5) + '...' : 'null');
+    }
+    console.groupEnd();
   }
   
-  return isValid;
+  return hasKey && hasProjectId;
 }

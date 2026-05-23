@@ -18,22 +18,27 @@ let db: Firestore;
 let storage: FirebaseStorage;
 
 /**
- * Initializes Firebase services with a robust singleton pattern.
- * Ensures offline persistence is only configured on the client side once.
+ * Initializes Firebase services with singleton protection and runtime diagnostics.
  */
 export function initializeFirebase() {
+  // 1. Audit configuration before attempt
   if (!isFirebaseConfigValid()) {
-    throw new Error('Firebase initialization failed: Missing configuration. Please ensure all NEXT_PUBLIC_FIREBASE_* environment variables are set in your .env file.');
+    const errorMsg = 'Firebase initialization halted: Configuration is invalid or incomplete. Check environment variables.';
+    console.error(errorMsg);
+    // We throw to prevent late-stage crashes in hooks
+    throw new Error(errorMsg);
   }
 
+  // 2. Initialize App
   if (getApps().length === 0) {
+    console.log('[Firebase] Initializing new instance...');
     app = initializeApp(firebaseConfig);
   } else {
     app = getApp();
   }
 
+  // 3. Initialize Firestore with persistence
   if (!db) {
-    // Check if we are in the browser to enable persistence
     if (typeof window !== 'undefined') {
       try {
         db = initializeFirestore(app, {
@@ -42,19 +47,19 @@ export function initializeFirebase() {
           }),
         });
       } catch (e) {
-        // Fallback if initializeFirestore was already called elsewhere
         db = getFirestore(app);
       }
     } else {
-      // Server-side uses standard Firestore instance
       db = getFirestore(app);
     }
   }
   
+  // 4. Initialize Auth
   if (!auth) {
     auth = getAuth(app);
   }
 
+  // 5. Initialize Storage
   if (!storage) {
     storage = getStorage(app);
   }
