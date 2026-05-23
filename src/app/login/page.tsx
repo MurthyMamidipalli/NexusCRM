@@ -1,69 +1,89 @@
+'use client';
 
-"use client"
-
-import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
   signInWithEmailAndPassword, 
   signInWithPopup, 
   GoogleAuthProvider,
   sendPasswordResetEmail
-} from 'firebase/auth'
-import { useAuth } from '@/firebase'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Target, Chrome, Loader2, Eye, EyeOff } from 'lucide-react'
-import { toast } from '@/hooks/use-toast'
+} from 'firebase/auth';
+import { useAuth } from '@/firebase';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Target, Chrome, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const auth = useAuth()
-  const router = useRouter()
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const auth = useAuth();
+  const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
+    setMounted(true);
+  }, []);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
+    console.group('🔑 LOGIN ATTEMPT: Email/Password');
+    console.log('Email:', email);
+    
     try {
-      await signInWithEmailAndPassword(auth, email, password)
-      router.push('/dashboard')
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('SUCCESS: Login call completed.');
+      console.log('CURRENT_USER_OBJECT:', auth.currentUser);
+      console.log('CREDENTIAL_UID:', userCredential.user.uid);
+      
+      toast({
+        title: 'Login Successful',
+        description: `Welcome back, ${userCredential.user.email}`,
+      });
+
+      console.log('REDIRECTING: To /dashboard...');
+      router.push('/dashboard');
     } catch (error: any) {
+      console.error('FAILURE: Login failed.', error);
       toast({
         variant: 'destructive',
         title: 'Login Failed',
         description: error.message
-      })
+      });
     } finally {
-      setLoading(false)
+      console.groupEnd();
+      setLoading(false);
     }
-  }
+  };
 
   const handleGoogleLogin = async () => {
-    setLoading(true)
-    const provider = new GoogleAuthProvider()
+    setLoading(true);
+    console.group('🔑 LOGIN ATTEMPT: Google Popup');
+    const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider)
-      router.push('/dashboard')
+      const result = await signInWithPopup(auth, provider);
+      console.log('SUCCESS: Google login completed.');
+      console.log('UID:', result.user.uid);
+      router.push('/dashboard');
     } catch (error: any) {
+      console.error('FAILURE: Google login failed.', error);
       toast({
         variant: 'destructive',
         title: 'Google Login Failed',
         description: error.message
-      })
+      });
     } finally {
-      setLoading(false)
+      console.groupEnd();
+      setLoading(false);
     }
-  }
+  };
 
   const handleForgotPassword = async () => {
     if (!email) {
@@ -71,26 +91,26 @@ export default function LoginPage() {
         variant: 'destructive',
         title: 'Email Required',
         description: 'Please enter your email address first to reset your password.'
-      })
-      return
+      });
+      return;
     }
 
     try {
-      await sendPasswordResetEmail(auth, email)
+      await sendPasswordResetEmail(auth, email);
       toast({
         title: 'Reset Email Sent',
         description: 'Check your inbox for password reset instructions.'
-      })
+      });
     } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Reset Failed',
         description: error.message
-      })
+      });
     }
-  }
+  };
 
-  if (!mounted) return null
+  if (!mounted) return null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4 sm:p-8">
@@ -180,5 +200,5 @@ export default function LoginPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

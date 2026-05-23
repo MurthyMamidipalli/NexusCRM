@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,20 +13,26 @@ export function useUser() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[Auth] Initializing observer for Auth state changes...');
+    console.log('[Auth Hook] Initializing observer for Auth state changes...');
     
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      console.group('[Auth Hook] onAuthStateChanged Triggered');
       if (firebaseUser) {
-        console.log('[Auth] User detected:', firebaseUser.uid, '| Email:', firebaseUser.email);
+        console.log('STATUS: Authenticated');
+        console.log('UID:', firebaseUser.uid);
+        console.log('EMAIL:', firebaseUser.email);
+        console.log('TOKEN_REFRESH_TIME:', new Date().toLocaleTimeString());
       } else {
-        console.warn('[Auth] No active session found.');
+        console.warn('STATUS: Unauthenticated (User is null)');
       }
+      console.groupEnd();
+
       setUser(firebaseUser);
       setLoading(false);
     });
     
     return () => {
-      console.log('[Auth] Cleaning up observer.');
+      console.log('[Auth Hook] Cleaning up observer.');
       unsubscribe();
     };
   }, [auth]);

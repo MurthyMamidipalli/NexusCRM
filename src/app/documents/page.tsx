@@ -21,7 +21,7 @@ import {
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
-import { toast } from '@/hooks/use-toast'
+import { useToast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -47,6 +47,7 @@ export default function DocumentVaultPage() {
   const db = useFirestore()
   const { user, loading: authLoading } = useUser()
   const [mounted, setMounted] = useState(false)
+  const { toast } = useToast()
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -67,6 +68,7 @@ export default function DocumentVaultPage() {
       console.log('AUTH USER:', user);
       console.log('AUTH UID:', user?.uid || 'UNDEFINED');
       console.log('AUTH LOADING:', authLoading);
+      console.log('REASON FOR NULL USER:', !user ? (authLoading ? 'Session still loading' : 'No active session found in Firebase Auth state') : 'User is authenticated');
       console.groupEnd();
     }
   }, [user, authLoading, mounted]);
@@ -192,7 +194,7 @@ export default function DocumentVaultPage() {
             <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
               {!user && (
                 <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
-                  <X className="h-4 w-4" /> Sign-in required to enable upload button.
+                  <X className="h-4 w-4" /> {authLoading ? 'Authenticating...' : 'Sign-in required to enable upload button.'}
                 </div>
               )}
               

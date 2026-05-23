@@ -18,31 +18,38 @@ export const firebaseConfig = {
  * Exhaustive audit of environment variables at runtime.
  */
 export function isFirebaseConfigValid() {
-  const { projectId, appId, apiKey, authDomain, messagingSenderId } = firebaseConfig;
+  const { projectId, appId, apiKey, authDomain } = firebaseConfig;
   
   if (typeof window !== 'undefined') {
     console.group('🔍 NEXUS HUB: RUNTIME ENVIRONMENT AUDIT');
     console.log('PROJECT_ID:', projectId || '❌ MISSING');
     console.log('AUTH_DOMAIN:', authDomain || '❌ MISSING');
-    console.log('SENDER_ID:', messagingSenderId || '❌ MISSING');
     console.log('APP_ID:', appId || '❌ MISSING');
     console.log('API_KEY_PRESENT:', !!apiKey ? '✅ YES' : '❌ NO');
     
     const isPlaceholderApp = appId?.includes('1234567890') || appId?.includes('abcdef');
-    const isDefaultProject = projectId === 'studio-3717134241-d7612';
+    const isTargetProject = projectId === 'studio-3717134241-d7612';
+    const isTargetApp = appId === '1:479443906344:web:c709ce1776169302c92a1d';
 
     if (isPlaceholderApp) {
-      console.warn('⚠️ APP_ID IS A PLACEHOLDER: 1:1234567890:web:abcdef1234567890 detected.');
+      console.warn('⚠️ WARNING: App ID is a generic placeholder (1:1234567890...).');
     }
-    if (!isDefaultProject && projectId) {
-      console.warn(`⚠️ PROJECT ID MISMATCH: Running on ${projectId} instead of studio-3717134241-d7612`);
+    
+    if (isTargetProject) {
+      console.log('✅ PROJECT MATCH: Successfully targeting studio-3717134241-d7612');
+    } else {
+      console.warn(`⚠️ PROJECT MISMATCH: Expected studio-3717134241-d7612, got ${projectId}`);
     }
-    if (apiKey && apiKey.length < 20) {
-      console.error('❌ API KEY INVALID: Key is too short or appears to be a placeholder.');
+
+    if (isTargetApp) {
+      console.log('✅ APP ID MATCH: Successfully targeting 1:479443906344...');
+    } else if (!isPlaceholderApp) {
+      console.warn(`⚠️ APP ID MISMATCH: Current App ID is ${appId}`);
     }
     
     console.groupEnd();
   }
   
-  return !!(projectId && apiKey && appId && !appId.includes('1234567890'));
+  // We return true even with warnings to allow the app to attempt connection
+  return !!(projectId && apiKey && appId);
 }
