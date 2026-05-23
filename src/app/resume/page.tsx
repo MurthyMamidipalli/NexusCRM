@@ -82,7 +82,7 @@ export default function ResumePage() {
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
-        description: 'Supabase URL or Anon Key is missing. Check Vercel logs.' 
+        description: 'Supabase configuration is missing. Verify your environment variables.' 
       })
       return
     }
@@ -95,6 +95,12 @@ export default function ResumePage() {
 
     try {
       if (activeTab === 'PDF') {
+        if (pendingFiles.length === 0) {
+          toast({ variant: 'destructive', title: 'File Required', description: 'Please select at least one PDF file.' })
+          setIsSaving(false)
+          return
+        }
+
         for (const file of pendingFiles) {
           const timestamp = Date.now()
           const storagePath = `resumes/${uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
@@ -137,12 +143,13 @@ export default function ResumePage() {
         await createRecord(db, collections.RESUMES, data, uid)
       }
 
-      toast({ title: 'Record Saved', description: 'Files synchronized to Supabase.' })
+      toast({ title: 'Record Saved', description: 'Your records have been synchronized.' })
       setIsDialogOpen(false)
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Save Failed', description: err.message })
+      console.error('Resume save failed:', err)
+      toast({ variant: 'destructive', title: 'Save Failed', description: err.message || 'An unexpected error occurred.' })
     } finally {
       setIsSaving(false)
     }
@@ -189,20 +196,6 @@ export default function ResumePage() {
                 Securely host your professional records on Supabase Storage.
               </DialogDescription>
             </DialogHeader>
-
-            {!supabase && (
-              <div className="mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
-                <AlertCircle className="h-5 w-5 shrink-0" />
-                <div className="space-y-1">
-                  <p className="text-xs font-bold">Integration Inactive</p>
-                  <p className="text-[10px] opacity-80">
-                    Missing: {!process.env.NEXT_PUBLIC_SUPABASE_URL ? 'URL ' : ''}
-                    {!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Anon Key' : ''}
-                  </p>
-                  <p className="text-[10px] mt-1 italic">Check Vercel Environment Variables.</p>
-                </div>
-              </div>
-            )}
 
             <form onSubmit={handleFinalSave} className="space-y-6">
               <div className="space-y-2">
@@ -273,7 +266,7 @@ export default function ResumePage() {
               )}
               
               <DialogFooter>
-                <Button type="submit" disabled={isSaving || (activeTab === 'PDF' && pendingFiles.length === 0) || !supabase} className="w-full bg-primary h-12 rounded-xl font-bold">
+                <Button type="submit" disabled={isSaving} className="w-full bg-primary h-12 rounded-xl font-bold">
                   {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                   {isSaving ? 'Synchronizing...' : 'Secure in Vault'}
                 </Button>

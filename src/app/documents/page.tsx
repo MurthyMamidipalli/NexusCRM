@@ -100,17 +100,18 @@ export default function DocumentVaultPage() {
     e.preventDefault()
     if (!user || !db || isSaving) return
 
+    // Explicit check for Supabase with detailed user feedback
     if (!supabase) {
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
-        description: 'Supabase URL or Anon Key is missing. Check Vercel logs.' 
+        description: 'Supabase keys are missing or invalid. Check the Settings page and your .env file.' 
       })
       return
     }
 
     if (pendingFiles.length === 0) {
-      toast({ variant: 'destructive', title: 'Selection Required', description: 'Please select files to upload.' })
+      toast({ variant: 'destructive', title: 'Selection Required', description: 'Please select files to upload before saving.' })
       return
     }
 
@@ -159,7 +160,8 @@ export default function DocumentVaultPage() {
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
+      console.error('Save failed:', err)
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message || 'An unexpected error occurred during upload.' });
     } finally {
       setIsSaving(false)
     }
@@ -208,20 +210,6 @@ export default function DocumentVaultPage() {
                 Your files are encrypted and stored in your private bucket.
               </DialogDescription>
             </DialogHeader>
-
-            {!supabase && (
-              <div className="mx-8 mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
-                <AlertCircle className="h-5 w-5 shrink-0" />
-                <div className="space-y-1">
-                  <p className="text-xs font-bold">Integration Inactive</p>
-                  <p className="text-[10px] opacity-80">
-                    Missing: {!process.env.NEXT_PUBLIC_SUPABASE_URL ? 'URL ' : ''}
-                    {!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Anon Key' : ''}
-                  </p>
-                  <p className="text-[10px] mt-1 italic">Verify environment variables in Vercel dashboard.</p>
-                </div>
-              </div>
-            )}
 
             <form onSubmit={handleFinalSave} className="p-8 pt-0 space-y-6">
               <div className="space-y-2">
@@ -316,7 +304,7 @@ export default function DocumentVaultPage() {
 
               <Button 
                 type="submit" 
-                disabled={pendingFiles.length === 0 || isSaving || !supabase} 
+                disabled={isSaving} 
                 className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
