@@ -107,13 +107,13 @@ export default function DocumentVaultPage() {
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
-        description: 'Check your environment variables for Supabase keys.' 
+        description: 'Please check your environment variables for Supabase keys.' 
       })
       return
     }
 
     if (pendingFiles.length === 0) {
-      toast({ variant: 'destructive', title: 'No Files', description: 'Please select at least one file to upload.' })
+      toast({ variant: 'destructive', title: 'No Files Selected', description: 'Please select at least one file to upload.' })
       return
     }
 
@@ -215,7 +215,7 @@ export default function DocumentVaultPage() {
               <Plus className="h-5 w-5" /> Add New Record
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[480px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden">
+          <DialogContent className="sm:max-w-[480px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
             <DialogHeader className="p-8 pb-4">
               <DialogTitle className="text-3xl font-bold font-headline">Secure Document</DialogTitle>
               <DialogDescription className="text-gray-400 text-sm mt-2">
@@ -223,116 +223,121 @@ export default function DocumentVaultPage() {
               </DialogDescription>
             </DialogHeader>
 
-            {!supabase && (
-              <div className="mx-8 mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
-                <AlertCircle className="h-5 w-5 shrink-0" />
-                <div className="space-y-1">
-                  <p className="text-xs font-bold">Integration Inactive</p>
-                  <p className="text-[10px] opacity-80 italic">Configure NEXT_PUBLIC_SUPABASE variables in your dashboard.</p>
-                </div>
-              </div>
-            )}
-
-            <form onSubmit={handleFinalSave} className="p-8 pt-0 space-y-6">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-white">Document Name</Label>
-                <Input 
-                  name="title" 
-                  disabled={isSaving}
-                  className="bg-[#1c1c1f] border-2 border-transparent focus:border-[#10b981] transition-all h-14 rounded-2xl text-white placeholder:text-gray-600" 
-                  placeholder="e.g. Identity Record" 
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-white">Category</Label>
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isSaving}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
-                      <SelectValue placeholder="Category" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                      {DOCUMENT_CATEGORIES.map(cat => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-white">Status</Label>
-                  <Select value={selectedStatus} onValueChange={setSelectedStatus} disabled={isSaving}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
-                      <SelectValue placeholder="Active" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="archived">Archived</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-white">Visibility</Label>
-                <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
-                  <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
-                    <div className="flex items-center gap-2">
-                      <Lock className="h-4 w-4 text-emerald-400" />
-                      <SelectValue />
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                    <SelectItem value="Private">🔒 Private (Vault Only)</SelectItem>
-                    <SelectItem value="Public">🌍 Public (Shared on Hub)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div 
-                className="group relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-gray-800 p-10 bg-[#1c1c1f]/50 transition-colors cursor-pointer hover:border-[#10b981]/50" 
-                onClick={() => !isSaving && fileInputRef.current?.click()}
-              >
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  className="hidden" 
-                  multiple 
-                  onChange={handleFileSelection} 
-                  disabled={isSaving}
-                />
-                {pendingFiles.length > 0 ? (
-                  <div className="text-[#10b981] text-center">
-                    <CheckCircle2 className="mx-auto mb-2 h-12 w-12" />
-                    <span className="text-sm font-bold">{pendingFiles.length} Files Selected</span>
+            <div className="flex-1 overflow-y-auto px-8 pb-8">
+              {!supabase && (
+                <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
+                  <AlertCircle className="h-5 w-5 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold">Integration Inactive</p>
+                    <p className="text-[10px] opacity-80 italic">Configure NEXT_PUBLIC_SUPABASE variables in your settings.</p>
                   </div>
-                ) : (
-                  <div className="text-center">
-                    <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
-                    <p className="text-sm text-gray-500 font-medium">Select Documents for Upload</p>
-                  </div>
-                )}
-              </div>
-
-              {isSaving && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-emerald-400">
-                    <span>Synchronizing...</span>
-                    <span>{totalProgress}%</span>
-                  </div>
-                  <Progress value={totalProgress} className="h-1 bg-gray-800" />
                 </div>
               )}
 
+              <form id="vault-form" onSubmit={handleFinalSave} className="space-y-6">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-white">Document Name</Label>
+                  <Input 
+                    name="title" 
+                    disabled={isSaving}
+                    className="bg-[#1c1c1f] border-2 border-transparent focus:border-[#10b981] transition-all h-14 rounded-2xl text-white placeholder:text-gray-600" 
+                    placeholder="e.g. Identity Record" 
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-white">Category</Label>
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isSaving}>
+                      <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                        {DOCUMENT_CATEGORIES.map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-white">Status</Label>
+                    <Select value={selectedStatus} onValueChange={setSelectedStatus} disabled={isSaving}>
+                      <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
+                        <SelectValue placeholder="Active" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="archived">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-white">Visibility</Label>
+                  <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
+                      <div className="flex items-center gap-2">
+                        <Lock className="h-4 w-4 text-emerald-400" />
+                        <SelectValue />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                      <SelectItem value="Private">🔒 Private (Vault Only)</SelectItem>
+                      <SelectItem value="Public">🌍 Public (Shared on Hub)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div 
+                  className="group relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-gray-800 p-10 bg-[#1c1c1f]/50 transition-colors cursor-pointer hover:border-[#10b981]/50" 
+                  onClick={() => !isSaving && fileInputRef.current?.click()}
+                >
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    multiple 
+                    onChange={handleFileSelection} 
+                    disabled={isSaving}
+                  />
+                  {pendingFiles.length > 0 ? (
+                    <div className="text-[#10b981] text-center">
+                      <CheckCircle2 className="mx-auto mb-2 h-12 w-12" />
+                      <span className="text-sm font-bold">{pendingFiles.length} Files Selected</span>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
+                      <p className="text-sm text-gray-500 font-medium">Select Documents for Upload</p>
+                    </div>
+                  )}
+                </div>
+
+                {isSaving && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                      <span>Synchronizing...</span>
+                      <span>{totalProgress}%</span>
+                    </div>
+                    <Progress value={totalProgress} className="h-1 bg-gray-800" />
+                  </div>
+                )}
+              </form>
+            </div>
+
+            <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
               <Button 
                 type="submit" 
+                form="vault-form"
                 disabled={isSaving} 
                 className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
                 {isSaving ? 'Uploading...' : 'Save Record'}
               </Button>
-            </form>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
