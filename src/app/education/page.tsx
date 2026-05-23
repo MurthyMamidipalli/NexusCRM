@@ -111,7 +111,7 @@ export default function EducationPage() {
         if (!open) setEditingEdu(null);
       }}>
         <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
-          <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0">
+          <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
             <DialogTitle className="text-3xl font-bold font-headline text-white">Academic Record</DialogTitle>
             <DialogDescription className="text-gray-400">Enter details of your educational institution.</DialogDescription>
             <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">

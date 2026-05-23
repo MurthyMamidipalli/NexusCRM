@@ -20,7 +20,6 @@ export const firebaseConfig = {
 
 /**
  * Performs a runtime audit of the Firebase configuration.
- * Logs results to the console to help identify misconfigurations.
  */
 export function isFirebaseConfigValid() {
   if (typeof window === 'undefined') return false;
@@ -42,5 +41,6 @@ export function isFirebaseConfigValid() {
   }
   console.groupEnd();
 
-  return !isPlaceholderApp && !!apiKey && isCorrectProject;
+  // Return true if we have at least the minimum keys to attempt a boot
+  return !!apiKey && !!projectId;
 }

@@ -41,7 +41,8 @@ export default function LoginPage() {
     console.log('App Config ID:', auth.app.options.appId);
     console.log('App Config Project:', auth.app.options.projectId);
     if (firebaseConfig.apiKey) {
-      console.log('API Key First/Last 4:', `${firebaseConfig.apiKey.substring(0, 4)}...${firebaseConfig.apiKey.substring(firebaseConfig.apiKey.length - 4)}`);
+      const k = firebaseConfig.apiKey;
+      console.log('API Key First/Last 4:', `${k.substring(0, 4)}...${k.substring(k.length - 4)}`);
     }
     
     try {
