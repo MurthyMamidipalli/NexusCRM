@@ -31,16 +31,16 @@ export const collections = {
 
 /**
  * Creates a new record in the specified collection.
- * Automatically adds ownership and timestamps.
  */
 export function createRecord(db: Firestore, collectionName: string, data: any, userId?: string) {
-  console.log(`[Firestore] Attempting to create record in ${collectionName}`);
+  console.log(`[Firestore] Attempting to create record in ${collectionName}...`);
   
   if (!collectionName) throw new Error('Collection name is required');
   const colRef = collection(db, collectionName);
   
   const finalUserId = userId || data.ownerId;
   if (!finalUserId) {
+    console.error('[Firestore] Record creation failed: Missing Auth UID');
     throw new Error(`Record creation failed: Auth UID is required to save data to ${collectionName}.`);
   }
 
@@ -51,15 +51,19 @@ export function createRecord(db: Firestore, collectionName: string, data: any, u
     updatedAt: serverTimestamp()
   };
 
-  // NON-BLOCKING: Return promise but allow UI to continue
-  return addDoc(colRef, payload);
+  const promise = addDoc(colRef, payload);
+  
+  promise.then((doc) => console.log(`[Firestore] Success! Record created with ID: ${doc.id}`))
+         .catch((err) => console.error('[Firestore] Write error:', err));
+
+  return promise;
 }
 
 /**
  * Updates an existing record.
  */
 export function updateRecord(db: Firestore, collectionName: string, id: string, data: any) {
-  console.log(`[Firestore] Attempting to update record ${id} in ${collectionName}`);
+  console.log(`[Firestore] Updating record ${id} in ${collectionName}...`);
   if (!collectionName || !id) throw new Error('Collection name and ID are required');
   const docRef = doc(db, collectionName, id);
   return updateDoc(docRef, {
@@ -72,7 +76,7 @@ export function updateRecord(db: Firestore, collectionName: string, id: string, 
  * Deletes a record.
  */
 export function deleteRecord(db: Firestore, collectionName: string, id: string) {
-  console.log(`[Firestore] Attempting to delete record ${id} in ${collectionName}`);
+  console.log(`[Firestore] Deleting record ${id} from ${collectionName}...`);
   if (!collectionName || !id) throw new Error('Collection name and ID are required');
   const docRef = doc(db, collectionName, id);
   return deleteDoc(docRef);

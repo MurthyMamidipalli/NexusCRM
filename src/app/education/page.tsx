@@ -50,7 +50,12 @@ export default function EducationPage() {
 
   const handleSaveEdu = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db) return
+    console.log('[Education] handleSaveEdu triggered');
+    
+    if (!user || !db) {
+      console.warn('[Education] User or DB not ready');
+      return;
+    }
 
     setLoading(true)
     const formData = new FormData(e.currentTarget)
@@ -66,6 +71,8 @@ export default function EducationPage() {
       description: formData.get('description') as string,
     }
 
+    console.log('[Education] Saving data:', data);
+
     const mutation = editingEdu
       ? updateRecord(db, collections.EDUCATION, editingEdu.id, data)
       : createRecord(db, collections.EDUCATION, data, user.uid)
@@ -76,7 +83,9 @@ export default function EducationPage() {
     setLoading(false)
 
     mutation
+      .then(() => console.log('[Education] Save successful'))
       .catch(async (err) => {
+        console.error('[Education] Save failed:', err);
         const permissionError = new FirestorePermissionError({
           path: editingEdu ? `${collections.EDUCATION}/${editingEdu.id}` : collections.EDUCATION,
           operation: editingEdu ? 'update' : 'create',
@@ -89,8 +98,10 @@ export default function EducationPage() {
 
   const handleDelete = (id: string) => {
     if (!db) return
+    console.log(`[Education] Deleting ID: ${id}`);
     deleteRecord(db, collections.EDUCATION, id)
       .catch(async (err) => {
+        console.error('[Education] Delete failed:', err);
         const permissionError = new FirestorePermissionError({
           path: `${collections.EDUCATION}/${id}`,
           operation: 'delete',

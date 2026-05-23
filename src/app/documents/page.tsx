@@ -92,17 +92,24 @@ export default function DocumentVaultPage() {
 
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
+    console.log(`[Vault] Files selected: ${files.length}`);
     setPendingFiles(prev => [...prev, ...files])
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    console.log('[Vault] Final save initiated');
+    console.log('[Vault] handleFinalSave triggered');
     
-    if (!user || !db || isSaving) return
+    if (!user || !db) {
+      console.warn('[Vault] Aborted: User or DB not ready');
+      return;
+    }
+
+    if (isSaving) return;
 
     if (!supabase) {
+      console.error('[Vault] Aborted: Supabase client is null');
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
@@ -112,6 +119,7 @@ export default function DocumentVaultPage() {
     }
 
     if (pendingFiles.length === 0) {
+      console.warn('[Vault] Aborted: No files selected');
       toast({ variant: 'destructive', title: 'Files Required', description: 'Please select at least one document to upload.' })
       return
     }
@@ -120,6 +128,7 @@ export default function DocumentVaultPage() {
     const baseTitle = formData.get('title') as string
     const uid = user.uid
 
+    console.log(`[Vault] Processing ${pendingFiles.length} files for user ${uid}`);
     setIsSaving(true)
 
     try {
@@ -127,6 +136,7 @@ export default function DocumentVaultPage() {
         const timestamp = Date.now()
         const storagePath = `${uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         
+        console.log(`[Vault] Uploading ${file.name}...`);
         const fileUrl = await uploadWithProgress(
           'documents',
           storagePath,
@@ -135,6 +145,8 @@ export default function DocumentVaultPage() {
             setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
           }
         )
+
+        console.log(`[Vault] Upload complete. URL: ${fileUrl}`);
 
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
@@ -153,9 +165,11 @@ export default function DocumentVaultPage() {
           storageProvider: 'Supabase'
         }
 
+        console.log('[Vault] Creating Firestore record...');
         await createRecord(db, collections.DOCUMENTS, recordData, uid);
       }
 
+      console.log('[Vault] All records saved successfully');
       toast({ title: 'Record Secured', description: 'Your files have been saved successfully.' })
       setIsDialogOpen(false)
       setPendingFiles([])
@@ -170,6 +184,7 @@ export default function DocumentVaultPage() {
 
   const handleDelete = async (doc: any) => {
     if (!db) return
+    console.log(`[Vault] Deleting record: ${doc.id}`);
     try {
       await deleteRecord(db, collections.DOCUMENTS, doc.id)
       if (doc.filePath && supabase) {

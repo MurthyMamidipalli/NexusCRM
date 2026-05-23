@@ -5,8 +5,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 // Immediate diagnostics for Vercel/Studio debugging
 if (typeof window !== 'undefined') {
-  console.log('[Supabase] URL detected:', !!supabaseUrl);
-  console.log('[Supabase] Anon Key detected:', !!supabaseAnonKey);
+  console.log('[Supabase] Env Check - URL:', !!supabaseUrl);
+  console.log('[Supabase] Env Check - Key:', !!supabaseAnonKey);
 }
 
 /**
@@ -19,14 +19,11 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
 
 // Audit and report status to developer console
 if (typeof window !== 'undefined') {
-  const isUrlSet = !!supabaseUrl;
-  const isKeySet = !!supabaseAnonKey;
-  
-  if (!isUrlSet || !isKeySet) {
+  if (!supabase) {
     console.group('📡 Supabase Integration Status');
-    console.error('URL:', isUrlSet ? '✅ CONFIGURED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_URL)');
-    console.error('KEY:', isKeySet ? '✅ CONFIGURED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_ANON_KEY)');
-    console.info('Reason: Environment variables not found. Check your .env file.');
+    console.error('Status: OFFLINE');
+    console.error('URL:', !!supabaseUrl ? '✅ DETECTED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_URL)');
+    console.error('KEY:', !!supabaseAnonKey ? '✅ DETECTED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_ANON_KEY)');
     console.groupEnd();
   } else {
     console.log('🚀 Supabase Client Initialized Successfully');
@@ -42,15 +39,16 @@ export async function uploadWithProgress(
   file: File,
   onProgress: (percent: number) => void
 ): Promise<string> {
+  console.log(`[Supabase] Starting upload: ${file.name} to ${bucket}/${path}`);
+  
   if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('[Supabase] Upload failed: Missing credentials');
     throw new Error('Supabase Configuration Missing. Ensure NEXT_PUBLIC variables are set.');
   }
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const url = `${supabaseUrl}/storage/v1/object/${bucket}/${path}`;
-
-    console.log(`[Supabase] Initiating upload to: ${url}`);
 
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
@@ -61,10 +59,10 @@ export async function uploadWithProgress(
 
     xhr.onreadystatechange = () => {
       if (xhr.readyState === 4) {
-        console.log(`[Supabase] XHR Status: ${xhr.status}`);
+        console.log(`[Supabase] XHR Complete - Status: ${xhr.status}`);
         if (xhr.status === 200 || xhr.status === 201) {
           const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
-          console.log(`[Supabase] Upload successful. Public URL: ${publicUrl}`);
+          console.log(`[Supabase] Success! URL: ${publicUrl}`);
           resolve(publicUrl);
         } else {
           let errorMessage = `Upload failed with status ${xhr.status}`;
@@ -72,21 +70,16 @@ export async function uploadWithProgress(
             const error = JSON.parse(xhr.responseText);
             errorMessage = error.message || error.error || errorMessage;
           } catch (e) {
-            // If response is not JSON (e.g. HTML error page)
             errorMessage = xhr.statusText || errorMessage;
           }
-          console.error(`[Supabase] Upload Error: ${errorMessage}`, xhr.responseText);
+          console.error(`[Supabase] Error: ${errorMessage}`);
           reject(new Error(errorMessage));
         }
       }
     };
 
-    xhr.onerror = () => {
-      console.error('[Supabase] Network Error during XHR');
-      reject(new Error('Network error. Check CORS settings or bucket policies in Supabase.'));
-    };
-
-    xhr.onabort = () => reject(new Error('Upload aborted by user or browser.'));
+    xhr.onerror = () => reject(new Error('Network error. Check CORS settings or bucket policies in Supabase.'));
+    xhr.onabort = () => reject(new Error('Upload aborted.'));
 
     xhr.open('POST', url, true);
     xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`);
