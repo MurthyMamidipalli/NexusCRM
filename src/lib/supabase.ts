@@ -1,12 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://fwjghfbipemaiytojczk.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 /**
  * Supabase client for Storage integration.
+ * Initialized safely to prevent runtime crashes if environment variables are missing.
  */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
+  : null;
+
+if (!supabase && typeof window !== 'undefined') {
+  console.warn('⚠️ Supabase integration is inactive. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file.');
+}
 
 /**
  * Utility to upload a file to Supabase Storage with progress tracking.
@@ -21,6 +28,10 @@ export async function uploadWithProgress(
   file: File,
   onProgress: (percent: number) => void
 ): Promise<string> {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase configuration is missing. Check your environment variables.');
+  }
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const url = `${supabaseUrl}/storage/v1/object/${bucket}/${path}`
@@ -35,9 +46,14 @@ export async function uploadWithProgress(
     xhr.onreadystatechange = () => {
       if (xhr.readyState === 4) {
         if (xhr.status === 200 || xhr.status === 201) {
-          // Success: Get the public URL
-          const { data } = supabase.storage.from(bucket).getPublicUrl(path)
-          resolve(data.publicUrl)
+          // Success: Use the Supabase client to get the public URL if initialized
+          if (supabase) {
+            const { data } = supabase.storage.from(bucket).getPublicUrl(path)
+            resolve(data.publicUrl)
+          } else {
+            // Fallback URL generation if client isn't available but upload succeeded
+            resolve(`${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`)
+          }
         } else {
           try {
             const error = JSON.parse(xhr.responseText)
@@ -53,9 +69,6 @@ export async function uploadWithProgress(
     xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`)
     xhr.setRequestHeader('apikey', supabaseAnonKey)
     
-    const formData = new FormData()
-    formData.append('file', file)
-    
-    xhr.send(file) // Supabase storage accepts raw file body for binary uploads
+    xhr.send(file) // Supabase storage accepts raw file body
   })
 }

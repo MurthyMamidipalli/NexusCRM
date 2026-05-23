@@ -100,6 +100,15 @@ export default function DocumentVaultPage() {
     e.preventDefault()
     if (!user || !db || isSaving) return
 
+    if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      toast({ 
+        variant: 'destructive', 
+        title: 'System Unconfigured', 
+        description: 'Please add your Supabase keys to .env.local to enable uploads.' 
+      })
+      return
+    }
+
     if (pendingFiles.length === 0) {
       toast({ variant: 'destructive', title: 'Selection Required', description: 'Please select files to upload.' })
       return
@@ -112,13 +121,10 @@ export default function DocumentVaultPage() {
     setIsSaving(true)
 
     try {
-      console.log('🚀 Starting Supabase Batch Upload for:', pendingFiles.length, 'files')
-      
       for (const file of pendingFiles) {
         const timestamp = Date.now()
         const storagePath = `${uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         
-        // 1. Upload to Supabase Storage
         const fileUrl = await uploadWithProgress(
           'documents',
           storagePath,
@@ -128,9 +134,6 @@ export default function DocumentVaultPage() {
           }
         )
 
-        console.log('✅ Supabase Upload Complete:', file.name, 'URL:', fileUrl)
-
-        // 2. Save Metadata to Firestore
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
           file_name: file.name,
@@ -139,7 +142,7 @@ export default function DocumentVaultPage() {
           visibility: selectedVisibility,
           isPublic: selectedVisibility === 'Public',
           file_url: fileUrl,
-          fileUrl: fileUrl, // Keep original for UI
+          fileUrl: fileUrl,
           fileSize: file.size,
           fileType: file.type,
           filePath: storagePath,
@@ -151,13 +154,12 @@ export default function DocumentVaultPage() {
         await createRecord(db, collections.DOCUMENTS, recordData, uid);
       }
 
-      toast({ title: 'Record Secured', description: 'Your files have been synchronized to Supabase.' })
+      toast({ title: 'Record Secured', description: 'Your files have been saved to Supabase.' })
       setIsDialogOpen(false)
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      console.error('❌ Upload Error:', err)
-      toast({ variant: 'destructive', title: 'Vault Error', description: err.message });
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
     } finally {
       setIsSaving(false)
     }
@@ -167,7 +169,7 @@ export default function DocumentVaultPage() {
     if (!db) return
     try {
       await deleteRecord(db, collections.DOCUMENTS, doc.id)
-      if (doc.filePath) {
+      if (doc.filePath && supabase) {
         await supabase.storage.from('documents').remove([doc.filePath])
       }
       toast({ title: 'Record Removed' })
@@ -203,9 +205,17 @@ export default function DocumentVaultPage() {
             <DialogHeader className="p-8 pb-4">
               <DialogTitle className="text-3xl font-bold font-headline">Secure Document</DialogTitle>
               <DialogDescription className="text-gray-400 text-sm mt-2">
-                Files are encrypted and stored in your private Supabase bucket.
+                Files are stored in your private Supabase bucket.
               </DialogDescription>
             </DialogHeader>
+
+            {!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && (
+              <div className="mx-8 mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
+                <AlertCircle className="h-5 w-5 shrink-0" />
+                <p className="text-xs font-bold">Supabase Configuration Required. Set your keys in .env.local to enable file uploads.</p>
+              </div>
+            )}
+
             <form onSubmit={handleFinalSave} className="p-8 pt-0 space-y-6">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-white">Document Name</Label>
@@ -299,7 +309,7 @@ export default function DocumentVaultPage() {
 
               <Button 
                 type="submit" 
-                disabled={pendingFiles.length === 0 || isSaving} 
+                disabled={pendingFiles.length === 0 || isSaving || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY} 
                 className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
@@ -391,7 +401,7 @@ export default function DocumentVaultPage() {
           <FolderLock className="h-12 w-12 opacity-10" />
           <div className="text-center">
             <p className="font-bold">Vault Empty</p>
-            <p className="text-xs italic">Encrypted Supabase storage ready.</p>
+            <p className="text-xs italic">Encrypted storage ready.</p>
           </div>
         </div>
       )}
