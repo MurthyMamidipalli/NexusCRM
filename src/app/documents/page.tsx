@@ -16,7 +16,8 @@ import {
   Eye, 
   FileCheck, 
   FolderLock, 
-  Lock
+  Lock,
+  CheckCircle2
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -63,6 +64,7 @@ export default function DocumentVaultPage() {
   const [mounted, setMounted] = useState(false)
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
   
@@ -92,7 +94,7 @@ export default function DocumentVaultPage() {
       })
       .sort((a: any, b: any) => {
         const getVal = (doc: any) => {
-          if (!doc.createdAt) return Date.now() + 10000; // Force newly added items to the absolute top
+          if (!doc.createdAt) return Date.now() + 1000000;
           if (typeof doc.createdAt.toMillis === 'function') return doc.createdAt.toMillis();
           if (doc.createdAt.seconds) return doc.createdAt.seconds * 1000;
           return Date.now();
@@ -110,6 +112,9 @@ export default function DocumentVaultPage() {
         toast({ variant: 'destructive', title: 'File Too Large', description: `${file.name} exceeds 500MB.` })
         return
       }
+
+      // Avoid duplicates in the active list
+      if (activeUploads[file.name]) return;
 
       const fileName = `${Date.now()}_${file.name}`
       const path = `documents/${user.uid}/${fileName}`
@@ -154,11 +159,14 @@ export default function DocumentVaultPage() {
         }
       )
     })
+    
+    // Clear input so same file can be selected again if removed
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db) return
+    if (!user || !db || isSaving) return
 
     const uploadsToProcess = Object.values(activeUploads)
     if (uploadsToProcess.length === 0) {
@@ -173,13 +181,11 @@ export default function DocumentVaultPage() {
     const visibility = selectedVisibility
     const uid = user.uid
 
-    // Immediate UI Feedback
-    setIsDialogOpen(false)
-    toast({ title: 'Syncing to Vault', description: 'Securing your records in the background...' })
+    setIsSaving(true)
 
-    // Process each upload independently to ensure all Firestore records are created
-    for (const upload of uploadsToProcess) {
-      try {
+    try {
+      // Process each upload
+      for (const upload of uploadsToProcess) {
         let finalUrl = upload.url
         let finalPath = upload.path
 
@@ -205,19 +211,24 @@ export default function DocumentVaultPage() {
           
           await createRecord(db, collections.DOCUMENTS, recordData, uid)
         }
-      } catch (err: any) {
-        console.error(`❌ [VAULT] Error syncing ${upload.file.name}:`, err);
-        const permissionError = new FirestorePermissionError({
-          path: collections.DOCUMENTS,
-          operation: 'create',
-          originalError: err
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
       }
-    }
 
-    // Reset local upload state only after all tasks are processed
-    setActiveUploads({})
+      toast({ title: 'Success', description: 'Record uploaded successfully.' })
+      setIsDialogOpen(false)
+      setActiveUploads({})
+    } catch (err: any) {
+      console.error(`❌ [VAULT] Save Error:`, err);
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message || 'Could not save records to database.' });
+      
+      const permissionError = new FirestorePermissionError({
+        path: collections.DOCUMENTS,
+        operation: 'create',
+        originalError: err
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleDelete = async (doc: any) => {
@@ -247,31 +258,27 @@ export default function DocumentVaultPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight flex items-center gap-3">
             📂 Document Vault <Lock className="h-6 w-6 text-primary/40" />
           </h1>
-          <p className="text-muted-foreground">High-speed secure storage for identification and professional records.</p>
+          <p className="text-muted-foreground">Secure high-speed storage for personal and professional identification.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { 
-          if (!o && Object.values(activeUploads).some(u => !u.done)) {
-             // Prevent accidental closing if uploads are in middle of selecting? 
-             // Actually, we allow closing because sync happens in background now.
-          }
-          setIsDialogOpen(o); 
-          if (!o) {
-            // Only reset basic form fields, uploads are handled by handleFinalSave
-            setSelectedCategory(DOCUMENT_CATEGORIES[0]);
-            setSelectedStatus("active");
-            setSelectedVisibility("Private");
+          if (!isSaving) {
+            setIsDialogOpen(o);
+            if (!o) {
+              setActiveUploads({});
+              setSelectedCategory(DOCUMENT_CATEGORIES[0]);
+            }
           }
         }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl">
-              <Plus className="h-5 v-5" /> Secure New Document
+              <Plus className="h-5 w-5" /> Secure New Document
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[480px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden">
             <DialogHeader className="p-8 pb-4">
               <DialogTitle className="text-3xl font-bold font-headline">Upload to Vault</DialogTitle>
               <DialogDescription className="text-gray-400 text-sm mt-2">
-                Immediate background sync. Files up to 500MB supported.
+                Files up to 500MB supported. Secured immediately upon selection.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleFinalSave} className="p-8 pt-0 space-y-6">
@@ -279,6 +286,7 @@ export default function DocumentVaultPage() {
                 <Label className="text-sm font-semibold text-white">Document Name</Label>
                 <Input 
                   name="title" 
+                  disabled={isSaving}
                   className="bg-[#1c1c1f] border-2 border-transparent focus:border-[#10b981] transition-all h-14 rounded-2xl text-white placeholder:text-gray-600" 
                   placeholder="e.g. Identity Record" 
                   required
@@ -288,7 +296,7 @@ export default function DocumentVaultPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Category</Label>
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isSaving}>
                     <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
                       <SelectValue placeholder="Category" />
                     </SelectTrigger>
@@ -301,7 +309,7 @@ export default function DocumentVaultPage() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Status</Label>
-                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                  <Select value={selectedStatus} onValueChange={setSelectedStatus} disabled={isSaving}>
                     <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
                       <SelectValue placeholder="Active" />
                     </SelectTrigger>
@@ -315,7 +323,7 @@ export default function DocumentVaultPage() {
 
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-white">Visibility (Mandatory)</Label>
-                <Select value={selectedVisibility} onValueChange={setSelectedVisibility}>
+                <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
                   <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
                     <div className="flex items-center gap-2">
                       <Lock className="h-4 w-4 text-orange-400" />
@@ -330,8 +338,8 @@ export default function DocumentVaultPage() {
               </div>
 
               <div 
-                className="group relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-gray-800 p-10 bg-[#1c1c1f]/50 cursor-pointer hover:border-[#10b981]/50 transition-colors" 
-                onClick={() => fileInputRef.current?.click()}
+                className={`group relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-gray-800 p-10 bg-[#1c1c1f]/50 transition-colors ${isSaving ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-[#10b981]/50'}`} 
+                onClick={() => !isSaving && fileInputRef.current?.click()}
               >
                 <input 
                   type="file" 
@@ -339,12 +347,13 @@ export default function DocumentVaultPage() {
                   className="hidden" 
                   multiple 
                   onChange={handleFileSelection} 
+                  disabled={isSaving}
                 />
                 {Object.keys(activeUploads).length > 0 ? (
                   <div className="text-[#10b981] text-center">
                     <FileCheck className="mx-auto mb-2 h-12 w-12" />
                     <span className="text-sm font-bold">
-                      {Object.keys(activeUploads).length} Files Selected
+                      {Object.keys(activeUploads).length} Files Prepared
                     </span>
                   </div>
                 ) : (
@@ -358,7 +367,7 @@ export default function DocumentVaultPage() {
               {Object.keys(activeUploads).length > 0 && (
                 <div className="space-y-3">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-[#10b981]">
-                    <span>Transferring...</span>
+                    <span>{overallProgress === 100 ? 'Ready to Save' : 'Transferring...'}</span>
                     <span>{Math.round(overallProgress)}%</span>
                   </div>
                   <Progress value={overallProgress} className="h-1 bg-gray-800" />
@@ -367,10 +376,11 @@ export default function DocumentVaultPage() {
 
               <Button 
                 type="submit" 
-                disabled={Object.keys(activeUploads).length === 0} 
+                disabled={Object.keys(activeUploads).length === 0 || isSaving} 
                 className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
               >
-                Save Record
+                {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
+                {isSaving ? 'Securing...' : 'Save Record'}
               </Button>
             </form>
           </DialogContent>
