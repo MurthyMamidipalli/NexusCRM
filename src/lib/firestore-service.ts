@@ -34,19 +34,22 @@ export const collections = {
  * Automatically adds ownership and timestamps.
  */
 export function createRecord(db: Firestore, collectionName: string, data: any, userId?: string) {
+  console.log(`[Firestore] Attempting to create record in ${collectionName}`);
+  
   if (!collectionName) throw new Error('Collection name is required');
   const colRef = collection(db, collectionName);
   
+  const finalUserId = userId || data.ownerId;
+  if (!finalUserId) {
+    throw new Error(`Record creation failed: Auth UID is required to save data to ${collectionName}.`);
+  }
+
   const payload = {
     ...data,
-    ownerId: userId || data.ownerId,
+    ownerId: finalUserId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   };
-
-  if (!payload.ownerId) {
-    throw new Error(`Record creation failed: ownerId is required for cloud synchronization in ${collectionName}.`);
-  }
 
   // NON-BLOCKING: Return promise but allow UI to continue
   return addDoc(colRef, payload);
@@ -56,6 +59,7 @@ export function createRecord(db: Firestore, collectionName: string, data: any, u
  * Updates an existing record.
  */
 export function updateRecord(db: Firestore, collectionName: string, id: string, data: any) {
+  console.log(`[Firestore] Attempting to update record ${id} in ${collectionName}`);
   if (!collectionName || !id) throw new Error('Collection name and ID are required');
   const docRef = doc(db, collectionName, id);
   return updateDoc(docRef, {
@@ -68,6 +72,7 @@ export function updateRecord(db: Firestore, collectionName: string, id: string, 
  * Deletes a record.
  */
 export function deleteRecord(db: Firestore, collectionName: string, id: string) {
+  console.log(`[Firestore] Attempting to delete record ${id} in ${collectionName}`);
   if (!collectionName || !id) throw new Error('Collection name and ID are required');
   const docRef = doc(db, collectionName, id);
   return deleteDoc(docRef);

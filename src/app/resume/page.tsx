@@ -78,11 +78,11 @@ export default function ResumePage() {
     e.preventDefault()
     if (!user || !db || isSaving) return
     
-    if (!supabase) {
+    if (!supabase && activeTab === 'PDF') {
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
-        description: 'Verify your NEXT_PUBLIC_SUPABASE variables.' 
+        description: 'Verify your Supabase credentials in Settings.' 
       })
       return
     }
@@ -148,8 +148,8 @@ export default function ResumePage() {
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      console.error('[Vault] Resume Save Error:', err)
-      toast({ variant: 'destructive', title: 'Save Failed', description: err.message || 'Check browser console for details.' })
+      console.error('[Vault] Save Error:', err)
+      toast({ variant: 'destructive', title: 'Save Failed', description: err.message })
     } finally {
       setIsSaving(false)
     }
@@ -187,8 +187,8 @@ export default function ResumePage() {
               <Plus className="h-4 w-4" /> {activeTab === 'PDF' ? 'Add Resumes & CV\'S' : 'Add Link'}
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-2xl p-8">
-            <DialogHeader className="mb-6">
+          <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <DialogHeader className="p-8 pb-4">
               <DialogTitle className="text-2xl font-bold font-headline">
                 {activeTab === 'PDF' ? 'Supabase Sync' : 'Add Link'}
               </DialogTitle>
@@ -197,75 +197,77 @@ export default function ResumePage() {
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleFinalSave} className="space-y-6">
-              <div className="space-y-2">
-                <Label>Record Name / Folder Label</Label>
-                <Input name="name" required disabled={isSaving} className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="e.g. Senior Software Engineer CV" />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleFinalSave} className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-8 pb-8 space-y-6">
                 <div className="space-y-2">
-                  <Label>Document Type</Label>
-                  <Select value={selectedDocType} onValueChange={setSelectedDocType} disabled={isSaving}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                      <SelectItem value="Resume">Resume</SelectItem>
-                      <SelectItem value="CV">CV</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Record Name / Folder Label</Label>
+                  <Input name="name" required disabled={isSaving} className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="e.g. Senior Software Engineer CV" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Visibility</Label>
-                  <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                      <SelectItem value="Private">🔒 Private</SelectItem>
-                      <SelectItem value="Public">🌍 Public</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {activeTab === 'PDF' ? (
-                <div 
-                  className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
-                  onClick={() => !isSaving && fileInputRef.current?.click()}
-                >
-                  <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,.doc,.docx" multiple onChange={handleFileSelection} disabled={isSaving} />
-                  {pendingFiles.length > 0 ? (
-                    <div className="text-primary text-center">
-                      <CheckCircle2 className="mx-auto mb-2 h-10 w-10" />
-                      <span className="text-sm font-bold">{pendingFiles.length} Records Identified</span>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <Upload className="text-gray-500 mx-auto mb-2 h-10 w-10" />
-                      <span className="text-xs text-gray-500">Select Files for Upload</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label>Link URL</Label>
-                  <Input name="url" required disabled={isSaving} className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="https://linkedin.com/in/username" />
-                </div>
-              )}
-
-              {isSaving && activeTab === 'PDF' && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                    <span>Syncing to Supabase...</span>
-                    <span>{totalProgress}%</span>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Document Type</Label>
+                    <Select value={selectedDocType} onValueChange={setSelectedDocType} disabled={isSaving}>
+                      <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                        <SelectItem value="Resume">Resume</SelectItem>
+                        <SelectItem value="CV">CV</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Progress value={totalProgress} className="h-1 bg-gray-800" />
+                  <div className="space-y-2">
+                    <Label>Visibility</Label>
+                    <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
+                      <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                        <SelectItem value="Private">🔒 Private</SelectItem>
+                        <SelectItem value="Public">🌍 Public</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              )}
+
+                {activeTab === 'PDF' ? (
+                  <div 
+                    className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
+                    onClick={() => !isSaving && fileInputRef.current?.click()}
+                  >
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,.doc,.docx" multiple onChange={handleFileSelection} disabled={isSaving} />
+                    {pendingFiles.length > 0 ? (
+                      <div className="text-primary text-center">
+                        <CheckCircle2 className="mx-auto mb-2 h-10 w-10" />
+                        <span className="text-sm font-bold">{pendingFiles.length} Records Identified</span>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <Upload className="text-gray-500 mx-auto mb-2 h-10 w-10" />
+                        <span className="text-xs text-gray-500">Select Files for Upload</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Link URL</Label>
+                    <Input name="url" required disabled={isSaving} className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="https://linkedin.com/in/username" />
+                  </div>
+                )}
+
+                {isSaving && activeTab === 'PDF' && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
+                      <span>Syncing...</span>
+                      <span>{totalProgress}%</span>
+                    </div>
+                    <Progress value={totalProgress} className="h-1 bg-gray-800" />
+                  </div>
+                )}
+              </div>
               
-              <DialogFooter>
+              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
                 <Button type="submit" disabled={isSaving} className="w-full bg-primary h-12 rounded-xl font-bold">
                   {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                   {isSaving ? 'Synchronizing...' : 'Secure in Vault'}

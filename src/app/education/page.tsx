@@ -119,7 +119,7 @@ export default function EducationPage() {
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
-            <DialogHeader className="p-8 pb-4">
+            <DialogHeader className="p-8 pb-4 relative">
               <DialogTitle className="text-3xl font-bold font-headline">
                 {editingEdu ? 'Edit Education' : 'Add Education'}
               </DialogTitle>
@@ -128,8 +128,8 @@ export default function EducationPage() {
               </DialogDescription>
             </DialogHeader>
             
-            <div className="flex-1 overflow-y-auto px-8 pb-8">
-              <form id="education-form" onSubmit={handleSaveEdu} className="space-y-6">
+            <form onSubmit={handleSaveEdu} className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-8 pb-8 space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="institution" className="text-sm font-semibold text-white">Institution</Label>
                   <Input 
@@ -237,20 +237,19 @@ export default function EducationPage() {
                     className="bg-[#1c1c1f] border-none text-white min-h-[120px] rounded-xl focus:ring-1 focus:ring-primary"
                   />
                 </div>
-              </form>
-            </div>
+              </div>
 
-            <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
-              <Button 
-                type="submit" 
-                form="education-form"
-                disabled={loading} 
-                className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none w-full sm:w-auto"
-              >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Record
-              </Button>
-            </DialogFooter>
+              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
+                <Button 
+                  type="submit" 
+                  disabled={loading} 
+                  className="bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-8 rounded-xl border-none w-full"
+                >
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Record
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </div>

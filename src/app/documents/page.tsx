@@ -98,38 +98,34 @@ export default function DocumentVaultPage() {
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    console.log('[Vault] handleFinalSave triggered');
+    console.log('[Vault] Final save initiated');
     
     if (!user || !db || isSaving) return
 
     if (!supabase) {
-      console.error('[Vault] Supabase client missing');
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
-        description: 'Please check your environment variables for Supabase keys.' 
+        description: 'Supabase keys are missing. Configure them in Settings.' 
       })
       return
     }
 
     if (pendingFiles.length === 0) {
-      toast({ variant: 'destructive', title: 'No Files Selected', description: 'Please select at least one file to upload.' })
+      toast({ variant: 'destructive', title: 'Files Required', description: 'Please select at least one document to upload.' })
       return
     }
 
     const formData = new FormData(e.currentTarget)
-    const baseTitle = (formData.get('title') as string) || 'Untitled Document'
+    const baseTitle = formData.get('title') as string
     const uid = user.uid
 
     setIsSaving(true)
-    console.log(`[Vault] Processing ${pendingFiles.length} files...`);
 
     try {
       for (const file of pendingFiles) {
         const timestamp = Date.now()
         const storagePath = `${uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
-        
-        console.log(`[Vault] Uploading: ${file.name} -> ${storagePath}`);
         
         const fileUrl = await uploadWithProgress(
           'documents',
@@ -140,10 +136,8 @@ export default function DocumentVaultPage() {
           }
         )
 
-        console.log('[Vault] Upload complete, creating Firestore record...');
-
         const recordData = {
-          title: pendingFiles.length > 1 ? file.name : baseTitle,
+          title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
           file_name: file.name,
           category: selectedCategory,
           status: selectedStatus,
@@ -160,7 +154,6 @@ export default function DocumentVaultPage() {
         }
 
         await createRecord(db, collections.DOCUMENTS, recordData, uid);
-        console.log('[Vault] Firestore record saved successfully');
       }
 
       toast({ title: 'Record Secured', description: 'Your files have been saved successfully.' })
@@ -168,12 +161,8 @@ export default function DocumentVaultPage() {
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      console.error('[Vault] Critical Save Failure:', err)
-      toast({ 
-        variant: 'destructive', 
-        title: 'Save Failed', 
-        description: err.message || 'An unexpected error occurred. Check browser console.' 
-      });
+      console.error('[Vault] Save Error:', err);
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
     } finally {
       setIsSaving(false)
     }
@@ -223,18 +212,18 @@ export default function DocumentVaultPage() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto px-8 pb-8">
-              {!supabase && (
-                <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
-                  <AlertCircle className="h-5 w-5 shrink-0" />
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold">Integration Inactive</p>
-                    <p className="text-[10px] opacity-80 italic">Configure NEXT_PUBLIC_SUPABASE variables in your settings.</p>
+            <form onSubmit={handleFinalSave} className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-8 pb-8 space-y-6">
+                {!supabase && (
+                  <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
+                    <AlertCircle className="h-5 w-5 shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold">Integration Inactive</p>
+                      <p className="text-[10px] opacity-80">Verify environment variables in Vercel settings.</p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <form id="vault-form" onSubmit={handleFinalSave} className="space-y-6">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Document Name</Label>
                   <Input 
@@ -324,20 +313,19 @@ export default function DocumentVaultPage() {
                     <Progress value={totalProgress} className="h-1 bg-gray-800" />
                   </div>
                 )}
-              </form>
-            </div>
+              </div>
 
-            <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
-              <Button 
-                type="submit" 
-                form="vault-form"
-                disabled={isSaving} 
-                className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
-              >
-                {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
-                {isSaving ? 'Uploading...' : 'Save Record'}
-              </Button>
-            </DialogFooter>
+              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
+                <Button 
+                  type="submit" 
+                  disabled={isSaving} 
+                  className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                >
+                  {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
+                  {isSaving ? 'Uploading...' : 'Save Record'}
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
