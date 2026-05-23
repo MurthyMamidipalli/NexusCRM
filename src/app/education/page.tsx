@@ -45,11 +45,6 @@ export default function EducationPage() {
   const handleSaveEdu = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
-    if (authLoading) {
-      toast({ title: 'Loading...', description: 'Please wait for your session to initialize.' });
-      return;
-    }
-
     if (!user || !db) {
       toast({ variant: 'destructive', title: 'Session Required', description: 'Please sign in to save records.' });
       return;
@@ -72,11 +67,13 @@ export default function EducationPage() {
       ? updateRecord(db, collections.EDUCATION, editingEdu.id, data)
       : createRecord(db, collections.EDUCATION, data, user.uid)
 
+    // Snappy UI: Immediate Feedback and Close
     toast({ title: editingEdu ? 'Record Updated' : 'Record Created' })
     setIsDialogOpen(false)
     setEditingEdu(null)
     setLoading(false)
 
+    // Handle potential errors asynchronously
     mutation.catch(async (err) => {
       const permissionError = new FirestorePermissionError({
         path: editingEdu ? `${collections.EDUCATION}/${editingEdu.id}` : collections.EDUCATION,
@@ -90,7 +87,14 @@ export default function EducationPage() {
 
   const handleDelete = (id: string) => {
     if (!db) return
-    deleteRecord(db, collections.EDUCATION, id).catch(console.error)
+    deleteRecord(db, collections.EDUCATION, id).catch((err) => {
+       const permissionError = new FirestorePermissionError({
+        path: `${collections.EDUCATION}/${id}`,
+        operation: 'delete',
+        originalError: err
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
     toast({ title: 'Record Removed' })
   }
 

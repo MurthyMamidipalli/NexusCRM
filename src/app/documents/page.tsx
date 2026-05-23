@@ -29,6 +29,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 const DOCUMENT_CATEGORIES = [
   "Aadhaar Card", 
@@ -100,6 +102,7 @@ export default function DocumentVaultPage() {
         
         const uploadTask = uploadBytesResumable(storageRef, file)
 
+        // Wait for storage upload only
         await new Promise((resolve, reject) => {
           uploadTask.on(
             'state_changed',
@@ -125,15 +128,26 @@ export default function DocumentVaultPage() {
           ownerId: user.uid,
         }
 
-        await createRecord(db, collections.DOCUMENTS, recordData, user.uid);
+        // NON-BLOCKING MUTATION: Optimistic update
+        createRecord(db, collections.DOCUMENTS, recordData, user.uid)
+          .catch(async (err: any) => {
+            const permissionError = new FirestorePermissionError({
+              path: collections.DOCUMENTS,
+              operation: 'create',
+              requestResourceData: recordData,
+              originalError: err
+            } satisfies SecurityRuleContext);
+            errorEmitter.emit('permission-error', permissionError);
+          });
       }
 
+      // Snappy UI: Close immediately after initiating writes
       toast({ title: 'Record Secured', description: 'Vault synchronized successfully.' })
       setIsDialogOpen(false)
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
     } finally {
       setIsSaving(false)
     }
