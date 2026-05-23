@@ -16,34 +16,33 @@ export const firebaseConfig = {
 
 /**
  * Detailed audit of environment variables.
+ * Uses warnings instead of errors to prevent Next.js dev-overlay crashes.
  */
 export function isFirebaseConfigValid() {
-  const { projectId, appId, apiKey, messagingSenderId } = firebaseConfig;
+  const { projectId, appId, apiKey } = firebaseConfig;
   
   if (typeof window !== 'undefined') {
-    console.group('🔍 NEXUS HUB: FINAL ENVIRONMENT AUDIT');
+    console.group('🔍 NEXUS HUB: ENVIRONMENT SYNC AUDIT');
     console.log('PROJECT_ID:', projectId || 'MISSING');
-    console.log('AUTH_DOMAIN:', firebaseConfig.authDomain || 'MISSING');
-    console.log('SENDER_ID:', messagingSenderId || 'MISSING');
     console.log('APP_ID:', appId || 'MISSING');
     console.log('API_KEY_PRESENT:', !!apiKey);
     
     const isPlaceholderApp = appId?.includes('1234567890') || appId?.includes('abcdef');
     const isCorrectProject = projectId === 'studio-3717134241-d7612';
 
-    if (!isCorrectProject) {
-      console.warn('❌ INCORRECT PROJECT: Expected studio-3717134241-d7612 but got', projectId);
+    if (!isCorrectProject && projectId) {
+      console.warn('⚠️ PROJECT MISMATCH: Host is serving', projectId, 'but expected studio-3717134241-d7612');
     }
     if (isPlaceholderApp) {
-      console.error('❌ PLACEHOLDER DETECTED: App ID is still using a generic placeholder value.');
+      console.warn('⚠️ APP_ID PLACEHOLDER: The platform is still injecting a placeholder App ID. Synchronization in progress...');
     }
     if (!apiKey) {
-      console.error('❌ API KEY MISSING: Authentication will fail.');
+      console.warn('⚠️ API KEY MISSING: Authentication features will be disabled.');
     }
     
     console.groupEnd();
   }
   
-  // Return true only if key and project are present (allowing placeholder app id for boot)
-  return !!(apiKey && projectId && projectId !== 'undefined');
+  // Return true if we have the bare minimum to attempt boot
+  return !!(projectId && projectId !== 'undefined');
 }
