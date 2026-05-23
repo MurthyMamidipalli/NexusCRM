@@ -47,7 +47,7 @@ const DOCUMENT_CATEGORIES = [
 
 export default function DocumentVaultPage() {
   const db = useFirestore()
-  const { user } = useUser()
+  const { user, loading: authLoading } = useUser()
   const [mounted, setMounted] = useState(false)
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -100,35 +100,57 @@ export default function DocumentVaultPage() {
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
-    console.log("FORM SUBMITTED");
-    console.log("USER:", user);
-    console.log("DB:", db);
-    console.log("SUPABASE:", supabase);
-    console.log("PENDING FILES:", pendingFiles);
-    
-    if (!user || !db || isSaving) {
-      console.error("Blocked: user/db/isSaving", { user: !!user, db: !!db, isSaving });
+    console.log("--- DOCUMENT SAVE DIAGNOSTICS ---");
+    console.log("USER OBJECT:", user);
+    console.log("DB OBJECT:", db);
+    console.log("IS SAVING:", isSaving);
+    console.log("AUTH LOADING:", authLoading);
+    console.log("SUPABASE CLIENT:", supabase ? "READY" : "NULL");
+    console.log("PENDING FILES:", pendingFiles.length);
+
+    if (authLoading) {
+      toast({ title: 'Auth Pending', description: 'Still checking your session. Please try again in a moment.' });
+      return;
+    }
+
+    if (!user) {
+      console.error("[Vault] Aborted: User is not logged in");
+      toast({ 
+        variant: 'destructive', 
+        title: 'Authentication Required', 
+        description: 'Please sign in before uploading documents.' 
+      });
+      return;
+    }
+
+    if (!db) {
+      console.error("[Vault] Aborted: Database instance is null");
+      toast({ 
+        variant: 'destructive', 
+        title: 'Database Error', 
+        description: 'Database connection not ready.' 
+      });
+      return;
+    }
+
+    if (isSaving) {
+      console.warn("[Vault] Aborted: Save operation already in progress");
       return;
     }
 
     if (!supabase) {
-      console.error("Blocked: Supabase client is null");
+      console.error("[Vault] Aborted: Supabase client is null");
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
-        description: 'Supabase client is null. Check environment variables in Settings.' 
-      })
-      return
+        description: 'Supabase URL or Anon Key is missing. Check your settings.' 
+      });
+      return;
     }
 
     if (pendingFiles.length === 0) {
-      console.error("Blocked: No files selected");
-      toast({ 
-        variant: 'destructive', 
-        title: 'Files Required', 
-        description: 'Please select at least one document to upload.' 
-      })
-      return
+      toast({ variant: 'destructive', title: 'Files Required', description: 'Please select at least one document to upload.' });
+      return;
     }
 
     const formData = new FormData(e.currentTarget)
@@ -154,9 +176,8 @@ export default function DocumentVaultPage() {
               setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
             }
           )
-          console.log(`[Vault] Upload success URL: ${fileUrl}`);
         } catch (uploadErr: any) {
-          console.error("[Vault] uploadWithProgress failed detail:", uploadErr);
+          console.error("[Vault] Upload failed:", uploadErr);
           throw new Error(`Upload failed for ${file.name}: ${uploadErr.message}`);
         }
 
@@ -177,14 +198,8 @@ export default function DocumentVaultPage() {
           storageProvider: 'Supabase'
         }
 
-        console.log('[Vault] Attempting Firestore createRecord...');
-        try {
-          await createRecord(db, collections.DOCUMENTS, recordData, uid);
-          console.log('[Vault] Firestore save success');
-        } catch (dbErr: any) {
-          console.error("[Vault] createRecord failed detail:", dbErr);
-          throw new Error(`Database save failed: ${dbErr.message}`);
-        }
+        console.log('[Vault] Writing to Firestore...');
+        await createRecord(db, collections.DOCUMENTS, recordData, uid);
       }
 
       toast({ title: 'Record Secured', description: 'Your files have been saved successfully.' })
@@ -248,7 +263,9 @@ export default function DocumentVaultPage() {
                 <AlertCircle className="h-5 w-5 shrink-0" />
                 <div className="space-y-1">
                   <p className="text-xs font-bold">Integration Inactive</p>
-                  <p className="text-[10px] opacity-80">Check console for blocked status.</p>
+                  <p className="text-[10px] opacity-80">
+                    Missing configuration. Visit settings to configure Supabase keys.
+                  </p>
                 </div>
               </div>
             )}
@@ -344,16 +361,14 @@ export default function DocumentVaultPage() {
                 </div>
               )}
 
-              <DialogFooter className="p-0 border-none bg-transparent">
-                <Button 
-                  type="submit" 
-                  disabled={isSaving} 
-                  className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
-                >
-                  {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
-                  {isSaving ? 'Saving...' : 'Save Record'}
-                </Button>
-              </DialogFooter>
+              <Button 
+                type="submit" 
+                disabled={isSaving} 
+                className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+              >
+                {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
+                {isSaving ? 'Uploading...' : 'Save Record'}
+              </Button>
             </form>
           </DialogContent>
         </Dialog>

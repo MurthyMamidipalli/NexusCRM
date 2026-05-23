@@ -19,7 +19,7 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/e
 
 export default function EducationPage() {
   const db = useFirestore()
-  const { user } = useUser()
+  const { user, loading: authLoading } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingEdu, setEditingEdu] = useState<any>(null)
   const [loading, setLoading] = useState(false)
@@ -50,10 +50,24 @@ export default function EducationPage() {
 
   const handleSaveEdu = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    console.log('[Education] handleSaveEdu triggered');
     
+    console.log("--- EDUCATION SAVE DIAGNOSTICS ---");
+    console.log("USER OBJECT:", user);
+    console.log("DB OBJECT:", db);
+    console.log("AUTH LOADING:", authLoading);
+
+    if (authLoading) {
+      toast({ title: 'Auth Pending', description: 'Still checking your session.' });
+      return;
+    }
+
     if (!user || !db) {
-      console.warn('[Education] User or DB not ready');
+      console.warn('[Education] Aborted: User or DB not ready');
+      toast({ 
+        variant: 'destructive', 
+        title: 'Save Aborted', 
+        description: !user ? 'Please sign in first.' : 'Database connection not ready.' 
+      });
       return;
     }
 
@@ -71,8 +85,6 @@ export default function EducationPage() {
       description: formData.get('description') as string,
     }
 
-    console.log('[Education] Saving data:', data);
-
     const mutation = editingEdu
       ? updateRecord(db, collections.EDUCATION, editingEdu.id, data)
       : createRecord(db, collections.EDUCATION, data, user.uid)
@@ -82,26 +94,21 @@ export default function EducationPage() {
     setEditingEdu(null)
     setLoading(false)
 
-    mutation
-      .then(() => console.log('[Education] Save successful'))
-      .catch(async (err) => {
-        console.error('[Education] Save failed:', err);
-        const permissionError = new FirestorePermissionError({
-          path: editingEdu ? `${collections.EDUCATION}/${editingEdu.id}` : collections.EDUCATION,
-          operation: editingEdu ? 'update' : 'create',
-          requestResourceData: data,
-          originalError: err
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      })
+    mutation.catch(async (err) => {
+      const permissionError = new FirestorePermissionError({
+        path: editingEdu ? `${collections.EDUCATION}/${editingEdu.id}` : collections.EDUCATION,
+        operation: editingEdu ? 'update' : 'create',
+        requestResourceData: data,
+        originalError: err
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    })
   }
 
   const handleDelete = (id: string) => {
     if (!db) return
-    console.log(`[Education] Deleting ID: ${id}`);
     deleteRecord(db, collections.EDUCATION, id)
       .catch(async (err) => {
-        console.error('[Education] Delete failed:', err);
         const permissionError = new FirestorePermissionError({
           path: `${collections.EDUCATION}/${id}`,
           operation: 'delete',
