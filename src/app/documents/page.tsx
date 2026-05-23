@@ -69,7 +69,7 @@ export default function DocumentVaultPage() {
   const [activeUploads, setActiveUploads] = useState<{ [key: string]: ActiveUpload }>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [selectedCategory, setSelectedCategory] = useState<string>("Identity")
+  const [selectedCategory, setSelectedCategory] = useState<string>(DOCUMENT_CATEGORIES[0])
   const [selectedStatus, setSelectedStatus] = useState<string>("active")
   const [selectedVisibility, setSelectedVisibility] = useState<string>("Private")
 
@@ -92,7 +92,7 @@ export default function DocumentVaultPage() {
       })
       .sort((a: any, b: any) => {
         const getVal = (doc: any) => {
-          if (!doc.createdAt) return Date.now(); // Put new/pending items at the top
+          if (!doc.createdAt) return Date.now() + 10000; // Force newly added items to the absolute top
           if (typeof doc.createdAt.toMillis === 'function') return doc.createdAt.toMillis();
           if (doc.createdAt.seconds) return doc.createdAt.seconds * 1000;
           return Date.now();
@@ -134,6 +134,7 @@ export default function DocumentVaultPage() {
           })
         },
         (error) => {
+          console.error("Upload error:", error);
           setActiveUploads(prev => {
             const next = { ...prev }
             delete next[file.name]
@@ -155,7 +156,7 @@ export default function DocumentVaultPage() {
     })
   }
 
-  const handleFinalSave = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user || !db) return
 
@@ -167,65 +168,56 @@ export default function DocumentVaultPage() {
 
     const formData = new FormData(e.currentTarget)
     const baseTitle = formData.get('title') as string
-    const metadataSnapshot = {
-      category: selectedCategory,
-      status: selectedStatus,
-      visibility: selectedVisibility,
-      userId: user.uid
-    }
+    const category = selectedCategory
+    const status = selectedStatus
+    const visibility = selectedVisibility
+    const uid = user.uid
 
     // Immediate UI Feedback
-    toast({ title: 'Securing Records', description: 'Records are being synced to your vault in the background.' })
     setIsDialogOpen(false)
+    toast({ title: 'Syncing to Vault', description: 'Securing your records in the background...' })
 
-    // Detached Background Persistence Loop
-    uploadsToProcess.forEach(async (upload) => {
-      const commitRecord = async (url: string, path: string, file: File) => {
-        const data = {
-          title: uploadsToProcess.length > 1 ? file.name : (baseTitle || file.name),
-          category: metadataSnapshot.category,
-          fileUrl: url,
-          filePath: path,
-          fileType: file.type,
-          fileSize: file.size,
-          status: metadataSnapshot.status,
-          isPublic: metadataSnapshot.visibility === 'Public',
-          ownerId: metadataSnapshot.userId
-        }
-        
-        try {
-          console.log(`📡 [VAULT] Committing: ${data.title}`)
-          await createRecord(db, collections.DOCUMENTS, data, metadataSnapshot.userId)
-          console.log(`✅ [VAULT] Secured: ${data.title}`)
-        } catch (err: any) {
-          const permissionError = new FirestorePermissionError({
-            path: collections.DOCUMENTS,
-            operation: 'create',
-            requestResourceData: data,
-            originalError: err
-          } satisfies SecurityRuleContext);
-          errorEmitter.emit('permission-error', permissionError);
-        } finally {
-          setActiveUploads(prev => {
-            const next = { ...prev }
-            delete next[file.name]
-            return next
-          })
-        }
-      }
-
+    // Process each upload independently to ensure all Firestore records are created
+    for (const upload of uploadsToProcess) {
       try {
-        if (upload.done && upload.url && upload.path) {
-          await commitRecord(upload.url, upload.path, upload.file)
-        } else if (upload.task) {
-          await upload.task;
-          const url = await getDownloadURL(upload.task.snapshot.ref);
-          await commitRecord(url, upload.path!, upload.file);
+        let finalUrl = upload.url
+        let finalPath = upload.path
+
+        // If upload is still in progress, wait for it
+        if (!upload.done && upload.task) {
+          const snapshot = await upload.task;
+          finalUrl = await getDownloadURL(snapshot.ref);
+          finalPath = snapshot.ref.fullPath;
         }
-      } catch (err) {
-        console.error(`❌ [VAULT] Background Error:`, err);
+
+        if (finalUrl && finalPath) {
+          const recordData = {
+            title: uploadsToProcess.length > 1 ? upload.file.name : (baseTitle || upload.file.name),
+            category: category,
+            fileUrl: finalUrl,
+            filePath: finalPath,
+            fileType: upload.file.type,
+            fileSize: upload.file.size,
+            status: status,
+            isPublic: visibility === 'Public',
+            ownerId: uid
+          }
+          
+          await createRecord(db, collections.DOCUMENTS, recordData, uid)
+        }
+      } catch (err: any) {
+        console.error(`❌ [VAULT] Error syncing ${upload.file.name}:`, err);
+        const permissionError = new FirestorePermissionError({
+          path: collections.DOCUMENTS,
+          operation: 'create',
+          originalError: err
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
       }
-    })
+    }
+
+    // Reset local upload state only after all tasks are processed
+    setActiveUploads({})
   }
 
   const handleDelete = async (doc: any) => {
@@ -233,11 +225,12 @@ export default function DocumentVaultPage() {
     try {
       await deleteRecord(db, collections.DOCUMENTS, doc.id)
       if (doc.filePath) {
-        await deleteObject(ref(storage, doc.filePath))
+        const storageRef = ref(storage, doc.filePath)
+        await deleteObject(storageRef).catch(console.warn)
       }
       toast({ title: 'Record Removed' })
     } catch (err: any) {
-      console.error(err)
+      console.error("Delete error:", err)
     }
   }
 
@@ -257,10 +250,14 @@ export default function DocumentVaultPage() {
           <p className="text-muted-foreground">High-speed secure storage for identification and professional records.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { 
+          if (!o && Object.values(activeUploads).some(u => !u.done)) {
+             // Prevent accidental closing if uploads are in middle of selecting? 
+             // Actually, we allow closing because sync happens in background now.
+          }
           setIsDialogOpen(o); 
-          if(!o && !Object.values(activeUploads).some(u => !u.done)) {
-            setActiveUploads({});
-            setSelectedCategory("Aadhaar Card");
+          if (!o) {
+            // Only reset basic form fields, uploads are handled by handleFinalSave
+            setSelectedCategory(DOCUMENT_CATEGORIES[0]);
             setSelectedStatus("active");
             setSelectedVisibility("Private");
           }
