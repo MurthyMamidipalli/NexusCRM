@@ -45,7 +45,7 @@ const DOCUMENT_CATEGORIES = [
 
 export default function DocumentVaultPage() {
   const db = useFirestore()
-  const { user, loading: authLoading } = useUser()
+  const { user } = useUser()
   const [mounted, setMounted] = useState(false)
   const { toast } = useToast()
   
@@ -62,17 +62,6 @@ export default function DocumentVaultPage() {
   const [selectedVisibility, setSelectedVisibility] = useState<string>("Private")
 
   useEffect(() => { setMounted(true) }, [])
-
-  // DIAGNOSTIC LOGS
-  useEffect(() => {
-    if (mounted) {
-      console.group('📂 VAULT: AUTH STATUS CHECK');
-      console.log('AUTH USER:', user);
-      console.log('AUTH UID:', user?.uid);
-      console.log('AUTH LOADING:', authLoading);
-      console.groupEnd();
-    }
-  }, [user, authLoading, mounted]);
 
   const docsQuery = useMemo(() => {
     if (!db || !user) return null
@@ -92,20 +81,10 @@ export default function DocumentVaultPage() {
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    
-    if (authLoading) {
-      toast({ title: 'Auth Loading', description: 'Please wait for your session to initialize.' });
-      return;
-    }
-
-    if (!user || !db) {
-      toast({ variant: 'destructive', title: 'Auth Required', description: 'Please sign in before uploading documents.' });
-      return;
-    }
-
+    if (!user || !db) return
     if (pendingFiles.length === 0) {
       toast({ variant: 'destructive', title: 'File Missing', description: 'Please select a document to upload.' });
-      return;
+      return
     }
 
     const formData = new FormData(e.currentTarget)
@@ -186,12 +165,6 @@ export default function DocumentVaultPage() {
 
           <form onSubmit={handleFinalSave} className="flex flex-col flex-1 overflow-hidden">
             <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
-              {!user && !authLoading && (
-                <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
-                  <X className="h-4 w-4" /> Sign-in required to enable upload button.
-                </div>
-              )}
-              
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-white">Document Name</Label>
                 <Input name="title" disabled={isSaving} required className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white focus:ring-1 focus:ring-[#10b981]" placeholder="e.g. Identity Record" />
@@ -227,7 +200,7 @@ export default function DocumentVaultPage() {
               {isSaving && <div className="space-y-2"><div className="flex justify-between text-[10px] font-bold uppercase text-emerald-400"><span>Syncing to vault...</span><span>{totalProgress}%</span></div><Progress value={totalProgress} className="h-1 bg-gray-800" /></div>}
             </div>
             <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
-              <Button type="submit" disabled={isSaving || !user} className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20">
+              <Button type="submit" disabled={isSaving} className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20">
                 {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
                 Save Record
               </Button>

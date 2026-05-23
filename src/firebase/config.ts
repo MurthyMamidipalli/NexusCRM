@@ -41,6 +41,5 @@ export function isFirebaseConfigValid() {
   }
   console.groupEnd();
 
-  // Return true if we have at least the minimum keys to attempt a boot
   return !!apiKey && !!projectId;
 }
