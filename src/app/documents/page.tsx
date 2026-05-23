@@ -100,11 +100,11 @@ export default function DocumentVaultPage() {
     e.preventDefault()
     if (!user || !db || isSaving) return
 
-    if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (!supabase) {
       toast({ 
         variant: 'destructive', 
-        title: 'System Unconfigured', 
-        description: 'Please add your Supabase keys to .env.local to enable uploads.' 
+        title: 'Integration Inactive', 
+        description: 'Verify NEXT_PUBLIC_SUPABASE_URL and ANON_KEY are set in environment variables.' 
       })
       return
     }
@@ -154,7 +154,7 @@ export default function DocumentVaultPage() {
         await createRecord(db, collections.DOCUMENTS, recordData, uid);
       }
 
-      toast({ title: 'Record Secured', description: 'Your files have been saved to Supabase.' })
+      toast({ title: 'Record Secured', description: 'Your files have been saved successfully.' })
       setIsDialogOpen(false)
       setPendingFiles([])
       setUploadProgress({})
@@ -193,7 +193,7 @@ export default function DocumentVaultPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight flex items-center gap-3">
             📂 Document Vault <Database className="h-6 w-6 text-primary/40" />
           </h1>
-          <p className="text-muted-foreground">High-performance secure storage powered by Supabase Cloud.</p>
+          <p className="text-muted-foreground">Secure high-performance storage powered by Supabase Cloud.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { if (!isSaving) setIsDialogOpen(o); if (!o) { setPendingFiles([]); setUploadProgress({}); } }}>
           <DialogTrigger asChild>
@@ -205,14 +205,21 @@ export default function DocumentVaultPage() {
             <DialogHeader className="p-8 pb-4">
               <DialogTitle className="text-3xl font-bold font-headline">Secure Document</DialogTitle>
               <DialogDescription className="text-gray-400 text-sm mt-2">
-                Files are stored in your private Supabase bucket.
+                Your files are encrypted and stored in your private bucket.
               </DialogDescription>
             </DialogHeader>
 
-            {!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && (
+            {!supabase && (
               <div className="mx-8 mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
                 <AlertCircle className="h-5 w-5 shrink-0" />
-                <p className="text-xs font-bold">Supabase Configuration Required. Set your keys in .env.local to enable file uploads.</p>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold">Integration Inactive</p>
+                  <p className="text-[10px] opacity-80">
+                    Missing: {!process.env.NEXT_PUBLIC_SUPABASE_URL ? 'URL ' : ''}
+                    {!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Anon Key' : ''}
+                  </p>
+                  <p className="text-[10px] mt-1 italic">Verify environment variables in Vercel dashboard.</p>
+                </div>
               </div>
             )}
 
@@ -287,12 +294,12 @@ export default function DocumentVaultPage() {
                 {pendingFiles.length > 0 ? (
                   <div className="text-[#10b981] text-center">
                     <CheckCircle2 className="mx-auto mb-2 h-12 w-12" />
-                    <span className="text-sm font-bold">{pendingFiles.length} Records Selected</span>
+                    <span className="text-sm font-bold">{pendingFiles.length} Files Selected</span>
                   </div>
                 ) : (
                   <div className="text-center">
                     <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
-                    <p className="text-sm text-gray-500 font-medium">Select Files for Upload</p>
+                    <p className="text-sm text-gray-500 font-medium">Select Documents for Upload</p>
                   </div>
                 )}
               </div>
@@ -309,7 +316,7 @@ export default function DocumentVaultPage() {
 
               <Button 
                 type="submit" 
-                disabled={pendingFiles.length === 0 || isSaving || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY} 
+                disabled={pendingFiles.length === 0 || isSaving || !supabase} 
                 className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}

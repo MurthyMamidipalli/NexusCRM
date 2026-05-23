@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://fwjghfbipemaiytojczk.supabase.co'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 /**
@@ -11,8 +11,20 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
-if (!supabase && typeof window !== 'undefined') {
-  console.warn('⚠️ Supabase integration is inactive. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file.');
+// Diagnostics for the developer in the browser console
+if (typeof window !== 'undefined') {
+  const isUrlSet = !!supabaseUrl;
+  const isKeySet = !!supabaseAnonKey;
+  
+  if (!isUrlSet || !isKeySet) {
+    console.group('📡 Supabase Integration Status');
+    console.warn('URL:', isUrlSet ? '✅ CONFIGURED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_URL)');
+    console.warn('KEY:', isKeySet ? '✅ CONFIGURED' : '❌ MISSING (NEXT_PUBLIC_SUPABASE_ANON_KEY)');
+    console.info('Verify these variables are set in your Vercel/Hosting environment settings.');
+    console.groupEnd();
+  } else {
+    console.log('🚀 Supabase Client Initialized Successfully');
+  }
 }
 
 /**
@@ -29,7 +41,7 @@ export async function uploadWithProgress(
   onProgress: (percent: number) => void
 ): Promise<string> {
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase configuration is missing. Check your environment variables.');
+    throw new Error(`Supabase Configuration Missing: ${!supabaseUrl ? 'URL ' : ''}${!supabaseAnonKey ? 'Anon Key' : ''}`);
   }
 
   return new Promise((resolve, reject) => {
@@ -51,7 +63,7 @@ export async function uploadWithProgress(
             const { data } = supabase.storage.from(bucket).getPublicUrl(path)
             resolve(data.publicUrl)
           } else {
-            // Fallback URL generation if client isn't available but upload succeeded
+            // Fallback URL generation
             resolve(`${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`)
           }
         } else {
@@ -69,6 +81,6 @@ export async function uploadWithProgress(
     xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`)
     xhr.setRequestHeader('apikey', supabaseAnonKey)
     
-    xhr.send(file) // Supabase storage accepts raw file body
+    xhr.send(file)
   })
 }
