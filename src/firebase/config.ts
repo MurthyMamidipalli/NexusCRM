@@ -15,28 +15,20 @@ export const firebaseConfig = {
 
 /**
  * Validates the configuration to prevent initialization crashes.
- * Returns true if the configuration appears valid.
  */
 export function isFirebaseConfigValid() {
-  return !!(
-    firebaseConfig.apiKey &&
-    firebaseConfig.apiKey !== 'your-api-key' &&
+  const isValid = !!(
+    firebaseConfig.apiKey && 
+    firebaseConfig.apiKey !== 'AIzaSyA_placeholder_key' &&
     firebaseConfig.projectId
   );
-}
-
-// Audit and validate configuration on startup
-if (typeof window !== 'undefined') {
-  console.group('📡 Firebase Configuration Audit');
-  console.log('Project ID:', firebaseConfig.projectId || '❌ MISSING');
-  console.log('API Key Detected:', !!firebaseConfig.apiKey);
   
-  if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('your-api-key')) {
-    console.error('Firebase Error: Invalid or missing API Key. Check your .env file and ensure NEXT_PUBLIC_FIREBASE_API_KEY is set.');
+  if (!isValid && typeof window !== 'undefined') {
+    console.error('❌ Firebase Config Invalid:', {
+      hasApiKey: !!firebaseConfig.apiKey,
+      projectId: firebaseConfig.projectId
+    });
   }
   
-  if (!firebaseConfig.storageBucket) {
-    console.warn('Firebase Warning: Storage Bucket is not configured. Some legacy Firebase features may fail.');
-  }
-  console.groupEnd();
+  return isValid;
 }
