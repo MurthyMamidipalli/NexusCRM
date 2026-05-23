@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Target, Chrome, Loader2, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { isFirebaseConfigValid, firebaseConfig } from '@/firebase/config';
+import { isFirebaseConfigValid } from '@/firebase/config';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -39,18 +39,16 @@ export default function LoginPage() {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!firebaseConfig.apiKey) {
-      toast({
-        variant: 'destructive',
-        title: 'Configuration Error',
-        description: 'Firebase API Key is missing. Please check your .env file.',
-      });
-      return;
-    }
+    console.group('🔑 LOGIN ATTEMPT');
+    console.log('Target Email:', email);
+    console.log('Auth App Options:', auth.app.options);
+    console.groupEnd();
 
     setLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('SUCCESS: Authenticated as', userCredential.user.uid);
+      
       toast({
         title: 'Login Successful',
         description: `Welcome back, ${userCredential.user.email}`,
@@ -61,9 +59,7 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: error.message.includes('api-key-not-valid') 
-          ? 'Invalid API Key. Ensure your Firebase Project settings are synchronized.' 
-          : error.message
+        description: error.message
       });
     } finally {
       setLoading(false);
@@ -116,7 +112,7 @@ export default function LoginPage() {
         {configError && (
           <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm animate-in fade-in slide-in-from-top-2">
             <AlertTriangle className="h-5 w-5 shrink-0" />
-            <p><strong>Warning:</strong> Firebase Configuration is incomplete. Check the browser console (F12) for details.</p>
+            <p><strong>Warning:</strong> Firebase Configuration may be incomplete. Check console for details.</p>
           </div>
         )}
 

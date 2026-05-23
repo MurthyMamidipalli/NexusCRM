@@ -26,11 +26,12 @@ export function initializeFirebase() {
 
   try {
     if (getApps().length === 0) {
-      console.log('[Firebase] 🚀 Initializing primary app instance...');
+      console.log('🚀 [Firebase] Initializing primary app instance...');
+      console.log('Firebase Runtime Config:', firebaseConfig);
       app = initializeApp(firebaseConfig);
     } else {
       app = getApp();
-      console.log('[Firebase] ♻️ Reusing existing app instance.');
+      console.log('♻️ [Firebase] Reusing existing app instance.');
     }
 
     if (!db) {
@@ -53,7 +54,7 @@ export function initializeFirebase() {
       storage = getStorage(app);
     }
   } catch (err) {
-    console.error('[Firebase] ❌ Critical initialization error:', err);
+    console.error('❌ [Firebase] Critical initialization error:', err);
   }
   
   return { app, auth, db, storage };

@@ -45,7 +45,7 @@ const DOCUMENT_CATEGORIES = [
 
 export default function DocumentVaultPage() {
   const db = useFirestore()
-  const { user } = useUser()
+  const { user, loading: authLoading } = useUser()
   const [mounted, setMounted] = useState(false)
   const { toast } = useToast()
   
@@ -148,7 +148,11 @@ export default function DocumentVaultPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">📂 Document Vault</h1>
           <p className="text-muted-foreground">Secure high-performance storage for sensitive professional records.</p>
         </div>
-        <Button className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl" onClick={() => setIsDialogOpen(true)}>
+        <Button 
+          className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl" 
+          onClick={() => setIsDialogOpen(true)}
+          disabled={!user}
+        >
           <Plus className="h-5 w-5" /> Add Record
         </Button>
       </div>
@@ -216,7 +220,7 @@ export default function DocumentVaultPage() {
         </div>
       </div>
 
-      {!user && (
+      {!user && !authLoading && (
         <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-sm font-bold flex items-center gap-2">
            Sign-in required to enable upload button.
         </div>
