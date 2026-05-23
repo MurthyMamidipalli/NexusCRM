@@ -145,8 +145,9 @@ export default function DocumentVaultPage() {
     e.preventDefault()
     if (!user || !db) return
 
-    const uploadsList = Object.values(activeUploads)
-    if (uploadsList.length === 0) {
+    // Capture the static list of current uploads to process in background
+    const uploadsToProcess = Object.values(activeUploads)
+    if (uploadsToProcess.length === 0) {
       toast({ variant: 'destructive', title: 'Empty Vault', description: 'Please select documents first.' })
       return
     }
@@ -155,32 +156,37 @@ export default function DocumentVaultPage() {
     const formConfig = {
       baseTitle: formData.get('title') as string,
       category: formData.get('category') as string || 'Other',
-      status: formData.get('status') as string || 'Active',
+      status: 'active', // Strictly follow lowercase schema enum
       visibility: formData.get('visibility') as string || 'Private'
     }
 
-    // INSTANT UI CLOSURE
-    toast({ title: 'Securing Records', description: 'Your files are syncing to your private vault.' })
+    // INSTANT UI FEEDBACK: Close dialog immediately for responsiveness
+    toast({ title: 'Securing Records', description: 'Your files are syncing to your private vault in the background.' })
     setIsDialogOpen(false)
 
-    // PROCESS IN BACKGROUND (Fully independent of component state clearing)
-    uploadsList.forEach(async (upload) => {
+    // PROCESS IN BACKGROUND: Independent of dialog or local state cleanup
+    uploadsToProcess.forEach(async (upload) => {
       const finalizeRecord = async (url: string, path: string, file: File) => {
         const data = {
-          title: uploadsList.length > 1 ? file.name : formConfig.baseTitle || file.name,
+          title: uploadsToProcess.length > 1 ? file.name : formConfig.baseTitle || file.name,
           category: formConfig.category,
           fileUrl: url,
           filePath: path,
           fileType: file.type,
           fileSize: file.size,
-          status: formConfig.status.toLowerCase(),
+          status: formConfig.status,
           isPublic: formConfig.visibility === 'Public',
           ownerId: user.uid
         }
-        await createRecord(db, collections.DOCUMENTS, data, user.uid).catch(console.error)
-        console.log(`📁 Record secured: ${file.name}`)
         
-        // Final cleanup of this specific item from state
+        console.log(`📡 Finalizing Firestore record for: ${file.name}`)
+        await createRecord(db, collections.DOCUMENTS, data, user.uid).catch(err => {
+          console.error(`❌ Background record creation failed for ${file.name}:`, err)
+        })
+        
+        console.log(`📁 Record secured in Vault: ${file.name}`)
+        
+        // Only clean up this specific file from active uploads after full completion
         setActiveUploads(prev => {
           const next = { ...prev }
           delete next[file.name]
@@ -188,18 +194,19 @@ export default function DocumentVaultPage() {
         })
       }
 
-      if (upload.done && upload.url && upload.path) {
-        finalizeRecord(upload.url, upload.path, upload.file)
-      } else if (upload.task) {
-        // Wait for the specific task to finish if it hasn't yet
-        console.log(`⏳ Background task awaiting: ${upload.file.name}`)
-        try {
+      try {
+        if (upload.done && upload.url && upload.path) {
+          // File was already 100% finished
+          await finalizeRecord(upload.url, upload.path, upload.file)
+        } else if (upload.task) {
+          // Await any remaining bytes before committing metadata
+          console.log(`⏳ Background task awaiting completion: ${upload.file.name}`)
           await upload.task;
           const url = await getDownloadURL(upload.task.snapshot.ref);
-          finalizeRecord(url, upload.path!, upload.file);
-        } catch (err) {
-          console.error(`❌ Background finalize failed for ${upload.file.name}`, err);
+          await finalizeRecord(url, upload.path!, upload.file);
         }
+      } catch (err) {
+        console.error(`❌ Critical background sync error for ${upload.file.name}:`, err);
       }
     })
   }

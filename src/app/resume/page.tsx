@@ -136,16 +136,17 @@ export default function ResumePage() {
       url: formData.get('url') as string
     }
 
-    // INSTANT UI CLOSURE
-    toast({ title: 'Syncing to Vault', description: 'Records are being secured in the background.' })
+    const uploadsToProcess = Object.values(activeUploads)
+
+    // INSTANT UI FEEDBACK
+    toast({ title: 'Securing in Vault', description: 'Your records are being finalized in the background.' })
     setIsDialogOpen(false)
 
     if (activeTab === 'PDF') {
-      const uploadsList = Object.values(activeUploads)
-      uploadsList.forEach(async (upload) => {
+      uploadsToProcess.forEach(async (upload) => {
         const finalize = async (url: string, path: string, file: File) => {
           const data: any = {
-            name: uploadsList.length > 1 ? `${formConfig.name} - ${file.name}` : formConfig.name,
+            name: uploadsToProcess.length > 1 ? `${formConfig.name} - ${file.name}` : formConfig.name,
             type: 'file',
             docType: formConfig.docType,
             visibility: formConfig.visibility,
@@ -157,7 +158,10 @@ export default function ResumePage() {
             fileSize: file.size,
             fileType: file.type
           }
-          await createRecord(db, collections.RESUMES, data, user.uid).catch(console.error)
+          console.log(`📡 Finalizing Resume/CV record for: ${file.name}`)
+          await createRecord(db, collections.RESUMES, data, user.uid).catch(err => {
+            console.error(`❌ Background resume creation failed for ${file.name}:`, err)
+          })
           
           setActiveUploads(prev => {
             const next = { ...prev }
@@ -166,16 +170,16 @@ export default function ResumePage() {
           })
         }
 
-        if (upload.done && upload.url && upload.path) {
-          finalize(upload.url, upload.path, upload.file)
-        } else if (upload.task) {
-          try {
+        try {
+          if (upload.done && upload.url && upload.path) {
+            await finalize(upload.url, upload.path, upload.file)
+          } else if (upload.task) {
             await upload.task;
             const url = await getDownloadURL(upload.task.snapshot.ref);
-            finalize(url, upload.path!, upload.file);
-          } catch (err) {
-            console.error(`❌ Background resume finalize failed`, err);
+            await finalize(url, upload.path!, upload.file);
           }
+        } catch (err) {
+          console.error(`❌ Critical background resume sync error:`, err);
         }
       })
     } else {
