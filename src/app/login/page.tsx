@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Target, Chrome, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { isFirebaseConfigValid, firebaseConfig } from '@/firebase/config';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -29,17 +30,19 @@ export default function LoginPage() {
 
   useEffect(() => {
     setMounted(true);
+    isFirebaseConfigValid();
   }, []);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
-    // CRITICAL: Diagnostic log before attempt
     console.group('🔑 AUTH REPAIR: LOGIN ATTEMPT');
-    console.log('Auth App Name:', auth.app.name);
-    console.log('Auth Config Project:', auth.app.options.projectId);
-    console.log('Auth Config AppID:', auth.app.options.appId);
+    console.log('App Config ID:', auth.app.options.appId);
+    console.log('App Config Project:', auth.app.options.projectId);
+    if (firebaseConfig.apiKey) {
+      console.log('API Key First/Last 4:', `${firebaseConfig.apiKey.substring(0, 4)}...${firebaseConfig.apiKey.substring(firebaseConfig.apiKey.length - 4)}`);
+    }
     
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);

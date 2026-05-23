@@ -10,7 +10,7 @@ import {
   persistentMultipleTabManager 
 } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { firebaseConfig, auditFirebaseConfig } from './config';
+import { firebaseConfig, isFirebaseConfigValid } from './config';
 
 let app: FirebaseApp;
 let auth: Auth;
@@ -23,7 +23,7 @@ let storage: FirebaseStorage;
  */
 export function initializeFirebase() {
   // Perform diagnostic audit on every initialization attempt
-  auditFirebaseConfig();
+  isFirebaseConfigValid();
 
   try {
     // 1. Initialize or Retrieve App Instance
