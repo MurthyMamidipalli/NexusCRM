@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
@@ -60,6 +61,17 @@ export default function DocumentVaultPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>(DOCUMENT_CATEGORIES[0])
   const [selectedVisibility, setSelectedVisibility] = useState<string>("Private")
 
+  // --- AUTH DIAGNOSTICS ---
+  useEffect(() => {
+    if (mounted) {
+      console.group('📂 VAULT: AUTH STATUS CHECK');
+      console.log('AUTH USER:', user);
+      console.log('AUTH UID:', user?.uid || 'UNDEFINED');
+      console.log('AUTH LOADING:', authLoading);
+      console.groupEnd();
+    }
+  }, [user, authLoading, mounted]);
+
   useEffect(() => { setMounted(true) }, [])
 
   const docsQuery = useMemo(() => {
@@ -81,6 +93,8 @@ export default function DocumentVaultPage() {
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
+    console.log('[Vault] Save initiated. User status:', user?.uid ? 'Signed In' : 'Logged Out');
+
     if (authLoading) {
       toast({ title: 'Auth Loading', description: 'Please wait for your session to initialize.' });
       return;
@@ -96,11 +110,6 @@ export default function DocumentVaultPage() {
       return;
     }
 
-    if (!supabase) {
-      toast({ variant: 'destructive', title: 'Configuration Missing', description: 'Supabase integration is offline. Check your environment settings.' });
-      return;
-    }
-
     const formData = new FormData(e.currentTarget)
     const baseTitle = formData.get('title') as string
     setIsSaving(true)
@@ -110,12 +119,18 @@ export default function DocumentVaultPage() {
         const timestamp = Date.now()
         const storagePath = `${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         
-        let fileUrl = await uploadWithProgress(
-          'documents',
-          storagePath,
-          file,
-          (percent) => setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
-        )
+        let fileUrl = 'PENDING_INFRASTRUCTURE';
+        
+        if (supabase) {
+           fileUrl = await uploadWithProgress(
+            'documents',
+            storagePath,
+            file,
+            (percent) => setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
+          )
+        } else {
+          console.warn('[Vault] Supabase is offline. Record will be stored with placeholder URL.');
+        }
 
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
@@ -137,6 +152,7 @@ export default function DocumentVaultPage() {
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
+      console.error('[Vault] Save Error:', err);
       toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
     } finally {
       setIsSaving(false)
@@ -164,7 +180,7 @@ export default function DocumentVaultPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={(o) => { if (!isSaving) setIsDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0">
             <DialogTitle className="text-3xl font-bold font-headline text-white">Secure Document</DialogTitle>
             <DialogDescription className="text-gray-400">Files are encrypted and stored privately in the cloud.</DialogDescription>
@@ -175,6 +191,12 @@ export default function DocumentVaultPage() {
 
           <form onSubmit={handleFinalSave} className="flex flex-col flex-1 overflow-hidden">
             <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+              {!user && (
+                <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
+                  <X className="h-4 w-4" /> Sign-in required to enable upload button.
+                </div>
+              )}
+              
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-white">Document Name</Label>
                 <Input name="title" disabled={isSaving} required className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white focus:ring-1 focus:ring-[#10b981]" placeholder="e.g. Identity Record" />
@@ -210,7 +232,7 @@ export default function DocumentVaultPage() {
               {isSaving && <div className="space-y-2"><div className="flex justify-between text-[10px] font-bold uppercase text-emerald-400"><span>Syncing to vault...</span><span>{totalProgress}%</span></div><Progress value={totalProgress} className="h-1 bg-gray-800" /></div>}
             </div>
             <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
-              <Button type="submit" disabled={isSaving} className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20">
+              <Button type="submit" disabled={isSaving || !user} className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20">
                 {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
                 Save Record
               </Button>

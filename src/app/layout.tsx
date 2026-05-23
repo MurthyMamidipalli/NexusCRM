@@ -1,3 +1,4 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
@@ -16,12 +17,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   // SERVER-SIDE DIAGNOSTIC LOG (Visible in Terminal)
-  console.log('--- SERVER ENVIRONMENT TRACE ---');
-  console.log('PROJECT_ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
-  console.log('AUTH_DOMAIN:', process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN);
-  console.log('API_KEY_PRESENT:', !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-  console.log('APP_ID:', process.env.NEXT_PUBLIC_FIREBASE_APP_ID);
-  console.log('-------------------------------');
+  if (process.env.NODE_ENV === 'development') {
+    console.log('--- SERVER ENVIRONMENT TRACE ---');
+    console.log('PROJECT_ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+    console.log('AUTH_DOMAIN:', process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN);
+    console.log('API_KEY_PRESENT:', !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+    console.log('APP_ID_STATUS:', process.env.NEXT_PUBLIC_FIREBASE_APP_ID?.includes('1234567890') ? 'PLACEHOLDER' : 'REAL');
+    console.log('-------------------------------');
+  }
 
   return (
     <html lang="en" className="dark" suppressHydrationWarning>

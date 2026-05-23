@@ -1,3 +1,4 @@
+
 'use client';
 
 import { initializeApp, getApps, FirebaseApp, getApp } from 'firebase/app';
@@ -18,19 +19,18 @@ let db: Firestore;
 let storage: FirebaseStorage;
 
 /**
- * Initializes Firebase services with singleton protection.
- * Error handling is graceful to prevent SSR crashes.
+ * Initializes Firebase services with singleton protection and diagnostic logging.
  */
 export function initializeFirebase() {
   const isValid = isFirebaseConfigValid();
 
   if (!isValid) {
-    console.error('Firebase configuration is incomplete. Auth and Firestore features may fail.');
-    // We proceed to initialize if possible, or return existing instances to avoid breaking the UI tree
+    console.warn('[Firebase] Initialization proceeding with configuration warnings.');
   }
 
   try {
     if (getApps().length === 0) {
+      console.log('[Firebase] Initializing new app instance...');
       app = initializeApp(firebaseConfig);
     } else {
       app = getApp();
@@ -44,8 +44,10 @@ export function initializeFirebase() {
               tabManager: persistentMultipleTabManager(),
             }),
           });
+          console.log('[Firestore] Persistent cache enabled.');
         } catch (e) {
           db = getFirestore(app);
+          console.warn('[Firestore] Falling back to default initialization.');
         }
       } else {
         db = getFirestore(app);
@@ -54,13 +56,15 @@ export function initializeFirebase() {
     
     if (!auth) {
       auth = getAuth(app);
+      console.log('[Auth] Service instance initialized.');
     }
 
     if (!storage) {
       storage = getStorage(app);
+      console.log('[Storage] Service instance initialized.');
     }
   } catch (err) {
-    console.error('Firebase initialization failed critical check:', err);
+    console.error('[Firebase] Fatal initialization error:', err);
   }
   
   return { app, auth, db, storage };
