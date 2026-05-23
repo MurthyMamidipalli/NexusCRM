@@ -92,7 +92,7 @@ export default function DocumentVaultPage() {
 
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    console.log("[Vault] Files selected:", files.map(f => f.name));
+    console.log("[Vault] FILES DETECTED:", files.map(f => f.name));
     setPendingFiles(prev => [...prev, ...files])
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
@@ -100,27 +100,34 @@ export default function DocumentVaultPage() {
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
+    // --- DIAGNOSTICS ---
+    console.log("--- STARTING SAVE FLOW ---");
+    console.log("USER:", user);
+    console.log("DB:", db);
+    console.log("IS SAVING:", isSaving);
+    console.log("FILES:", pendingFiles.length);
+    console.log("SUPABASE:", !!supabase);
+
     if (authLoading) {
-      toast({ title: 'Auth Pending', description: 'Still checking your session.' });
+      toast({ title: 'Session Loading', description: 'Please wait while we verify your account.' });
       return;
     }
 
-    if (!user) {
-      toast({ variant: 'destructive', title: 'Auth Required', description: 'Please sign in first.' });
+    if (!user || !db) {
+      console.error("[Vault] ABORTED: No User/DB");
+      toast({ variant: 'destructive', title: 'Auth Required', description: 'Please sign in before uploading documents.' });
       return;
     }
 
     if (!supabase) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Integration Inactive', 
-        description: 'Check your Supabase URL and Key in Settings. This is often a CORS or configuration issue.' 
-      });
+      console.error("[Vault] ABORTED: No Supabase Client");
+      toast({ variant: 'destructive', title: 'Integration Inactive', description: 'Check your Supabase URL and Key in Settings.' });
       return;
     }
 
     if (pendingFiles.length === 0) {
-      toast({ variant: 'destructive', title: 'File Required', description: 'Please select at least one document.' });
+      console.error("[Vault] ABORTED: No Files Selected");
+      toast({ variant: 'destructive', title: 'File Required', description: 'Please select at least one document for the vault.' });
       return;
     }
 
@@ -135,33 +142,44 @@ export default function DocumentVaultPage() {
         const timestamp = Date.now()
         const storagePath = `${uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         
-        const fileUrl = await uploadWithProgress(
-          'documents',
-          storagePath,
-          file,
-          (percent) => {
-            setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
+        console.log(`[Vault] TRIGGERING UPLOAD for: ${file.name}`);
+        
+        try {
+          const fileUrl = await uploadWithProgress(
+            'documents',
+            storagePath,
+            file,
+            (percent) => {
+              setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
+            }
+          )
+
+          console.log(`[Vault] UPLOAD FINISHED: ${fileUrl}`);
+
+          const recordData = {
+            title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
+            file_name: file.name,
+            category: selectedCategory,
+            status: selectedStatus,
+            visibility: selectedVisibility,
+            isPublic: selectedVisibility === 'Public',
+            file_url: fileUrl,
+            fileUrl: fileUrl,
+            fileSize: file.size,
+            fileType: file.type,
+            filePath: storagePath,
+            ownerId: uid,
+            created_at: new Date().toISOString(),
+            storageProvider: 'Supabase'
           }
-        )
 
-        const recordData = {
-          title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
-          file_name: file.name,
-          category: selectedCategory,
-          status: selectedStatus,
-          visibility: selectedVisibility,
-          isPublic: selectedVisibility === 'Public',
-          file_url: fileUrl,
-          fileUrl: fileUrl,
-          fileSize: file.size,
-          fileType: file.type,
-          filePath: storagePath,
-          ownerId: uid,
-          created_at: new Date().toISOString(),
-          storageProvider: 'Supabase'
+          console.log(`[Vault] CREATING FIRESTORE RECORD...`);
+          await createRecord(db, collections.DOCUMENTS, recordData, uid);
+          console.log(`[Vault] FIRESTORE SUCCESS.`);
+        } catch (uploadError: any) {
+          console.error(`[Vault] UPLOAD ERROR DETAIL:`, uploadError);
+          throw uploadError; // Rethrow to the outer catch
         }
-
-        await createRecord(db, collections.DOCUMENTS, recordData, uid);
       }
 
       toast({ title: 'Record Secured', description: 'Your files have been saved successfully.' })
@@ -169,7 +187,7 @@ export default function DocumentVaultPage() {
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      console.error("[Vault] Save failure:", err);
+      console.error("[Vault] FLOW FAILURE:", err);
       toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
     } finally {
       setIsSaving(false)
@@ -224,7 +242,7 @@ export default function DocumentVaultPage() {
               <div className="mx-8 mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
                 <AlertCircle className="h-5 w-5 shrink-0" />
                 <div className="space-y-1">
-                  <p className="text-xs font-bold">Integration Status</p>
+                  <p className="text-xs font-bold">Integration Inactive</p>
                   <p className="text-[10px] opacity-80">
                     Supabase connection issue detected. Verify CORS and Bucket settings.
                   </p>

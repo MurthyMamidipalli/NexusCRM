@@ -39,58 +39,74 @@ export async function uploadWithProgress(
   file: File,
   onProgress: (percent: number) => void
 ): Promise<string> {
-  console.log(`[Supabase] Starting upload: ${file.name} to ${bucket}/${path}`);
+  console.log(`[Supabase] STARTING UPLOAD: ${file.name} to ${bucket}/${path}`);
   
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('[Supabase] Upload failed: Missing credentials');
-    throw new Error('Supabase Configuration Missing. Ensure NEXT_PUBLIC variables are set.');
+    console.error('[Supabase] CRITICAL: Missing configuration variables.');
+    throw new Error('Supabase Configuration Missing. Ensure NEXT_PUBLIC_SUPABASE_URL and ANON_KEY are set.');
   }
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    const url = `${supabaseUrl}/storage/v1/object/${bucket}/${path}`;
+    // Supabase Storage API endpoint
+    const url = `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/${bucket}/${path}`;
+    
+    console.log(`[Supabase] TARGET URL: ${url}`);
 
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
         const percent = Math.round((event.loaded / event.total) * 100);
+        console.log(`[Supabase] PROGRESS: ${percent}%`);
         onProgress(percent);
       }
     });
 
     xhr.onreadystatechange = () => {
       if (xhr.readyState === 4) {
-        console.log(`[Supabase] XHR Complete - Status: ${xhr.status}`);
+        console.log(`[Supabase] XHR COMPLETE - Status: ${xhr.status}`);
+        console.log(`[Supabase] RAW RESPONSE:`, xhr.responseText);
         
         if (xhr.status === 200 || xhr.status === 201) {
+          // Success: Use public URL format
           const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
-          console.log(`[Supabase] Success! URL: ${publicUrl}`);
+          console.log(`[Supabase] UPLOAD SUCCESS! Public URL: ${publicUrl}`);
           resolve(publicUrl);
         } else if (xhr.status === 0) {
-          const corsError = 'Network Error (Status 0). This usually means a CORS policy violation. Please ensure your Supabase Storage settings allow uploads from this domain and that the "documents" bucket exists.';
-          console.error(`[Supabase] CORS/Network Error: ${corsError}`);
-          reject(new Error(corsError));
+          const corsMsg = 'Network Error (Status 0). Possible causes: 1. CORS policy violation in Supabase Dashboard. 2. Bucket "documents" does not exist. 3. Target URL is unreachable.';
+          console.error(`[Supabase] ${corsMsg}`);
+          reject(new Error(corsMsg));
         } else {
-          let errorMessage = `Upload failed with status ${xhr.status}`;
+          let errorMessage = `Upload failed (HTTP ${xhr.status})`;
           try {
-            const error = JSON.parse(xhr.responseText);
-            errorMessage = error.message || error.error || errorMessage;
+            const errorObj = JSON.parse(xhr.responseText);
+            errorMessage = errorObj.message || errorObj.error || errorMessage;
           } catch (e) {
             errorMessage = xhr.statusText || errorMessage;
           }
-          console.error(`[Supabase] Error: ${errorMessage}`);
+          console.error(`[Supabase] SERVER ERROR: ${errorMessage}`);
           reject(new Error(errorMessage));
         }
       }
     };
 
-    xhr.onerror = () => reject(new Error('Network error. Check CORS settings or bucket policies in Supabase.'));
-    xhr.onabort = () => reject(new Error('Upload aborted.'));
+    xhr.onerror = () => {
+      console.error('[Supabase] NETWORK ERROR: The request could not be sent.');
+      reject(new Error('Network error. Check CORS settings or bucket existence in Supabase.'));
+    };
+
+    xhr.onabort = () => {
+      console.warn('[Supabase] UPLOAD ABORTED.');
+      reject(new Error('Upload aborted by user or system.'));
+    };
 
     xhr.open('POST', url, true);
+    
+    // Required headers for Supabase REST API
     xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`);
     xhr.setRequestHeader('apikey', supabaseAnonKey);
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
     
+    console.log('[Supabase] XHR SENDING...');
     xhr.send(file);
   });
 }
