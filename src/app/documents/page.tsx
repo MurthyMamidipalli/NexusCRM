@@ -16,7 +16,8 @@ import {
   Globe,
   Eye,
   CheckCircle2,
-  X
+  X,
+  Info
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -28,6 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
@@ -77,7 +79,15 @@ export default function DocumentVaultPage() {
       const matchesSearch = (doc.title || doc.file_name || '').toLowerCase().includes(searchTerm.toLowerCase())
       const matchesCategory = categoryFilter === 'All' || doc.category === categoryFilter
       return matchesSearch && matchesCategory
-    }).sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    }).sort((a: any, b: any) => {
+      // Robust sorting for optimistic updates (serverTimestamp is null locally)
+      const getVal = (doc: any) => {
+        if (doc.createdAt?.toMillis) return doc.createdAt.toMillis();
+        if (doc.createdAt?.seconds) return doc.createdAt.seconds * 1000;
+        return Date.now() + 10000; // Place new optimistic records at the top
+      }
+      return getVal(b) - getVal(a);
+    })
   }, [rawDocs, searchTerm, categoryFilter])
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -90,6 +100,7 @@ export default function DocumentVaultPage() {
 
     const formData = new FormData(e.currentTarget)
     const baseTitle = formData.get('title') as string
+    const description = formData.get('description') as string
     setIsSaving(true)
 
     try {
@@ -126,13 +137,16 @@ export default function DocumentVaultPage() {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
           file_name: file.name,
           category: selectedCategory,
+          description: description || '',
           isPublic: selectedVisibility === 'Public',
           fileUrl: fileUrl,
           fileSize: file.size,
           filePath: storagePath,
           ownerId: user.uid,
+          status: 'active'
         }
 
+        console.log(`[Firestore] Initiating record creation for: ${recordData.title}`);
         createRecord(db, collections.DOCUMENTS, recordData, user.uid)
           .catch(async (err: any) => {
             const permissionError = new FirestorePermissionError({
@@ -150,18 +164,28 @@ export default function DocumentVaultPage() {
       setPendingFiles([])
     } catch (err: any) {
       console.error('[Storage] Critical error:', err)
-      const isCors = err.message?.toLowerCase().includes('cors') || err.code === 'storage/retry-limit-exceeded';
-      
       toast({ 
         variant: 'destructive', 
-        title: isCors ? 'CORS Access Denied' : 'Upload Failed', 
-        description: isCors 
-          ? 'Storage bucket requires CORS configuration for this domain in Firebase Console.' 
-          : 'Storage access error. Check console for technical logs.' 
+        title: 'Upload Failed', 
+        description: err.message || 'Check storage permissions and try again.'
       });
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const handleDelete = (doc: any) => {
+    if (!db) return
+    deleteRecord(db, collections.DOCUMENTS, doc.id)
+      .catch((err: any) => {
+        const permissionError = new FirestorePermissionError({
+          path: `${collections.DOCUMENTS}/${doc.id}`,
+          operation: 'delete',
+          originalError: err
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
+      })
+    toast({ title: 'Record Deleted' })
   }
 
   if (!mounted) return null
@@ -212,6 +236,12 @@ export default function DocumentVaultPage() {
                   </Select>
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-white">Internal Description (Optional)</Label>
+                <Textarea name="description" disabled={isSaving} className="bg-[#1c1c1f] border-none min-h-[80px] rounded-2xl text-white" placeholder="Add details for your own reference..." />
+              </div>
+
               <div className="group flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-gray-800 p-10 bg-[#1c1c1f]/50 cursor-pointer hover:border-[#10b981]/50 transition-colors" onClick={() => !isSaving && fileInputRef.current?.click()}>
                 <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => setPendingFiles(Array.from(e.target.files || []))} disabled={isSaving} />
                 {pendingFiles.length > 0 ? (
@@ -261,14 +291,17 @@ export default function DocumentVaultPage() {
                   <div className="p-4 rounded-2xl bg-[#10b981]/10 text-[#10b981]"><FileText className="h-8 w-8" /></div>
                   <div className="flex items-center gap-1">
                     {doc.fileUrl && <Button variant="ghost" size="icon" asChild className="rounded-full"><a href={doc.fileUrl} target="_blank" rel="noopener noreferrer"><Eye className="h-4 w-4" /></a></Button>}
-                    <Button variant="ghost" size="icon" className="hover:text-destructive rounded-full" onClick={() => deleteRecord(db, collections.DOCUMENTS, doc.id)}><Trash2 className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="hover:text-destructive rounded-full" onClick={() => handleDelete(doc)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
                 <h3 className="font-headline font-bold text-xl truncate mb-2">{doc.title || doc.file_name}</h3>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <Badge variant="outline" className="bg-[#10b981]/5 text-[#10b981] border-[#10b981]/20 text-[9px] uppercase font-bold tracking-widest">{doc.category}</Badge>
                   {doc.isPublic ? <Globe className="h-3 w-3 text-muted-foreground" /> : <Lock className="h-3 w-3 text-muted-foreground" />}
                 </div>
+                {doc.description && (
+                  <p className="text-xs text-muted-foreground line-clamp-2 italic">{doc.description}</p>
+                )}
               </CardContent>
             </Card>
           ))}

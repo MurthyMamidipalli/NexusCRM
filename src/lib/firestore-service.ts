@@ -53,8 +53,11 @@ export function createRecord(db: Firestore, collectionName: string, data: any, u
 
   const promise = addDoc(colRef, payload);
   
-  promise.then((doc) => console.log(`[Firestore] Success! Record created with ID: ${doc.id}`))
-         .catch((err) => console.error('[Firestore] Write error:', err));
+  promise.then((doc) => {
+    console.log(`[Firestore] Success! Record created with ID: ${doc.id} in ${collectionName}`);
+  }).catch((err) => {
+    console.error(`[Firestore] Write error in ${collectionName}:`, err);
+  });
 
   return promise;
 }
