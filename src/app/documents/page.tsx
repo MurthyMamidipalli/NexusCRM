@@ -98,8 +98,10 @@ export default function DocumentVaultPage() {
         const storagePath = `documents/${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         const storageRef = ref(storage, storagePath)
         
-        // Use uploadBytes to avoid complex preflight CORS issues with resumable uploads
-        const snapshot = await uploadBytes(storageRef, file)
+        // Mitigation: Explicitly set content type to avoid some preflight triggers
+        const metadata = { contentType: file.type };
+        
+        const snapshot = await uploadBytes(storageRef, file, metadata)
         const fileUrl = await getDownloadURL(snapshot.ref)
 
         const recordData = {
@@ -113,7 +115,6 @@ export default function DocumentVaultPage() {
           ownerId: user.uid,
         }
 
-        // Non-blocking write for snappy UI
         createRecord(db, collections.DOCUMENTS, recordData, user.uid)
           .catch(async (err: any) => {
             const permissionError = new FirestorePermissionError({
@@ -131,7 +132,15 @@ export default function DocumentVaultPage() {
       setPendingFiles([])
     } catch (err: any) {
       console.error('[Storage] Upload error:', err)
-      toast({ variant: 'destructive', title: 'Upload Failed', description: 'Storage access error. Check CORS/Permissions.' });
+      const isCors = err.message?.toLowerCase().includes('cors') || err.code === 'storage/retry-limit-exceeded';
+      
+      toast({ 
+        variant: 'destructive', 
+        title: isCors ? 'CORS Access Denied' : 'Upload Failed', 
+        description: isCors 
+          ? 'Storage bucket requires CORS configuration for this domain in Firebase Console.' 
+          : 'Storage access error. Check permissions.' 
+      });
     } finally {
       setIsSaving(false)
     }
