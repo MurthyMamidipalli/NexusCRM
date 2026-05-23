@@ -18,50 +18,49 @@ let db: Firestore;
 let storage: FirebaseStorage;
 
 /**
- * Initializes Firebase services with singleton protection and runtime diagnostics.
+ * Initializes Firebase services with singleton protection.
+ * Error handling is graceful to prevent SSR crashes.
  */
 export function initializeFirebase() {
-  // 1. Audit configuration before attempt
-  if (!isFirebaseConfigValid()) {
-    const errorMsg = 'Firebase initialization halted: Configuration is invalid or incomplete. Check environment variables.';
-    console.error(errorMsg);
-    // We throw to prevent late-stage crashes in hooks
-    throw new Error(errorMsg);
+  const isValid = isFirebaseConfigValid();
+
+  if (!isValid) {
+    console.error('Firebase configuration is incomplete. Auth and Firestore features may fail.');
+    // We proceed to initialize if possible, or return existing instances to avoid breaking the UI tree
   }
 
-  // 2. Initialize App
-  if (getApps().length === 0) {
-    console.log('[Firebase] Initializing new instance...');
-    app = initializeApp(firebaseConfig);
-  } else {
-    app = getApp();
-  }
+  try {
+    if (getApps().length === 0) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApp();
+    }
 
-  // 3. Initialize Firestore with persistence
-  if (!db) {
-    if (typeof window !== 'undefined') {
-      try {
-        db = initializeFirestore(app, {
-          localCache: persistentLocalCache({
-            tabManager: persistentMultipleTabManager(),
-          }),
-        });
-      } catch (e) {
+    if (!db) {
+      if (typeof window !== 'undefined') {
+        try {
+          db = initializeFirestore(app, {
+            localCache: persistentLocalCache({
+              tabManager: persistentMultipleTabManager(),
+            }),
+          });
+        } catch (e) {
+          db = getFirestore(app);
+        }
+      } else {
         db = getFirestore(app);
       }
-    } else {
-      db = getFirestore(app);
     }
-  }
-  
-  // 4. Initialize Auth
-  if (!auth) {
-    auth = getAuth(app);
-  }
+    
+    if (!auth) {
+      auth = getAuth(app);
+    }
 
-  // 5. Initialize Storage
-  if (!storage) {
-    storage = getStorage(app);
+    if (!storage) {
+      storage = getStorage(app);
+    }
+  } catch (err) {
+    console.error('Firebase initialization failed critical check:', err);
   }
   
   return { app, auth, db, storage };

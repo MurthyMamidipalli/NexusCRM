@@ -111,7 +111,7 @@ export default function EducationPage() {
         if (!open) setEditingEdu(null);
       }}>
         <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
-          <DialogHeader className="p-8 pb-4 border-b border-white/5 relative">
+          <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0">
             <DialogTitle className="text-3xl font-bold font-headline text-white">Academic Record</DialogTitle>
             <DialogDescription className="text-gray-400">Enter details of your educational institution.</DialogDescription>
             <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
@@ -157,7 +157,7 @@ export default function EducationPage() {
                 <Textarea name="description" defaultValue={editingEdu?.description} placeholder="Describe your key learnings and awards..." className="bg-[#1c1c1f] border-none min-h-[100px] rounded-xl focus:ring-1 focus:ring-primary" />
               </div>
             </div>
-            <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
+            <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
               <Button type="submit" disabled={loading} className="w-full bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-14 rounded-xl shadow-lg shadow-emerald-500/20 text-lg">
                 {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                 Save Record

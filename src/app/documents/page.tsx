@@ -97,7 +97,7 @@ export default function DocumentVaultPage() {
     }
 
     if (!supabase) {
-      toast({ variant: 'destructive', title: 'Configuration Missing', description: 'Supabase integration is offline. Check your settings.' });
+      toast({ variant: 'destructive', title: 'Configuration Missing', description: 'Supabase integration is offline. Check your environment settings.' });
       return;
     }
 
@@ -165,7 +165,7 @@ export default function DocumentVaultPage() {
 
       <Dialog open={isDialogOpen} onOpenChange={(o) => { if (!isSaving) setIsDialogOpen(o); }}>
         <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
-          <DialogHeader className="p-8 pb-4 border-b border-white/5 relative">
+          <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0">
             <DialogTitle className="text-3xl font-bold font-headline text-white">Secure Document</DialogTitle>
             <DialogDescription className="text-gray-400">Files are encrypted and stored privately in the cloud.</DialogDescription>
             <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
@@ -209,7 +209,7 @@ export default function DocumentVaultPage() {
               </div>
               {isSaving && <div className="space-y-2"><div className="flex justify-between text-[10px] font-bold uppercase text-emerald-400"><span>Syncing to vault...</span><span>{totalProgress}%</span></div><Progress value={totalProgress} className="h-1 bg-gray-800" /></div>}
             </div>
-            <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
+            <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
               <Button type="submit" disabled={isSaving} className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20">
                 {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
                 Save Record

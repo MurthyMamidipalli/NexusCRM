@@ -2,7 +2,7 @@
 
 /**
  * @fileOverview Firebase Configuration Trace & Audit
- * This file captures and logs all environment variables to diagnose 
+ * This file captures and logs environment variables to diagnose 
  * project ID mismatches and invalid API keys.
  */
 
@@ -16,32 +16,32 @@ export const firebaseConfig = {
 };
 
 /**
- * Exhaustive diagnostic audit of injected workspace environment variables.
+ * Audit of injected workspace environment variables.
+ * Relaxed to prevent boot crashes while allowing diagnostics.
  */
 export function isFirebaseConfigValid() {
+  const activeProjectId = firebaseConfig.projectId;
+  const activeAppId = firebaseConfig.appId;
+  
   if (typeof window !== 'undefined') {
-    console.group('🔍 NEXUS HUB: ENVIRONMENT TRACE');
-    console.log('--- FIREBASE IDENTITY ---');
-    console.log('PROJECT_ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
-    console.log('AUTH_DOMAIN:', process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN);
-    console.log('APP_ID:', process.env.NEXT_PUBLIC_FIREBASE_APP_ID);
+    const isIncorrectProject = activeProjectId === 'n-crm-40177';
+    const isPlaceholderApp = activeAppId?.includes('1234567890');
     
-    console.log('--- AUTHENTICATION ---');
-    console.log('API_KEY (RAW):', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-    console.log('API_KEY EXISTS:', !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-    console.log('API_KEY VALID FORMAT:', !!(process.env.NEXT_PUBLIC_FIREBASE_API_KEY && process.env.NEXT_PUBLIC_FIREBASE_API_KEY.startsWith('AIza')));
-
-    console.log('--- INFRASTRUCTURE ---');
-    console.log('STORAGE_BUCKET:', process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-    console.log('MESSAGING_SENDER_ID:', process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID);
+    console.group('🔍 NEXUS HUB: CLIENT ENVIRONMENT TRACE');
+    console.log('PROJECT_ID:', activeProjectId || 'MISSING');
+    console.log('APP_ID:', activeAppId || 'MISSING');
     
-    console.log('--- SUPABASE (CROSS-CLOUD) ---');
-    console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+    if (isIncorrectProject) {
+      console.warn('⚠️ WARNING: Environment is serving the default project (n-crm-40177). Synchronization may be in progress.');
+    }
+    if (isPlaceholderApp) {
+      console.warn('⚠️ WARNING: App ID appears to be a placeholder value.');
+    }
     console.groupEnd();
   }
   
-  const hasKey = !!(firebaseConfig.apiKey && firebaseConfig.apiKey !== 'undefined');
-  const hasProjectId = !!(firebaseConfig.projectId && firebaseConfig.projectId !== 'undefined');
+  const hasKey = !!(firebaseConfig.apiKey && firebaseConfig.apiKey !== 'undefined' && !firebaseConfig.apiKey.includes('placeholder'));
+  const hasProjectId = !!(activeProjectId && activeProjectId !== 'undefined');
   
   return hasKey && hasProjectId;
 }

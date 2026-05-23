@@ -15,11 +15,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // SERVER-SIDE DIAGNOSTIC LOG
-  console.log('--- SERVER ENVIRONMENT START ---');
-  console.log('NEXT_PUBLIC_FIREBASE_PROJECT_ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
-  console.log('NEXT_PUBLIC_FIREBASE_API_KEY EXISTS:', !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-  console.log('--- SERVER ENVIRONMENT END ---');
+  // SERVER-SIDE DIAGNOSTIC LOG (Visible in Terminal)
+  console.log('--- SERVER ENVIRONMENT TRACE ---');
+  console.log('PROJECT_ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+  console.log('AUTH_DOMAIN:', process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN);
+  console.log('API_KEY_PRESENT:', !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+  console.log('APP_ID:', process.env.NEXT_PUBLIC_FIREBASE_APP_ID);
+  console.log('-------------------------------');
 
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
