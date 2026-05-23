@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { useToast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from '@/components/ui/dialog'
@@ -28,7 +28,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
@@ -58,7 +57,6 @@ export default function DocumentVaultPage() {
   const [categoryFilter, setCategoryFilter] = useState('All')
   
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
-  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [selectedCategory, setSelectedCategory] = useState<string>(DOCUMENT_CATEGORIES[0])
@@ -100,21 +98,9 @@ export default function DocumentVaultPage() {
         const storagePath = `documents/${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         const storageRef = ref(storage, storagePath)
         
-        const uploadTask = uploadBytesResumable(storageRef, file)
-
-        await new Promise((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-              setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
-            },
-            (error) => reject(error),
-            () => resolve(null)
-          )
-        })
-        
-        const fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
+        // Use uploadBytes to avoid complex preflight CORS issues with resumable uploads
+        const snapshot = await uploadBytes(storageRef, file)
+        const fileUrl = await getDownloadURL(snapshot.ref)
 
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
@@ -127,6 +113,7 @@ export default function DocumentVaultPage() {
           ownerId: user.uid,
         }
 
+        // Non-blocking write for snappy UI
         createRecord(db, collections.DOCUMENTS, recordData, user.uid)
           .catch(async (err: any) => {
             const permissionError = new FirestorePermissionError({
@@ -142,19 +129,13 @@ export default function DocumentVaultPage() {
       toast({ title: 'Record Secured', description: 'Vault synchronized successfully.' })
       setIsDialogOpen(false)
       setPendingFiles([])
-      setUploadProgress({})
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
+      console.error('[Storage] Upload error:', err)
+      toast({ variant: 'destructive', title: 'Upload Failed', description: 'Storage access error. Check CORS/Permissions.' });
     } finally {
       setIsSaving(false)
     }
   }
-
-  const totalProgress = useMemo(() => {
-    if (pendingFiles.length === 0) return 0
-    const sum = Object.values(uploadProgress).reduce((a, b) => a + b, 0)
-    return Math.round(sum / pendingFiles.length)
-  }, [uploadProgress, pendingFiles])
 
   if (!mounted) return null
 
@@ -218,15 +199,6 @@ export default function DocumentVaultPage() {
                   </div>
                 )}
               </div>
-              {isSaving && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-bold uppercase text-emerald-400">
-                    <span>Syncing to vault...</span>
-                    <span>{totalProgress}%</span>
-                  </div>
-                  <Progress value={totalProgress} className="h-1 bg-gray-800" />
-                </div>
-              )}
             </div>
             <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
               <Button type="submit" disabled={isSaving} className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20">

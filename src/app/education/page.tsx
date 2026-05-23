@@ -67,6 +67,7 @@ export default function EducationPage() {
       ? updateRecord(db, collections.EDUCATION, editingEdu.id, data)
       : createRecord(db, collections.EDUCATION, data, user.uid)
 
+    // Close immediately for a snappy feel
     toast({ title: editingEdu ? 'Record Updated' : 'Record Created' })
     setIsDialogOpen(false)
     setEditingEdu(null)
