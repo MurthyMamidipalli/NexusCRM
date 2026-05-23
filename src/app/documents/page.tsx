@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { useToast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from '@/components/ui/dialog'
@@ -98,11 +98,29 @@ export default function DocumentVaultPage() {
         const storagePath = `documents/${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         const storageRef = ref(storage, storagePath)
         
-        // Mitigation: Explicitly set content type to avoid some preflight triggers
-        const metadata = { contentType: file.type };
-        
-        const snapshot = await uploadBytes(storageRef, file, metadata)
-        const fileUrl = await getDownloadURL(snapshot.ref)
+        console.log(`[Storage] Upload started for: ${file.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, file);
+
+        await new Promise((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              console.log(`[Storage] Upload progress for ${file.name}: ${Math.round(progress)}%`);
+            },
+            (error) => {
+              console.error(`[Storage] Upload error for ${file.name}:`, error);
+              reject(error);
+            },
+            () => {
+              console.log(`[Storage] Upload completed for: ${file.name}`);
+              resolve(null);
+            }
+          );
+        });
+
+        const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
+        console.log(`[Storage] Download URL generated for ${file.name}:`, fileUrl);
 
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
@@ -131,7 +149,7 @@ export default function DocumentVaultPage() {
       setIsDialogOpen(false)
       setPendingFiles([])
     } catch (err: any) {
-      console.error('[Storage] Upload error:', err)
+      console.error('[Storage] Critical error:', err)
       const isCors = err.message?.toLowerCase().includes('cors') || err.code === 'storage/retry-limit-exceeded';
       
       toast({ 
@@ -139,7 +157,7 @@ export default function DocumentVaultPage() {
         title: isCors ? 'CORS Access Denied' : 'Upload Failed', 
         description: isCors 
           ? 'Storage bucket requires CORS configuration for this domain in Firebase Console.' 
-          : 'Storage access error. Check permissions.' 
+          : 'Storage access error. Check console for technical logs.' 
       });
     } finally {
       setIsSaving(false)
