@@ -98,33 +98,38 @@ export default function DocumentVaultPage() {
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    console.log('[Vault] handleFinalSave triggered');
+    
     if (!user || !db || isSaving) return
 
-    // Explicit check for Supabase with detailed user feedback
     if (!supabase) {
+      console.error('[Vault] Supabase client missing');
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
-        description: 'Supabase keys are missing or invalid. Check the Settings page and your .env file.' 
+        description: 'Check your environment variables for Supabase keys.' 
       })
       return
     }
 
     if (pendingFiles.length === 0) {
-      toast({ variant: 'destructive', title: 'Selection Required', description: 'Please select files to upload before saving.' })
+      toast({ variant: 'destructive', title: 'No Files', description: 'Please select at least one file to upload.' })
       return
     }
 
     const formData = new FormData(e.currentTarget)
-    const baseTitle = formData.get('title') as string
+    const baseTitle = (formData.get('title') as string) || 'Untitled Document'
     const uid = user.uid
 
     setIsSaving(true)
+    console.log(`[Vault] Processing ${pendingFiles.length} files...`);
 
     try {
       for (const file of pendingFiles) {
         const timestamp = Date.now()
         const storagePath = `${uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
+        
+        console.log(`[Vault] Uploading: ${file.name} -> ${storagePath}`);
         
         const fileUrl = await uploadWithProgress(
           'documents',
@@ -135,8 +140,10 @@ export default function DocumentVaultPage() {
           }
         )
 
+        console.log('[Vault] Upload complete, creating Firestore record...');
+
         const recordData = {
-          title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
+          title: pendingFiles.length > 1 ? file.name : baseTitle,
           file_name: file.name,
           category: selectedCategory,
           status: selectedStatus,
@@ -153,6 +160,7 @@ export default function DocumentVaultPage() {
         }
 
         await createRecord(db, collections.DOCUMENTS, recordData, uid);
+        console.log('[Vault] Firestore record saved successfully');
       }
 
       toast({ title: 'Record Secured', description: 'Your files have been saved successfully.' })
@@ -160,8 +168,12 @@ export default function DocumentVaultPage() {
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      console.error('Save failed:', err)
-      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message || 'An unexpected error occurred during upload.' });
+      console.error('[Vault] Critical Save Failure:', err)
+      toast({ 
+        variant: 'destructive', 
+        title: 'Save Failed', 
+        description: err.message || 'An unexpected error occurred. Check browser console.' 
+      });
     } finally {
       setIsSaving(false)
     }
@@ -210,6 +222,16 @@ export default function DocumentVaultPage() {
                 Your files are encrypted and stored in your private bucket.
               </DialogDescription>
             </DialogHeader>
+
+            {!supabase && (
+              <div className="mx-8 mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
+                <AlertCircle className="h-5 w-5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-xs font-bold">Integration Inactive</p>
+                  <p className="text-[10px] opacity-80 italic">Configure NEXT_PUBLIC_SUPABASE variables in your dashboard.</p>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleFinalSave} className="p-8 pt-0 space-y-6">
               <div className="space-y-2">

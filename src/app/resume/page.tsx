@@ -82,7 +82,7 @@ export default function ResumePage() {
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
-        description: 'Supabase configuration is missing. Verify your environment variables.' 
+        description: 'Verify your NEXT_PUBLIC_SUPABASE variables.' 
       })
       return
     }
@@ -96,7 +96,7 @@ export default function ResumePage() {
     try {
       if (activeTab === 'PDF') {
         if (pendingFiles.length === 0) {
-          toast({ variant: 'destructive', title: 'File Required', description: 'Please select at least one PDF file.' })
+          toast({ variant: 'destructive', title: 'File Required', description: 'Please select a PDF file.' })
           setIsSaving(false)
           return
         }
@@ -143,13 +143,13 @@ export default function ResumePage() {
         await createRecord(db, collections.RESUMES, data, uid)
       }
 
-      toast({ title: 'Record Saved', description: 'Your records have been synchronized.' })
+      toast({ title: 'Record Saved', description: 'Records synchronized successfully.' })
       setIsDialogOpen(false)
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      console.error('Resume save failed:', err)
-      toast({ variant: 'destructive', title: 'Save Failed', description: err.message || 'An unexpected error occurred.' })
+      console.error('[Vault] Resume Save Error:', err)
+      toast({ variant: 'destructive', title: 'Save Failed', description: err.message || 'Check browser console for details.' })
     } finally {
       setIsSaving(false)
     }
