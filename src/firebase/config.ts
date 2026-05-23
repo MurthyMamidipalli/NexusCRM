@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * @fileOverview Firebase Configuration Trace & Audit
- * Captures and logs environment variables to diagnose project ID and App ID mismatches.
+ * @fileOverview Authoritative Firebase Configuration
+ * Ensures that environment variables are mapped correctly and provides
+ * a validation layer to detect placeholders.
  */
 
 export const firebaseConfig = {
@@ -15,41 +16,21 @@ export const firebaseConfig = {
 };
 
 /**
- * Exhaustive audit of environment variables at runtime.
+ * Performs a runtime audit of the Firebase configuration.
+ * Logs results to the console to help identify misconfigurations.
  */
-export function isFirebaseConfigValid() {
-  const { projectId, appId, apiKey, authDomain } = firebaseConfig;
-  
-  if (typeof window !== 'undefined') {
-    console.group('🔍 NEXUS HUB: RUNTIME ENVIRONMENT AUDIT');
-    console.log('PROJECT_ID:', projectId || '❌ MISSING');
-    console.log('AUTH_DOMAIN:', authDomain || '❌ MISSING');
-    console.log('APP_ID:', appId || '❌ MISSING');
-    console.log('API_KEY_PRESENT:', !!apiKey ? '✅ YES' : '❌ NO');
-    
-    const isPlaceholderApp = appId?.includes('1234567890') || appId?.includes('abcdef');
-    const isTargetProject = projectId === 'studio-3717134241-d7612';
-    const isTargetApp = appId === '1:479443906344:web:c709ce1776169302c92a1d';
+export function auditFirebaseConfig() {
+  if (typeof window === 'undefined') return;
 
-    if (isPlaceholderApp) {
-      console.warn('⚠️ WARNING: App ID is a generic placeholder (1:1234567890...).');
-    }
-    
-    if (isTargetProject) {
-      console.log('✅ PROJECT MATCH: Successfully targeting studio-3717134241-d7612');
-    } else {
-      console.warn(`⚠️ PROJECT MISMATCH: Expected studio-3717134241-d7612, got ${projectId}`);
-    }
+  const { projectId, appId, apiKey } = firebaseConfig;
+  const isPlaceholderApp = appId?.includes('1234567890') || appId?.includes('abcdef');
+  const isCorrectProject = projectId === 'studio-3717134241-d7612';
 
-    if (isTargetApp) {
-      console.log('✅ APP ID MATCH: Successfully targeting 1:479443906344...');
-    } else if (!isPlaceholderApp) {
-      console.warn(`⚠️ APP ID MISMATCH: Current App ID is ${appId}`);
-    }
-    
-    console.groupEnd();
-  }
-  
-  // We return true even with warnings to allow the app to attempt connection
-  return !!(projectId && apiKey && appId);
+  console.group('🔍 FIREBASE RUNTIME AUDIT');
+  console.log('Project ID:', projectId, isCorrectProject ? '✅' : '❌ (Expected studio-3717134241-d7612)');
+  console.log('App ID:', appId, isPlaceholderApp ? '❌ (PLACEHOLDER DETECTED)' : '✅');
+  console.log('API Key Present:', !!apiKey ? '✅' : '❌ (MISSING)');
+  console.groupEnd();
+
+  return !isPlaceholderApp && !!apiKey && !!projectId;
 }
