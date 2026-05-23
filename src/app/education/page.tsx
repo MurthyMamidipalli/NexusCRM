@@ -83,6 +83,7 @@ export default function EducationPage() {
       cgpa: formData.get('cgpa') as string,
       percentage: formData.get('percentage') as string,
       description: formData.get('description') as string,
+      ownerId: user.uid
     }
 
     const mutation = editingEdu
