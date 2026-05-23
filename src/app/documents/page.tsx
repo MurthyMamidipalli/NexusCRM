@@ -189,28 +189,28 @@ export default function DocumentVaultPage() {
               <Plus className="h-5 w-5" /> Add Record
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[480px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
-            <DialogHeader className="p-8 pb-4">
-              <DialogTitle className="text-3xl font-bold font-headline">Secure Document</DialogTitle>
+          <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <DialogHeader className="p-8 pb-4 border-b border-white/5 relative">
+              <DialogTitle className="text-3xl font-bold font-headline text-white">Secure Document</DialogTitle>
               <DialogDescription className="text-gray-400">Files are encrypted and stored privately in the cloud.</DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleFinalSave} className="flex flex-col flex-1 overflow-hidden">
-              <div className="flex-1 overflow-y-auto px-8 pb-4 space-y-6">
+              <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
                 <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Document Name</Label>
+                  <Label className="text-sm font-semibold text-white">Document Name</Label>
                   <Input name="title" disabled={isSaving} required className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white focus:ring-1 focus:ring-[#10b981]" placeholder="e.g. Identity Record" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label className="text-sm font-semibold">Category</Label>
+                  <div className="space-y-2"><Label className="text-sm font-semibold text-white">Category</Label>
                     <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isSaving}>
-                      <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
                       <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">{DOCUMENT_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2"><Label className="text-sm font-semibold">Visibility</Label>
+                  <div className="space-y-2"><Label className="text-sm font-semibold text-white">Visibility</Label>
                     <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
-                      <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
                       <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white"><SelectItem value="Private">🔒 Private</SelectItem><SelectItem value="Public">🌍 Public</SelectItem></SelectContent>
                     </Select>
                   </div>

@@ -45,7 +45,6 @@ export default function EducationPage() {
   const handleSaveEdu = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
-    // Safety check for user/db
     if (authLoading) {
       toast({ title: 'Loading...', description: 'Please wait for your session to initialize.' });
       return;
@@ -76,14 +75,12 @@ export default function EducationPage() {
       ? updateRecord(db, collections.EDUCATION, editingEdu.id, data)
       : createRecord(db, collections.EDUCATION, data, user.uid)
 
-    // Snappy feedback
     toast({ title: editingEdu ? 'Record Updated' : 'Record Created' })
     setIsDialogOpen(false)
     setEditingEdu(null)
     setLoading(false)
 
     mutation.catch(async (err) => {
-      console.error("[Education] Save Error:", err);
       const permissionError = new FirestorePermissionError({
         path: editingEdu ? `${collections.EDUCATION}/${editingEdu.id}` : collections.EDUCATION,
         operation: 'write',
@@ -118,7 +115,7 @@ export default function EducationPage() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
             <DialogHeader className="p-8 pb-4 border-b border-white/5 relative">
-              <DialogTitle className="text-3xl font-bold font-headline">Academic Record</DialogTitle>
+              <DialogTitle className="text-3xl font-bold font-headline text-white">Academic Record</DialogTitle>
               <DialogDescription className="text-gray-400">Enter details of your educational institution.</DialogDescription>
             </DialogHeader>
             
