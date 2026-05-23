@@ -21,19 +21,20 @@ export const firebaseConfig = {
 export function isFirebaseConfigValid() {
   const key = firebaseConfig.apiKey;
   const pId = firebaseConfig.projectId;
+  const domain = firebaseConfig.authDomain;
   
   const hasKey = !!(key && key !== 'undefined' && key.length > 10);
   const hasProjectId = !!(pId && pId !== 'undefined');
   
   if (typeof window !== 'undefined') {
     console.group('🔥 Firebase Configuration Audit');
-    console.log('API Key Status:', hasKey ? '✅ DETECTED' : '❌ MISSING/INVALID');
-    console.log('Project ID Status:', hasProjectId ? `✅ (${pId})` : '❌ MISSING');
-    console.log('Auth Domain:', firebaseConfig.authDomain || '❌ MISSING');
+    console.log('NEXT_PUBLIC_FIREBASE_PROJECT_ID:', pId);
+    console.log('NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:', domain);
+    console.log('NEXT_PUBLIC_FIREBASE_API_KEY Exists:', !!key);
+    console.log('API Key Valid (Length/Format):', hasKey ? '✅' : '❌');
     
     if (!hasKey) {
-      console.error('CRITICAL: NEXT_PUBLIC_FIREBASE_API_KEY is not being read correctly.');
-      console.log('Current value starts with:', key ? key.substring(0, 5) + '...' : 'null');
+      console.error('CRITICAL: API Key is missing or invalid. Check project environment variables.');
     }
     console.groupEnd();
   }
