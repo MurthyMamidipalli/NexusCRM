@@ -107,18 +107,21 @@ export default function DocumentVaultPage() {
     const files = Array.from(e.target.files || [])
     if (!files.length || !user || !storage) return
 
+    console.log(`[VAULT] File selection detected: ${files.length} files.`);
+
     files.forEach((file) => {
       if (file.size > MAX_FILE_SIZE) {
         toast({ variant: 'destructive', title: 'File Too Large', description: `${file.name} exceeds 500MB.` })
         return
       }
 
-      // Avoid duplicates in the active list
       if (activeUploads[file.name]) return;
 
       const fileName = `${Date.now()}_${file.name}`
       const path = `documents/${user.uid}/${fileName}`
       const storageRef = ref(storage, path)
+      
+      console.log(`[VAULT] Starting upload for: ${file.name}`);
       const uploadTask = uploadBytesResumable(storageRef, file, { contentType: file.type })
 
       setActiveUploads(prev => ({
@@ -130,6 +133,7 @@ export default function DocumentVaultPage() {
         'state_changed',
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / (snapshot.totalBytes || 1)) * 100
+          console.log(`[VAULT] Progress for ${file.name}: ${Math.round(progress)}%`);
           setActiveUploads(prev => {
             if (!prev[file.name]) return prev;
             return {
@@ -139,15 +143,16 @@ export default function DocumentVaultPage() {
           })
         },
         (error) => {
-          console.error("Upload error:", error);
+          console.error(`[VAULT] Upload task failed for ${file.name}:`, error);
           setActiveUploads(prev => {
             const next = { ...prev }
             delete next[file.name]
             return next
           })
-          toast({ variant: 'destructive', title: 'Upload Error', description: error.message })
+          toast({ variant: 'destructive', title: 'Upload Error', description: `${file.name}: ${error.message}` })
         },
         async () => {
+          console.log(`[VAULT] Upload task completed for: ${file.name}`);
           const url = await getDownloadURL(uploadTask.snapshot.ref)
           setActiveUploads(prev => {
             if (!prev[file.name]) return prev;
@@ -160,7 +165,6 @@ export default function DocumentVaultPage() {
       )
     })
     
-    // Clear input so same file can be selected again if removed
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -182,15 +186,16 @@ export default function DocumentVaultPage() {
     const uid = user.uid
 
     setIsSaving(true)
+    console.log(`[VAULT] Finalizing record persistence for ${uploadsToProcess.length} items...`);
 
     try {
-      // Process each upload
       for (const upload of uploadsToProcess) {
         let finalUrl = upload.url
         let finalPath = upload.path
 
-        // If upload is still in progress, wait for it
+        // Wait if still transferring
         if (!upload.done && upload.task) {
+          console.log(`[VAULT] Waiting for final bytes of: ${upload.file.name}`);
           const snapshot = await upload.task;
           finalUrl = await getDownloadURL(snapshot.ref);
           finalPath = snapshot.ref.fullPath;
@@ -210,6 +215,7 @@ export default function DocumentVaultPage() {
           }
           
           await createRecord(db, collections.DOCUMENTS, recordData, uid)
+          console.log(`[VAULT] Firestore record secured: ${recordData.title}`);
         }
       }
 
@@ -217,8 +223,8 @@ export default function DocumentVaultPage() {
       setIsDialogOpen(false)
       setActiveUploads({})
     } catch (err: any) {
-      console.error(`❌ [VAULT] Save Error:`, err);
-      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message || 'Could not save records to database.' });
+      console.error(`[VAULT] Persistence Critical Failure:`, err);
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message || 'Database synchronization failed.' });
       
       const permissionError = new FirestorePermissionError({
         path: collections.DOCUMENTS,
@@ -241,7 +247,7 @@ export default function DocumentVaultPage() {
       }
       toast({ title: 'Record Removed' })
     } catch (err: any) {
-      console.error("Delete error:", err)
+      console.error("[VAULT] Delete Error:", err)
     }
   }
 
