@@ -50,7 +50,6 @@ export default function DocumentVaultPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
-  const [loading, setLoading] = useState(false)
   
   // High-speed task management
   const [activeUploads, setActiveUploads] = useState<{ [key: string]: ActiveUpload }>({})
@@ -75,8 +74,9 @@ export default function DocumentVaultPage() {
       })
       .sort((a: any, b: any) => {
         const getVal = (doc: any) => {
-          if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
-          if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
+          if (!doc.updatedAt) return Date.now();
+          if (typeof doc.updatedAt.toMillis === 'function') return doc.updatedAt.toMillis();
+          if (doc.updatedAt.seconds) return doc.updatedAt.seconds * 1000;
           return Date.now();
         };
         return getVal(b) - getVal(a);
@@ -87,7 +87,7 @@ export default function DocumentVaultPage() {
     const files = Array.from(e.target.files || [])
     if (!files.length || !user || !storage) return
 
-    console.log(`🚀 Starting high-speed eager upload for ${files.length} files...`)
+    console.log(`🚀 [VAULT] Starting high-speed upload for ${files.length} files...`)
 
     files.forEach((file) => {
       if (file.size > MAX_FILE_SIZE) {
@@ -98,7 +98,7 @@ export default function DocumentVaultPage() {
       const fileName = `${Date.now()}_${file.name}`
       const path = `documents/${user.uid}/${fileName}`
       const storageRef = ref(storage, path)
-      const uploadTask = uploadBytesResumable(storageRef, file)
+      const uploadTask = uploadBytesResumable(storageRef, file, { contentType: file.type })
 
       setActiveUploads(prev => ({
         ...prev,
@@ -118,7 +118,7 @@ export default function DocumentVaultPage() {
           })
         },
         (error) => {
-          console.error(`❌ Upload failed: ${file.name}`, error)
+          console.error(`❌ [VAULT] Upload failed: ${file.name}`, error)
           setActiveUploads(prev => {
             const next = { ...prev }
             delete next[file.name]
@@ -127,7 +127,7 @@ export default function DocumentVaultPage() {
         },
         async () => {
           const url = await getDownloadURL(uploadTask.snapshot.ref)
-          console.log(`✅ File synced to cloud: ${file.name}`)
+          console.log(`✅ [VAULT] Storage sync complete: ${file.name}`)
           
           setActiveUploads(prev => {
             if (!prev[file.name]) return prev;
@@ -145,7 +145,6 @@ export default function DocumentVaultPage() {
     e.preventDefault()
     if (!user || !db) return
 
-    // Capture the static list of current uploads to process in background
     const uploadsToProcess = Object.values(activeUploads)
     if (uploadsToProcess.length === 0) {
       toast({ variant: 'destructive', title: 'Empty Vault', description: 'Please select documents first.' })
@@ -156,57 +155,56 @@ export default function DocumentVaultPage() {
     const formConfig = {
       baseTitle: formData.get('title') as string,
       category: formData.get('category') as string || 'Other',
-      status: 'active', // Strictly follow lowercase schema enum
-      visibility: formData.get('visibility') as string || 'Private'
+      status: 'active',
+      visibility: formData.get('visibility') as string || 'Private',
+      userId: user.uid
     }
 
-    // INSTANT UI FEEDBACK: Close dialog immediately for responsiveness
+    // INSTANT FEEDBACK
     toast({ title: 'Securing Records', description: 'Your files are syncing to your private vault in the background.' })
     setIsDialogOpen(false)
 
-    // PROCESS IN BACKGROUND: Independent of dialog or local state cleanup
+    // BACKGROUND PROCESS: Process each file independently
     uploadsToProcess.forEach(async (upload) => {
       const finalizeRecord = async (url: string, path: string, file: File) => {
-        const data = {
-          title: uploadsToProcess.length > 1 ? file.name : formConfig.baseTitle || file.name,
-          category: formConfig.category,
-          fileUrl: url,
-          filePath: path,
-          fileType: file.type,
-          fileSize: file.size,
-          status: formConfig.status,
-          isPublic: formConfig.visibility === 'Public',
-          ownerId: user.uid
+        try {
+          const data = {
+            title: uploadsToProcess.length > 1 ? file.name : (formConfig.baseTitle || file.name),
+            category: formConfig.category,
+            fileUrl: url,
+            filePath: path,
+            fileType: file.type,
+            fileSize: file.size,
+            status: formConfig.status,
+            isPublic: formConfig.visibility === 'Public',
+            ownerId: formConfig.userId
+          }
+          
+          console.log(`📡 [VAULT] Committing Firestore record: ${data.title}`)
+          await createRecord(db, collections.DOCUMENTS, data, formConfig.userId)
+          console.log(`📁 [VAULT] Record secured successfully: ${data.title}`)
+        } catch (err) {
+          console.error(`❌ [VAULT] Background commit failed for ${file.name}:`, err)
+        } finally {
+          setActiveUploads(prev => {
+            const next = { ...prev }
+            delete next[file.name]
+            return next
+          })
         }
-        
-        console.log(`📡 Finalizing Firestore record for: ${file.name}`)
-        await createRecord(db, collections.DOCUMENTS, data, user.uid).catch(err => {
-          console.error(`❌ Background record creation failed for ${file.name}:`, err)
-        })
-        
-        console.log(`📁 Record secured in Vault: ${file.name}`)
-        
-        // Only clean up this specific file from active uploads after full completion
-        setActiveUploads(prev => {
-          const next = { ...prev }
-          delete next[file.name]
-          return next
-        })
       }
 
       try {
         if (upload.done && upload.url && upload.path) {
-          // File was already 100% finished
           await finalizeRecord(upload.url, upload.path, upload.file)
         } else if (upload.task) {
-          // Await any remaining bytes before committing metadata
-          console.log(`⏳ Background task awaiting completion: ${upload.file.name}`)
+          console.log(`⏳ [VAULT] Awaiting task completion: ${upload.file.name}`)
           await upload.task;
           const url = await getDownloadURL(upload.task.snapshot.ref);
           await finalizeRecord(url, upload.path!, upload.file);
         }
       } catch (err) {
-        console.error(`❌ Critical background sync error for ${upload.file.name}:`, err);
+        console.error(`❌ [VAULT] Critical task error: ${upload.file.name}`, err);
       }
     })
   }
@@ -274,13 +272,13 @@ export default function DocumentVaultPage() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Status</Label>
-                  <Select name="status" defaultValue="Active">
+                  <Select name="status" defaultValue="active">
                     <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
                       <SelectValue placeholder="Active" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Archived">Archived</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="archived">Archived</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -340,7 +338,7 @@ export default function DocumentVaultPage() {
 
               <Button 
                 type="submit" 
-                disabled={loading || Object.keys(activeUploads).length === 0} 
+                disabled={Object.keys(activeUploads).length === 0} 
                 className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
               >
                 Save Record

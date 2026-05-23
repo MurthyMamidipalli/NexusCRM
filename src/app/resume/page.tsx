@@ -49,7 +49,6 @@ export default function ResumePage() {
   const storage = useStorage()
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState('PDF')
   
@@ -72,8 +71,9 @@ export default function ResumePage() {
     if (!rawResumes) return []
     return [...rawResumes].sort((a: any, b: any) => {
       const getVal = (doc: any) => {
-        if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
-        if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
+        if (!doc.updatedAt) return Date.now();
+        if (typeof doc.updatedAt.toMillis === 'function') return doc.updatedAt.toMillis();
+        if (doc.updatedAt.seconds) return doc.updatedAt.seconds * 1000;
         return Date.now();
       }
       return getVal(b) - getVal(a);
@@ -90,7 +90,7 @@ export default function ResumePage() {
       const fileId = `${Date.now()}_${file.name}`
       const path = `resumes/${user.uid}/${fileId}`
       const storageRef = ref(storage, path)
-      const uploadTask = uploadBytesResumable(storageRef, file)
+      const uploadTask = uploadBytesResumable(storageRef, file, { contentType: file.type })
 
       setActiveUploads(prev => ({
         ...prev,
@@ -133,41 +133,45 @@ export default function ResumePage() {
       name: formData.get('name') as string,
       docType: formData.get('docType') as string || 'Resume',
       visibility: formData.get('visibility') as string || 'Private',
-      url: formData.get('url') as string
+      url: formData.get('url') as string,
+      userId: user.uid
     }
 
     const uploadsToProcess = Object.values(activeUploads)
 
-    // INSTANT UI FEEDBACK
+    // INSTANT FEEDBACK
     toast({ title: 'Securing in Vault', description: 'Your records are being finalized in the background.' })
     setIsDialogOpen(false)
 
     if (activeTab === 'PDF') {
       uploadsToProcess.forEach(async (upload) => {
         const finalize = async (url: string, path: string, file: File) => {
-          const data: any = {
-            name: uploadsToProcess.length > 1 ? `${formConfig.name} - ${file.name}` : formConfig.name,
-            type: 'file',
-            docType: formConfig.docType,
-            visibility: formConfig.visibility,
-            isPublic: formConfig.visibility === 'Public',
-            ownerId: user.uid,
-            fileUrl: url,
-            fileName: file.name,
-            filePath: path,
-            fileSize: file.size,
-            fileType: file.type
+          try {
+            const data: any = {
+              name: uploadsToProcess.length > 1 ? `${formConfig.name} - ${file.name}` : formConfig.name,
+              type: 'file',
+              docType: formConfig.docType,
+              visibility: formConfig.visibility,
+              isPublic: formConfig.visibility === 'Public',
+              ownerId: formConfig.userId,
+              fileUrl: url,
+              fileName: file.name,
+              filePath: path,
+              fileSize: file.size,
+              fileType: file.type
+            }
+            console.log(`📡 [RESUME] Committing record: ${data.name}`)
+            await createRecord(db, collections.RESUMES, data, formConfig.userId)
+            console.log(`📁 [RESUME] Secured: ${data.name}`)
+          } catch (err) {
+            console.error(`❌ [RESUME] Failed to secure ${file.name}:`, err)
+          } finally {
+            setActiveUploads(prev => {
+              const next = { ...prev }
+              delete next[file.name]
+              return next
+            })
           }
-          console.log(`📡 Finalizing Resume/CV record for: ${file.name}`)
-          await createRecord(db, collections.RESUMES, data, user.uid).catch(err => {
-            console.error(`❌ Background resume creation failed for ${file.name}:`, err)
-          })
-          
-          setActiveUploads(prev => {
-            const next = { ...prev }
-            delete next[file.name]
-            return next
-          })
         }
 
         try {
@@ -179,7 +183,7 @@ export default function ResumePage() {
             await finalize(url, upload.path!, upload.file);
           }
         } catch (err) {
-          console.error(`❌ Critical background resume sync error:`, err);
+          console.error(`❌ [RESUME] Critical background error:`, err);
         }
       })
     } else {
@@ -188,10 +192,10 @@ export default function ResumePage() {
         type: 'link',
         visibility: formConfig.visibility,
         isPublic: formConfig.visibility === 'Public',
-        ownerId: user.uid,
+        ownerId: formConfig.userId,
         url: formConfig.url
       }
-      createRecord(db, collections.RESUMES, data, user.uid).catch(console.error)
+      createRecord(db, collections.RESUMES, data, formConfig.userId).catch(console.error)
     }
   }
 
@@ -291,7 +295,7 @@ export default function ResumePage() {
               ) : (
                 <div className="space-y-2">
                   <Label>Link URL</Label>
-                  <Input name="url" required className="bg-[#1c1c1f] border-none h-12 rounded-xl" placeholder="https://linkedin.com/in/username" />
+                  <Input name="url" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="https://linkedin.com/in/username" />
                 </div>
               )}
               
@@ -306,7 +310,7 @@ export default function ResumePage() {
               )}
 
               <DialogFooter>
-                <Button type="submit" disabled={loading || (activeTab === 'PDF' && Object.keys(activeUploads).length === 0)} className="w-full bg-primary h-12 rounded-xl font-bold">
+                <Button type="submit" className="w-full bg-primary h-12 rounded-xl font-bold">
                   Secure in Vault
                 </Button>
               </DialogFooter>
