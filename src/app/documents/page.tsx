@@ -17,11 +17,11 @@ import {
   Eye,
   CheckCircle2,
   X,
-  Info
+  AlertCircle
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { useToast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from '@/components/ui/dialog'
@@ -76,13 +76,14 @@ export default function DocumentVaultPage() {
   const filteredDocs = useMemo(() => {
     if (!rawDocs) return []
     return rawDocs.filter((doc: any) => {
-      const matchesSearch = (doc.title || doc.file_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+      const title = (doc.title || doc.file_name || '').toLowerCase()
+      const matchesSearch = title.includes(searchTerm.toLowerCase())
       const matchesCategory = categoryFilter === 'All' || doc.category === categoryFilter
       return matchesSearch && matchesCategory
     }).sort((a: any, b: any) => {
       const getVal = (doc: any) => {
-        if (doc.createdAt?.toMillis) return doc.createdAt.toMillis();
-        if (doc.createdAt?.seconds) return doc.createdAt.seconds * 1000;
+        if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
+        if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
         return Date.now() + 10000;
       }
       return getVal(b) - getVal(a);
@@ -92,27 +93,13 @@ export default function DocumentVaultPage() {
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
-    console.group('📁 [Vault] Save Execution Flow');
-    
-    // Step 1: User & Service Validation
-    console.log('Step 1: Validating Session & Services...');
-    if (!user) {
-      console.error('❌ Validation Failed: No authenticated user.');
-      console.groupEnd();
+    if (!user || !db || !storage) {
+      console.error('❌ Service validation failed: user, db, or storage missing.');
       return;
     }
-    if (!db) console.error('❌ Validation Failed: Firestore instance missing.');
-    if (!storage) console.error('❌ Validation Failed: Storage instance missing.');
-    
-    console.log('Auth UID:', user.uid);
-    console.log('Target Collection:', collections.DOCUMENTS);
 
-    // Step 2: File Validation
-    console.log('Step 2: Validating Files...');
     if (pendingFiles.length === 0) {
-      console.error('❌ Validation Failed: No files selected.');
       toast({ variant: 'destructive', title: 'File Missing', description: 'Please select a document to upload.' });
-      console.groupEnd();
       return
     }
 
@@ -121,45 +108,37 @@ export default function DocumentVaultPage() {
     const description = formData.get('description') as string
     setIsSaving(true)
 
+    console.group('📁 [Vault] Final Save Initiated');
+
     try {
       for (const file of pendingFiles) {
-        console.group(`📄 Processing File: ${file.name}`);
+        console.log(`🚀 Starting sync for: ${file.name}`);
         
         const timestamp = Date.now()
         const storagePath = `documents/${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         const storageRef = ref(storage, storagePath)
         
-        // Step 3: Storage Upload
-        console.log('Step 3: Initiating Firebase Storage Upload...');
-        console.log('Storage Path:', storagePath);
-        
-        const uploadTask = uploadBytesResumable(storageRef, file);
+        // Simple uploadBytes is the most robust against CORS preflight issues
+        console.log('Step 1: Attempting simple Storage upload...');
+        let snapshot;
+        try {
+          snapshot = await uploadBytes(storageRef, file);
+          console.log('✅ Step 1 SUCCESS: Storage snapshot received.');
+        } catch (uploadErr: any) {
+          console.error('❌ Step 1 FAILED: Storage upload was blocked or failed.');
+          console.error('Error Code:', uploadErr.code);
+          console.error('Error Message:', uploadErr.message);
+          
+          if (uploadErr.message?.includes('CORS') || uploadErr.code === 'storage/unknown') {
+            console.warn('⚠️ DIAGNOSIS: This is likely a Bucket CORS Policy issue. The origin *.cloudworkstations.dev is not allowed by the Storage bucket.');
+          }
+          throw uploadErr; // Exit the loop and trigger the main catch block
+        }
 
-        await new Promise((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              console.log(`[Storage] Upload Progress: ${Math.round(progress)}%`);
-            },
-            (error) => {
-              console.error('❌ Step 3 FAILED: Storage Upload Error', error);
-              reject(error);
-            },
-            () => {
-              console.log('✅ Step 3 SUCCESS: Upload Task Completed.');
-              resolve(null);
-            }
-          );
-        });
+        console.log('Step 2: Generating download URL...');
+        const fileUrl = await getDownloadURL(snapshot.ref);
+        console.log('✅ Step 2 SUCCESS:', fileUrl);
 
-        // Step 4: URL Generation
-        console.log('Step 4: Generating Download URL...');
-        const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
-        console.log('✅ Step 4 SUCCESS:', fileUrl);
-
-        // Step 5: Firestore Persistence
-        console.log('Step 5: Initiating Firestore Record Creation...');
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
           file_name: file.name,
@@ -173,34 +152,20 @@ export default function DocumentVaultPage() {
           status: 'active'
         }
 
-        const docPromise = createRecord(db, collections.DOCUMENTS, recordData, user.uid);
-        
-        docPromise.then((docRef) => {
-          console.log('✅ Step 6 SUCCESS: Firestore document created with ID:', docRef.id);
-        }).catch((err) => {
-          console.error('❌ Step 6 FAILED: Firestore Persistence Error', err);
-          
-          const permissionError = new FirestorePermissionError({
-            path: collections.DOCUMENTS,
-            operation: 'create',
-            requestResourceData: recordData,
-            originalError: err
-          } satisfies SecurityRuleContext);
-          errorEmitter.emit('permission-error', permissionError);
-        });
-
-        console.groupEnd();
+        console.log('Step 3: Creating Firestore record...');
+        await createRecord(db, collections.DOCUMENTS, recordData, user.uid);
+        console.log('✅ Step 3 SUCCESS: Firestore synchronized.');
       }
 
       toast({ title: 'Record Secured', description: 'Vault synchronized successfully.' })
       setIsDialogOpen(false)
       setPendingFiles([])
     } catch (err: any) {
-      console.error('🔥 Critical Execution Termination:', err);
+      console.error('🔥 Execution Termination:', err);
       toast({ 
         variant: 'destructive', 
         title: 'Upload Failed', 
-        description: err.message || 'The request was blocked or failed during synchronization.'
+        description: 'The upload was blocked by browser security (CORS). Check the console for a detailed diagnosis.'
       });
     } finally {
       setIsSaving(false)
@@ -211,7 +176,7 @@ export default function DocumentVaultPage() {
   const handleDelete = (doc: any) => {
     if (!db) return
     deleteRecord(db, collections.DOCUMENTS, doc.id)
-      .catch((err: any) => {
+      .catch(async (err: any) => {
         const permissionError = new FirestorePermissionError({
           path: `${collections.DOCUMENTS}/${doc.id}`,
           operation: 'delete',
@@ -234,9 +199,10 @@ export default function DocumentVaultPage() {
         <Button 
           className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl" 
           onClick={() => setIsDialogOpen(true)}
-          disabled={!user}
+          disabled={!user || isSaving}
         >
-          <Plus className="h-5 w-5" /> Add Record
+          {isSaving ? <Loader2 className="animate-spin h-5 w-5" /> : <Plus className="h-5 w-5" />}
+          {isSaving ? 'Processing...' : 'Add Record'}
         </Button>
       </div>
 
@@ -306,11 +272,22 @@ export default function DocumentVaultPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search document titles..." className="pl-10 bg-card/50 border-none h-11 rounded-xl focus:ring-1 focus:ring-primary" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
+        <div className="md:col-span-2 flex justify-end">
+           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-[180px] bg-card/50 border-none rounded-xl h-11">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent className="bg-card border-border">
+                <SelectItem value="All">All Categories</SelectItem>
+                {DOCUMENT_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+              </SelectContent>
+           </Select>
+        </div>
       </div>
 
       {!user && !authLoading && (
         <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-sm font-bold flex items-center gap-2">
-           Sign-in required to enable upload button.
+           <AlertCircle className="h-4 w-4" /> Sign-in required to enable upload feature.
         </div>
       )}
 
