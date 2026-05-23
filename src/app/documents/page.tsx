@@ -18,17 +18,17 @@ import {
   CheckCircle2,
   X
 } from 'lucide-react'
-import { useFirestore, useCollection, useUser } from '@/firebase'
+import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { useToast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { uploadWithProgress, supabase } from '@/lib/supabase'
 
 const DOCUMENT_CATEGORIES = [
   "Aadhaar Card", 
@@ -45,6 +45,7 @@ const DOCUMENT_CATEGORIES = [
 
 export default function DocumentVaultPage() {
   const db = useFirestore()
+  const storage = useStorage()
   const { user, loading: authLoading } = useUser()
   const [mounted, setMounted] = useState(false)
   const { toast } = useToast()
@@ -81,7 +82,7 @@ export default function DocumentVaultPage() {
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db) return
+    if (!user || !db || !storage) return
     if (pendingFiles.length === 0) {
       toast({ variant: 'destructive', title: 'File Missing', description: 'Please select a document to upload.' });
       return
@@ -94,25 +95,30 @@ export default function DocumentVaultPage() {
     try {
       for (const file of pendingFiles) {
         const timestamp = Date.now()
-        const storagePath = `${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
+        const storagePath = `documents/${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
+        const storageRef = ref(storage, storagePath)
         
-        let fileUrl = 'PENDING_INFRASTRUCTURE';
-        
-        if (supabase) {
-           fileUrl = await uploadWithProgress(
-            'documents',
-            storagePath,
-            file,
-            (percent) => setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
+        const uploadTask = uploadBytesResumable(storageRef, file)
+
+        await new Promise((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+              setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
+            },
+            (error) => reject(error),
+            () => resolve(null)
           )
-        }
+        })
+        
+        const fileUrl = await getDownloadURL(uploadTask.snapshot.ref)
 
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
           file_name: file.name,
           category: selectedCategory,
           isPublic: selectedVisibility === 'Public',
-          file_url: fileUrl,
           fileUrl: fileUrl,
           fileSize: file.size,
           filePath: storagePath,
@@ -201,7 +207,15 @@ export default function DocumentVaultPage() {
                   </div>
                 )}
               </div>
-              {isSaving && <div className="space-y-2"><div className="flex justify-between text-[10px] font-bold uppercase text-emerald-400"><span>Syncing to vault...</span><span>{totalProgress}%</span></div><Progress value={totalProgress} className="h-1 bg-gray-800" /></div>}
+              {isSaving && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-bold uppercase text-emerald-400">
+                    <span>Syncing to vault...</span>
+                    <span>{totalProgress}%</span>
+                  </div>
+                  <Progress value={totalProgress} className="h-1 bg-gray-800" />
+                </div>
+              )}
             </div>
             <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
               <Button type="submit" disabled={isSaving} className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20">
@@ -236,7 +250,7 @@ export default function DocumentVaultPage() {
                 <div className="flex justify-between items-start mb-6">
                   <div className="p-4 rounded-2xl bg-[#10b981]/10 text-[#10b981]"><FileText className="h-8 w-8" /></div>
                   <div className="flex items-center gap-1">
-                    {(doc.fileUrl || doc.file_url) && <Button variant="ghost" size="icon" asChild className="rounded-full"><a href={doc.file_url || doc.fileUrl} target="_blank" rel="noopener noreferrer"><Eye className="h-4 w-4" /></a></Button>}
+                    {doc.fileUrl && <Button variant="ghost" size="icon" asChild className="rounded-full"><a href={doc.fileUrl} target="_blank" rel="noopener noreferrer"><Eye className="h-4 w-4" /></a></Button>}
                     <Button variant="ghost" size="icon" className="hover:text-destructive rounded-full" onClick={() => deleteRecord(db, collections.DOCUMENTS, doc.id)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
