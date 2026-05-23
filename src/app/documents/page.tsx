@@ -10,20 +10,19 @@ import {
   Trash2, 
   FileText, 
   Search, 
-  Filter, 
   Upload, 
   Lock,
   Database,
   Globe,
   Eye,
   CheckCircle2,
-  AlertCircle
+  X
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -82,11 +81,6 @@ export default function DocumentVaultPage() {
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
-    console.log("[Vault] --- DIAGNOSTICS ---");
-    console.log("[Vault] USER OBJECT:", user);
-    console.log("[Vault] DB OBJECT:", !!db);
-    console.log("[Vault] IS SAVING:", isSaving);
-
     if (authLoading) {
       toast({ title: 'Auth Loading', description: 'Please wait for your session to initialize.' });
       return;
@@ -97,13 +91,13 @@ export default function DocumentVaultPage() {
       return;
     }
 
-    if (!supabase) {
-      toast({ variant: 'destructive', title: 'Integration Missing', description: 'Supabase configuration is not ready. Check your keys.' });
+    if (pendingFiles.length === 0) {
+      toast({ variant: 'destructive', title: 'File Missing', description: 'Please select a document to upload.' });
       return;
     }
 
-    if (pendingFiles.length === 0) {
-      toast({ variant: 'destructive', title: 'File Missing', description: 'Please select a document to upload.' });
+    if (!supabase) {
+      toast({ variant: 'destructive', title: 'Configuration Missing', description: 'Supabase integration is offline. Check your settings.' });
       return;
     }
 
@@ -112,27 +106,16 @@ export default function DocumentVaultPage() {
     setIsSaving(true)
 
     try {
-      console.log("[Vault] Starting upload loop for", pendingFiles.length, "files");
-      
       for (const file of pendingFiles) {
         const timestamp = Date.now()
         const storagePath = `${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         
-        console.log("[Vault] Uploading:", file.name, "to", storagePath);
-
-        let fileUrl;
-        try {
-          fileUrl = await uploadWithProgress(
-            'documents',
-            storagePath,
-            file,
-            (percent) => setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
-          )
-          console.log("[Vault] Upload success:", fileUrl);
-        } catch (uploadErr: any) {
-          console.error("[Vault] uploadWithProgress failed detail:", uploadErr);
-          throw uploadErr;
-        }
+        let fileUrl = await uploadWithProgress(
+          'documents',
+          storagePath,
+          file,
+          (percent) => setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
+        )
 
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
@@ -146,14 +129,7 @@ export default function DocumentVaultPage() {
           ownerId: user.uid,
         }
 
-        console.log("[Vault] Creating Firestore record...");
-        try {
-          await createRecord(db, collections.DOCUMENTS, recordData, user.uid);
-          console.log("[Vault] Firestore write complete.");
-        } catch (dbErr: any) {
-          console.error("[Vault] createRecord failed detail:", dbErr);
-          throw dbErr;
-        }
+        await createRecord(db, collections.DOCUMENTS, recordData, user.uid);
       }
 
       toast({ title: 'Record Secured', description: 'Vault synchronized successfully.' })
@@ -161,7 +137,6 @@ export default function DocumentVaultPage() {
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      console.error("[Vault] CRITICAL FAILURE:", err);
       toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
     } finally {
       setIsSaving(false)
@@ -183,64 +158,66 @@ export default function DocumentVaultPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight">📂 Document Vault</h1>
           <p className="text-muted-foreground">Secure high-performance storage for sensitive professional records.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { if (!isSaving) setIsDialogOpen(o); }}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl">
-              <Plus className="h-5 w-5" /> Add Record
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
-            <DialogHeader className="p-8 pb-4 border-b border-white/5 relative">
-              <DialogTitle className="text-3xl font-bold font-headline text-white">Secure Document</DialogTitle>
-              <DialogDescription className="text-gray-400">Files are encrypted and stored privately in the cloud.</DialogDescription>
-            </DialogHeader>
-
-            <form onSubmit={handleFinalSave} className="flex flex-col flex-1 overflow-hidden">
-              <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-white">Document Name</Label>
-                  <Input name="title" disabled={isSaving} required className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white focus:ring-1 focus:ring-[#10b981]" placeholder="e.g. Identity Record" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label className="text-sm font-semibold text-white">Category</Label>
-                    <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isSaving}>
-                      <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">{DOCUMENT_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2"><Label className="text-sm font-semibold text-white">Visibility</Label>
-                    <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
-                      <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white"><SelectItem value="Private">🔒 Private</SelectItem><SelectItem value="Public">🌍 Public</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="group flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-gray-800 p-10 bg-[#1c1c1f]/50 cursor-pointer hover:border-[#10b981]/50 transition-colors" onClick={() => !isSaving && fileInputRef.current?.click()}>
-                  <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => setPendingFiles(Array.from(e.target.files || []))} disabled={isSaving} />
-                  {pendingFiles.length > 0 ? (
-                    <div className="text-[#10b981] text-center">
-                      <CheckCircle2 className="mx-auto mb-2 h-12 w-12" />
-                      <span className="text-sm font-bold">{pendingFiles.length} Selected</span>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
-                      <p className="text-sm text-gray-500 font-medium">Click to select files</p>
-                    </div>
-                  )}
-                </div>
-                {isSaving && <div className="space-y-2"><div className="flex justify-between text-[10px] font-bold uppercase text-emerald-400"><span>Syncing to vault...</span><span>{totalProgress}%</span></div><Progress value={totalProgress} className="h-1 bg-gray-800" /></div>}
-              </div>
-              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
-                <Button type="submit" disabled={isSaving} className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20">
-                  {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
-                  Save Record
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl" onClick={() => setIsDialogOpen(true)}>
+          <Plus className="h-5 w-5" /> Add Record
+        </Button>
       </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={(o) => { if (!isSaving) setIsDialogOpen(o); }}>
+        <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader className="p-8 pb-4 border-b border-white/5 relative">
+            <DialogTitle className="text-3xl font-bold font-headline text-white">Secure Document</DialogTitle>
+            <DialogDescription className="text-gray-400">Files are encrypted and stored privately in the cloud.</DialogDescription>
+            <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
+              <X className="h-5 w-5" />
+            </DialogClose>
+          </DialogHeader>
+
+          <form onSubmit={handleFinalSave} className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-white">Document Name</Label>
+                <Input name="title" disabled={isSaving} required className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white focus:ring-1 focus:ring-[#10b981]" placeholder="e.g. Identity Record" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label className="text-sm font-semibold text-white">Category</Label>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isSaving}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">{DOCUMENT_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2"><Label className="text-sm font-semibold text-white">Visibility</Label>
+                  <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white"><SelectItem value="Private">🔒 Private</SelectItem><SelectItem value="Public">🌍 Public</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="group flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-gray-800 p-10 bg-[#1c1c1f]/50 cursor-pointer hover:border-[#10b981]/50 transition-colors" onClick={() => !isSaving && fileInputRef.current?.click()}>
+                <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => setPendingFiles(Array.from(e.target.files || []))} disabled={isSaving} />
+                {pendingFiles.length > 0 ? (
+                  <div className="text-[#10b981] text-center">
+                    <CheckCircle2 className="mx-auto mb-2 h-12 w-12" />
+                    <span className="text-sm font-bold">{pendingFiles.length} Selected</span>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
+                    <p className="text-sm text-gray-500 font-medium">Click to select files</p>
+                  </div>
+                )}
+              </div>
+              {isSaving && <div className="space-y-2"><div className="flex justify-between text-[10px] font-bold uppercase text-emerald-400"><span>Syncing to vault...</span><span>{totalProgress}%</span></div><Progress value={totalProgress} className="h-1 bg-gray-800" /></div>}
+            </div>
+            <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
+              <Button type="submit" disabled={isSaving} className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20">
+                {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
+                Save Record
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <div className="mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="md:col-span-2 relative">

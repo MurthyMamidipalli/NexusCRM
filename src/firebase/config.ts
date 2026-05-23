@@ -17,15 +17,19 @@ export const firebaseConfig = {
  * Validates the configuration to prevent initialization crashes.
  */
 export function isFirebaseConfigValid() {
+  const key = firebaseConfig.apiKey;
   const isValid = !!(
-    firebaseConfig.apiKey && 
-    firebaseConfig.apiKey !== 'AIzaSyA_placeholder_key' &&
-    firebaseConfig.projectId
+    key && 
+    key !== 'AIzaSyA_placeholder_key' &&
+    key !== 'undefined' &&
+    firebaseConfig.projectId &&
+    firebaseConfig.projectId !== 'undefined'
   );
   
   if (!isValid && typeof window !== 'undefined') {
-    console.error('❌ Firebase Config Invalid:', {
-      hasApiKey: !!firebaseConfig.apiKey,
+    console.error('❌ Firebase Config Invalid or Missing. Current state:', {
+      hasApiKey: !!key,
+      keyPrefix: key ? key.substring(0, 5) + '...' : 'none',
       projectId: firebaseConfig.projectId
     });
   }
