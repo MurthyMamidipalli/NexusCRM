@@ -23,12 +23,14 @@ import { collection, query, where } from 'firebase/firestore'
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject, UploadTask } from 'firebase/storage'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
@@ -40,6 +42,8 @@ interface ActiveUpload {
   path?: string;
   task?: UploadTask;
 }
+
+const DOCUMENT_CATEGORIES = ["Identity", "Tax", "Medical", "Property", "Insurance", "Other"];
 
 export default function DocumentVaultPage() {
   const db = useFirestore()
@@ -54,6 +58,11 @@ export default function DocumentVaultPage() {
   // High-speed task management
   const [activeUploads, setActiveUploads] = useState<{ [key: string]: ActiveUpload }>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Dialog field states (Explicitly tracked to avoid FormData extraction issues)
+  const [selectedCategory, setSelectedCategory] = useState<string>("Identity")
+  const [selectedStatus, setSelectedStatus] = useState<string>("active")
+  const [selectedVisibility, setSelectedVisibility] = useState<string>("Private")
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -124,6 +133,7 @@ export default function DocumentVaultPage() {
             delete next[file.name]
             return next
           })
+          toast({ variant: 'destructive', title: 'Upload Error', description: error.message })
         },
         async () => {
           const url = await getDownloadURL(uploadTask.snapshot.ref)
@@ -145,6 +155,7 @@ export default function DocumentVaultPage() {
     e.preventDefault()
     if (!user || !db) return
 
+    // Capture snapshot of uploads to process in the background
     const uploadsToProcess = Object.values(activeUploads)
     if (uploadsToProcess.length === 0) {
       toast({ variant: 'destructive', title: 'Empty Vault', description: 'Please select documents first.' })
@@ -152,40 +163,46 @@ export default function DocumentVaultPage() {
     }
 
     const formData = new FormData(e.currentTarget)
-    const formConfig = {
-      baseTitle: formData.get('title') as string,
-      category: formData.get('category') as string || 'Other',
-      status: 'active',
-      visibility: formData.get('visibility') as string || 'Private',
-      userId: user.uid
-    }
+    const baseTitle = formData.get('title') as string
+    const currentCategory = selectedCategory
+    const currentStatus = selectedStatus
+    const currentVisibility = selectedVisibility
+    const userId = user.uid
 
     // INSTANT FEEDBACK
     toast({ title: 'Securing Records', description: 'Your files are syncing to your private vault in the background.' })
     setIsDialogOpen(false)
 
-    // BACKGROUND PROCESS: Process each file independently
+    // BACKGROUND PROCESS: Process each file independently without relying on component state
     uploadsToProcess.forEach(async (upload) => {
       const finalizeRecord = async (url: string, path: string, file: File) => {
+        const data = {
+          title: uploadsToProcess.length > 1 ? file.name : (baseTitle || file.name),
+          category: currentCategory,
+          fileUrl: url,
+          filePath: path,
+          fileType: file.type,
+          fileSize: file.size,
+          status: currentStatus,
+          isPublic: currentVisibility === 'Public',
+          ownerId: userId
+        }
+        
         try {
-          const data = {
-            title: uploadsToProcess.length > 1 ? file.name : (formConfig.baseTitle || file.name),
-            category: formConfig.category,
-            fileUrl: url,
-            filePath: path,
-            fileType: file.type,
-            fileSize: file.size,
-            status: formConfig.status,
-            isPublic: formConfig.visibility === 'Public',
-            ownerId: formConfig.userId
-          }
-          
           console.log(`📡 [VAULT] Committing Firestore record: ${data.title}`)
-          await createRecord(db, collections.DOCUMENTS, data, formConfig.userId)
+          await createRecord(db, collections.DOCUMENTS, data, userId)
           console.log(`📁 [VAULT] Record secured successfully: ${data.title}`)
-        } catch (err) {
+        } catch (err: any) {
           console.error(`❌ [VAULT] Background commit failed for ${file.name}:`, err)
+          const permissionError = new FirestorePermissionError({
+            path: collections.DOCUMENTS,
+            operation: 'create',
+            requestResourceData: data,
+            originalError: err
+          } satisfies SecurityRuleContext);
+          errorEmitter.emit('permission-error', permissionError);
         } finally {
+          // Cleanup this specific task from the active state
           setActiveUploads(prev => {
             const next = { ...prev }
             delete next[file.name]
@@ -237,7 +254,16 @@ export default function DocumentVaultPage() {
           </h1>
           <p className="text-muted-foreground">High-speed secure storage for identification and professional records.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o && !Object.values(activeUploads).some(u => !u.done)) setActiveUploads({}); }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { 
+          setIsDialogOpen(o); 
+          if(!o && !Object.values(activeUploads).some(u => !u.done)) {
+            setActiveUploads({});
+            // Reset fields
+            setSelectedCategory("Identity");
+            setSelectedStatus("active");
+            setSelectedVisibility("Private");
+          }
+        }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl">
               <Plus className="h-5 v-5" /> Secure New Document
@@ -264,15 +290,20 @@ export default function DocumentVaultPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Category</Label>
-                  <Input 
-                    name="category"
-                    className="bg-[#1c1c1f] border-2 border-transparent focus:border-[#10b981] transition-all h-14 rounded-2xl text-white placeholder:text-gray-600" 
-                    placeholder="e.g. Identity" 
-                  />
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                      {DOCUMENT_CATEGORIES.map(cat => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Status</Label>
-                  <Select name="status" defaultValue="active">
+                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                     <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
                       <SelectValue placeholder="Active" />
                     </SelectTrigger>
@@ -286,7 +317,7 @@ export default function DocumentVaultPage() {
 
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-white">Visibility (Mandatory)</Label>
-                <Select name="visibility" defaultValue="Private">
+                <Select value={selectedVisibility} onValueChange={setSelectedVisibility}>
                   <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
                     <div className="flex items-center gap-2">
                       <Lock className="h-4 w-4 text-orange-400" />
@@ -366,10 +397,9 @@ export default function DocumentVaultPage() {
             </SelectTrigger>
             <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
               <SelectItem value="All">All Categories</SelectItem>
-              <SelectItem value="Identity">Identity</SelectItem>
-              <SelectItem value="Tax">Tax</SelectItem>
-              <SelectItem value="Medical">Medical</SelectItem>
-              <SelectItem value="Property">Property</SelectItem>
+              {DOCUMENT_CATEGORIES.map(cat => (
+                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
