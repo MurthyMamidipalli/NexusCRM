@@ -1,4 +1,3 @@
-
 'use client';
 
 /**
@@ -14,9 +13,18 @@ export const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Log a warning if the API key is missing or is a placeholder
+// Audit and validate configuration on startup
 if (typeof window !== 'undefined') {
+  console.group('📡 Firebase Configuration Audit');
+  console.log('Project ID:', firebaseConfig.projectId);
+  console.log('Storage Bucket:', firebaseConfig.storageBucket || '❌ MISSING');
+  
   if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('your-api-key')) {
-    console.error('Firebase Error: Invalid or missing API Key in .env file. Please check your NEXT_PUBLIC_FIREBASE_API_KEY.');
+    console.error('Firebase Error: Invalid or missing API Key in .env file.');
   }
+  
+  if (!firebaseConfig.storageBucket) {
+    console.error('Firebase Error: Storage Bucket is not configured. Uploads will fail with CORS or 404 errors.');
+  }
+  console.groupEnd();
 }

@@ -105,9 +105,26 @@ export default function DocumentVaultPage() {
 
   const handleFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    if (!files.length || !user || !storage) return
+    if (!files.length || !user) return
 
-    console.log(`[VAULT] File selection detected: ${files.length} files.`);
+    if (!storage) {
+      console.error('[VAULT] Storage service not initialized');
+      toast({ variant: 'destructive', title: 'System Error', description: 'Storage service is unavailable.' });
+      return;
+    }
+
+    const bucket = storage.app.options.storageBucket;
+    if (!bucket) {
+      console.error('[VAULT] Storage Bucket missing from config. Check .env variables.');
+      toast({ 
+        variant: 'destructive', 
+        title: 'Configuration Error', 
+        description: 'Firebase Storage Bucket not found. Please verify your environment settings.' 
+      });
+      return;
+    }
+
+    console.log(`[VAULT] Preparing ${files.length} file(s) for bucket: ${bucket}`);
 
     files.forEach((file) => {
       if (file.size > MAX_FILE_SIZE) {
@@ -121,7 +138,8 @@ export default function DocumentVaultPage() {
       const path = `documents/${user.uid}/${fileName}`
       const storageRef = ref(storage, path)
       
-      console.log(`[VAULT] Starting upload for: ${file.name}`);
+      console.log(`[VAULT] Starting upload: gs://${bucket}/${path}`);
+      
       const uploadTask = uploadBytesResumable(storageRef, file, { contentType: file.type })
 
       setActiveUploads(prev => ({
@@ -133,7 +151,6 @@ export default function DocumentVaultPage() {
         'state_changed',
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / (snapshot.totalBytes || 1)) * 100
-          console.log(`[VAULT] Progress for ${file.name}: ${Math.round(progress)}%`);
           setActiveUploads(prev => {
             if (!prev[file.name]) return prev;
             return {
@@ -143,17 +160,21 @@ export default function DocumentVaultPage() {
           })
         },
         (error) => {
-          console.error(`[VAULT] Upload task failed for ${file.name}:`, error);
+          console.error(`[VAULT] Upload critical failure for ${file.name}:`, error);
           setActiveUploads(prev => {
             const next = { ...prev }
             delete next[file.name]
             return next
           })
-          toast({ variant: 'destructive', title: 'Upload Error', description: `${file.name}: ${error.message}` })
+          toast({ 
+            variant: 'destructive', 
+            title: 'Upload Failed', 
+            description: `${file.name}: Check console for CORS or Permission errors.` 
+          })
         },
         async () => {
-          console.log(`[VAULT] Upload task completed for: ${file.name}`);
           const url = await getDownloadURL(uploadTask.snapshot.ref)
+          console.log(`[VAULT] Upload completed: ${file.name}`);
           setActiveUploads(prev => {
             if (!prev[file.name]) return prev;
             return {
@@ -186,7 +207,7 @@ export default function DocumentVaultPage() {
     const uid = user.uid
 
     setIsSaving(true)
-    console.log(`[VAULT] Finalizing record persistence for ${uploadsToProcess.length} items...`);
+    console.log(`[VAULT] Synchronizing records for ${uploadsToProcess.length} items...`);
 
     try {
       for (const upload of uploadsToProcess) {
@@ -195,7 +216,7 @@ export default function DocumentVaultPage() {
 
         // Wait if still transferring
         if (!upload.done && upload.task) {
-          console.log(`[VAULT] Waiting for final bytes of: ${upload.file.name}`);
+          console.log(`[VAULT] Waiting for remaining bytes: ${upload.file.name}`);
           const snapshot = await upload.task;
           finalUrl = await getDownloadURL(snapshot.ref);
           finalPath = snapshot.ref.fullPath;
@@ -215,7 +236,6 @@ export default function DocumentVaultPage() {
           }
           
           await createRecord(db, collections.DOCUMENTS, recordData, uid)
-          console.log(`[VAULT] Firestore record secured: ${recordData.title}`);
         }
       }
 
@@ -223,8 +243,8 @@ export default function DocumentVaultPage() {
       setIsDialogOpen(false)
       setActiveUploads({})
     } catch (err: any) {
-      console.error(`[VAULT] Persistence Critical Failure:`, err);
-      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message || 'Database synchronization failed.' });
+      console.error(`[VAULT] Firestore persistence failed:`, err);
+      toast({ variant: 'destructive', title: 'Sync Failed', description: err.message });
       
       const permissionError = new FirestorePermissionError({
         path: collections.DOCUMENTS,
