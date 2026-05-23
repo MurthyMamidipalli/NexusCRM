@@ -2,8 +2,7 @@
 
 /**
  * @fileOverview Firebase Configuration Trace & Audit
- * This file captures and logs environment variables to diagnose 
- * project ID mismatches and invalid API keys.
+ * Captures and logs environment variables to diagnose project ID and App ID mismatches.
  */
 
 export const firebaseConfig = {
@@ -16,32 +15,35 @@ export const firebaseConfig = {
 };
 
 /**
- * Audit of injected workspace environment variables.
- * Relaxed to prevent boot crashes while allowing diagnostics.
+ * Detailed audit of environment variables.
  */
 export function isFirebaseConfigValid() {
-  const activeProjectId = firebaseConfig.projectId;
-  const activeAppId = firebaseConfig.appId;
+  const { projectId, appId, apiKey, messagingSenderId } = firebaseConfig;
   
   if (typeof window !== 'undefined') {
-    const isIncorrectProject = activeProjectId === 'n-crm-40177';
-    const isPlaceholderApp = activeAppId?.includes('1234567890');
+    console.group('🔍 NEXUS HUB: FINAL ENVIRONMENT AUDIT');
+    console.log('PROJECT_ID:', projectId || 'MISSING');
+    console.log('AUTH_DOMAIN:', firebaseConfig.authDomain || 'MISSING');
+    console.log('SENDER_ID:', messagingSenderId || 'MISSING');
+    console.log('APP_ID:', appId || 'MISSING');
+    console.log('API_KEY_PRESENT:', !!apiKey);
     
-    console.group('🔍 NEXUS HUB: CLIENT ENVIRONMENT TRACE');
-    console.log('PROJECT_ID:', activeProjectId || 'MISSING');
-    console.log('APP_ID:', activeAppId || 'MISSING');
-    
-    if (isIncorrectProject) {
-      console.warn('⚠️ WARNING: Environment is serving the default project (n-crm-40177). Synchronization may be in progress.');
+    const isPlaceholderApp = appId?.includes('1234567890') || appId?.includes('abcdef');
+    const isCorrectProject = projectId === 'studio-3717134241-d7612';
+
+    if (!isCorrectProject) {
+      console.warn('❌ INCORRECT PROJECT: Expected studio-3717134241-d7612 but got', projectId);
     }
     if (isPlaceholderApp) {
-      console.warn('⚠️ WARNING: App ID appears to be a placeholder value.');
+      console.error('❌ PLACEHOLDER DETECTED: App ID is still using a generic placeholder value.');
     }
+    if (!apiKey) {
+      console.error('❌ API KEY MISSING: Authentication will fail.');
+    }
+    
     console.groupEnd();
   }
   
-  const hasKey = !!(firebaseConfig.apiKey && firebaseConfig.apiKey !== 'undefined' && !firebaseConfig.apiKey.includes('placeholder'));
-  const hasProjectId = !!(activeProjectId && activeProjectId !== 'undefined');
-  
-  return hasKey && hasProjectId;
+  // Return true only if key and project are present (allowing placeholder app id for boot)
+  return !!(apiKey && projectId && projectId !== 'undefined');
 }

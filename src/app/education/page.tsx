@@ -101,7 +101,7 @@ export default function EducationPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight text-foreground">🎓 Education</h1>
           <p className="text-muted-foreground">Your academic background and formal learning journey.</p>
         </div>
-        <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white" onClick={() => { setEditingEdu(null); setIsDialogOpen(true); }}>
+        <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white font-bold h-12 px-6 rounded-xl" onClick={() => { setEditingEdu(null); setIsDialogOpen(true); }}>
           <Plus className="h-4 w-4" /> Add Record
         </Button>
       </div>
@@ -110,7 +110,7 @@ export default function EducationPage() {
         setIsDialogOpen(open);
         if (!open) setEditingEdu(null);
       }}>
-        <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0">
             <DialogTitle className="text-3xl font-bold font-headline text-white">Academic Record</DialogTitle>
             <DialogDescription className="text-gray-400">Enter details of your educational institution.</DialogDescription>
@@ -123,42 +123,42 @@ export default function EducationPage() {
             <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-white">Institution</Label>
-                <Input name="institution" defaultValue={editingEdu?.institution} placeholder="e.g. Stanford University" required className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl focus:ring-1 focus:ring-primary" />
+                <Input name="institution" defaultValue={editingEdu?.institution} placeholder="e.g. Stanford University" required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl focus:ring-1 focus:ring-primary" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Degree</Label>
-                  <Input name="degree" defaultValue={editingEdu?.degree} placeholder="B.S." required className="bg-[#1c1c1f] border-none h-12 rounded-xl focus:ring-1 focus:ring-primary" />
+                  <Input name="degree" defaultValue={editingEdu?.degree} placeholder="B.S." required className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-1 focus:ring-primary" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Field of Study</Label>
-                  <Input name="fieldOfStudy" defaultValue={editingEdu?.fieldOfStudy} placeholder="Computer Science" className="bg-[#1c1c1f] border-none h-12 rounded-xl focus:ring-1 focus:ring-primary" />
+                  <Input name="fieldOfStudy" defaultValue={editingEdu?.fieldOfStudy} placeholder="Computer Science" className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-1 focus:ring-primary" />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-white">ID / Enrollment Number</Label>
                 <div className="relative">
                   <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input name="idNumber" defaultValue={editingEdu?.idNumber} className="bg-[#1c1c1f] border-none h-12 pl-12 rounded-xl focus:ring-1 focus:ring-primary" placeholder="STU-123456" />
+                  <Input name="idNumber" defaultValue={editingEdu?.idNumber} className="bg-[#1c1c1f] border-none h-14 pl-12 rounded-2xl focus:ring-1 focus:ring-primary" placeholder="STU-123456" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Start Date</Label>
-                  <Input name="startDate" type="date" defaultValue={editingEdu?.startDate} required className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark] focus:ring-1 focus:ring-primary" />
+                  <Input name="startDate" type="date" defaultValue={editingEdu?.startDate} required className="bg-[#1c1c1f] border-none h-14 rounded-2xl [color-scheme:dark] focus:ring-1 focus:ring-primary" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">End Date</Label>
-                  <Input name="endDate" type="date" defaultValue={editingEdu?.endDate} className="bg-[#1c1c1f] border-none h-12 rounded-xl [color-scheme:dark] focus:ring-1 focus:ring-primary" />
+                  <Input name="endDate" type="date" defaultValue={editingEdu?.endDate} className="bg-[#1c1c1f] border-none h-14 rounded-2xl [color-scheme:dark] focus:ring-1 focus:ring-primary" />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-white">Description / Achievements</Label>
-                <Textarea name="description" defaultValue={editingEdu?.description} placeholder="Describe your key learnings and awards..." className="bg-[#1c1c1f] border-none min-h-[100px] rounded-xl focus:ring-1 focus:ring-primary" />
+                <Textarea name="description" defaultValue={editingEdu?.description} placeholder="Describe your key learnings and awards..." className="bg-[#1c1c1f] border-none min-h-[120px] rounded-2xl focus:ring-1 focus:ring-primary" />
               </div>
             </div>
             <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
-              <Button type="submit" disabled={loading} className="w-full bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-14 rounded-xl shadow-lg shadow-emerald-500/20 text-lg">
+              <Button type="submit" disabled={loading} className="w-full bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-14 rounded-2xl shadow-lg shadow-emerald-500/20 text-lg">
                 {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                 Save Record
               </Button>
