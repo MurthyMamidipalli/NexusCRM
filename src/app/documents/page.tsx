@@ -114,10 +114,6 @@ export default function DocumentVaultPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  const removePendingFile = (index: number) => {
-    setPendingFiles(prev => prev.filter((_, i) => i !== index))
-  }
-
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!user || !db || !storage || isSaving) return
@@ -137,7 +133,8 @@ export default function DocumentVaultPage() {
     setIsSaving(true)
     setUploadProgress({})
 
-    console.group('🚀 [VAULT] Starting Robust Upload Flow');
+    console.group('🚀 [VAULT] Standard SDK Upload Workflow');
+    console.log('Firebase App Name:', storage.app.name);
     console.log('Project ID:', storage.app.options.projectId);
     console.log('Storage Bucket:', storage.app.options.storageBucket);
 
@@ -148,13 +145,11 @@ export default function DocumentVaultPage() {
         const path = `documents/${uid}/${fileName}`;
         const storageRef = ref(storage, path);
 
-        console.log(`[VAULT] Processing file ${i + 1}/${pendingFiles.length}: ${file.name}`);
+        console.log(`[VAULT] Initiating SDK Upload ${i + 1}/${pendingFiles.length}: ${path}`);
 
-        // 1. Upload to Storage
-        const uploadTask = uploadBytesResumable(storageRef, file, { 
-          contentType: file.type,
-          customMetadata: { uploadedBy: uid, category }
-        });
+        // 1. Upload to Storage using Official SDK Only
+        // Note: We use uploadBytesResumable as it is the most robust for CORS handling
+        const uploadTask = uploadBytesResumable(storageRef, file);
 
         const downloadUrl = await new Promise<string>((resolve, reject) => {
           uploadTask.on(
@@ -162,15 +157,19 @@ export default function DocumentVaultPage() {
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / (snapshot.totalBytes || 1)) * 100;
               setUploadProgress(prev => ({ ...prev, [file.name]: progress }));
-              console.log(`[VAULT] Upload Progress (${file.name}): ${Math.round(progress)}%`);
+              
+              switch (snapshot.state) {
+                case 'paused': console.log(`[VAULT] ${file.name} upload is paused`); break;
+                case 'running': console.log(`[VAULT] ${file.name} transferring: ${Math.round(progress)}%`); break;
+              }
             },
             (error) => {
-              console.error(`[VAULT] Storage Error (${file.name}):`, error);
+              console.error(`[VAULT] SDK Error (${file.name}):`, error.code, error.message);
               reject(error);
             },
             async () => {
+              console.log(`[VAULT] ${file.name} bytes transferred. Resolving URL...`);
               const url = await getDownloadURL(uploadTask.snapshot.ref);
-              console.log(`[VAULT] Storage Complete (${file.name}). URL obtained.`);
               resolve(url);
             }
           );
@@ -189,26 +188,29 @@ export default function DocumentVaultPage() {
           visibility: visibility,
           isPublic: visibility === 'Public',
           ownerId: uid,
-          uploadedBy: uid,
           uploadedAt: new Date().toISOString()
         }
 
         await createRecord(db, collections.DOCUMENTS, recordData, uid);
-        console.log(`[VAULT] Firestore Record Created (${file.name})`);
+        console.log(`[VAULT] Firestore Commitment Complete: ${file.name}`);
       }
 
       toast({ title: 'Success', description: 'Record uploaded successfully.' })
       setIsDialogOpen(false)
       setPendingFiles([])
-      setUploadProgress({})
     } catch (err: any) {
       console.error(`[VAULT] Critical Failure:`, err);
+      let errorMessage = "Network failure or CORS restriction.";
+      
+      if (err.code === 'storage/unauthorized') errorMessage = "Security Rules Access Denied.";
+      if (err.code === 'storage/canceled') errorMessage = "Upload was canceled.";
+      
       toast({ 
         variant: 'destructive', 
-        title: 'Upload Failed', 
-        description: err.code === 'storage/unauthorized' ? 'Access Denied: Check Storage Rules.' : (err.message || 'Network error occurred.')
+        title: 'Vault Error', 
+        description: errorMessage 
       });
-      
+
       const permissionError = new FirestorePermissionError({
         path: collections.DOCUMENTS,
         operation: 'create',
@@ -217,6 +219,7 @@ export default function DocumentVaultPage() {
       errorEmitter.emit('permission-error', permissionError);
     } finally {
       setIsSaving(false)
+      setUploadProgress({})
       console.groupEnd();
     }
   }
@@ -248,7 +251,7 @@ export default function DocumentVaultPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight flex items-center gap-3">
             📂 Document Vault <Lock className="h-6 w-6 text-primary/40" />
           </h1>
-          <p className="text-muted-foreground">Secure high-speed storage for personal and professional identification.</p>
+          <p className="text-muted-foreground">Secure SDK-powered storage for your professional credentials.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { if (!isSaving) setIsDialogOpen(o); if (!o) setPendingFiles([]); }}>
           <DialogTrigger asChild>
@@ -260,7 +263,7 @@ export default function DocumentVaultPage() {
             <DialogHeader className="p-8 pb-4">
               <DialogTitle className="text-3xl font-bold font-headline">Upload to Vault</DialogTitle>
               <DialogDescription className="text-gray-400 text-sm mt-2">
-                Files up to 500MB supported. Secured upon clicking Save.
+                Standard SDK binary transfer. Supports files up to 500MB.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleFinalSave} className="p-8 pt-0 space-y-6">
@@ -335,13 +338,13 @@ export default function DocumentVaultPage() {
                   <div className="text-[#10b981] text-center">
                     <FileCheck className="mx-auto mb-2 h-12 w-12" />
                     <span className="text-sm font-bold">
-                      {pendingFiles.length} Files Selected
+                      {pendingFiles.length} Files Ready
                     </span>
                   </div>
                 ) : (
                   <div className="text-center">
                     <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
-                    <p className="text-sm text-gray-500 font-medium">Select Files (Max 500MB)</p>
+                    <p className="text-sm text-gray-500 font-medium">Select Documents</p>
                   </div>
                 )}
               </div>
@@ -349,7 +352,7 @@ export default function DocumentVaultPage() {
               {isSaving && (
                 <div className="space-y-3 animate-in fade-in zoom-in duration-300">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-[#10b981]">
-                    <span>{overallProgress === 100 ? 'Securing Firestore...' : 'Transferring to Cloud...'}</span>
+                    <span>{overallProgress === 100 ? 'Securing Record...' : 'Uploading Bytes...'}</span>
                     <span>{Math.round(overallProgress)}%</span>
                   </div>
                   <Progress value={overallProgress} className="h-1 bg-gray-800" />
@@ -362,7 +365,7 @@ export default function DocumentVaultPage() {
                 className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
-                {isSaving ? 'Securing...' : 'Save Record'}
+                {isSaving ? 'Securing...' : 'Upload Record'}
               </Button>
             </form>
           </DialogContent>
