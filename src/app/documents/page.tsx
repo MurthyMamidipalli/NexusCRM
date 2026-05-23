@@ -63,6 +63,17 @@ export default function DocumentVaultPage() {
 
   useEffect(() => { setMounted(true) }, [])
 
+  // DIAGNOSTIC LOGS
+  useEffect(() => {
+    if (mounted) {
+      console.group('📂 VAULT: AUTH STATUS CHECK');
+      console.log('AUTH USER:', user);
+      console.log('AUTH UID:', user?.uid);
+      console.log('AUTH LOADING:', authLoading);
+      console.groupEnd();
+    }
+  }, [user, authLoading, mounted]);
+
   const docsQuery = useMemo(() => {
     if (!db || !user) return null
     return query(collection(db, collections.DOCUMENTS), where('ownerId', '==', user.uid))

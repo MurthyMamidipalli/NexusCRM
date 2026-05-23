@@ -3,7 +3,7 @@
 /**
  * @fileOverview Authoritative Firebase Configuration
  * Forces the correct project identifiers to prevent host-environment overrides
- * from injecting "n-crm-40177" or placeholder values.
+ * from injecting placeholder values.
  */
 
 const TARGET_PROJECT_ID = 'studio-3717134241-d7612';
@@ -29,12 +29,16 @@ export function isFirebaseConfigValid() {
   const isPlaceholderApp = appId.includes('1234567890');
   const isCorrectProject = projectId === TARGET_PROJECT_ID;
 
-  console.group('🔍 FIREBASE RUNTIME AUDIT');
-  console.log('Project ID:', projectId, isCorrectProject ? '✅' : `❌ (Expected ${TARGET_PROJECT_ID})`);
-  console.log('App ID:', appId, isPlaceholderApp ? '❌ (PLACEHOLDER DETECTED)' : '✅');
-  console.log('API Key Status:', !!apiKey ? '✅ PRESENT' : '❌ MISSING');
+  console.group('🔍 NEXUS HUB: RUNTIME ENVIRONMENT AUDIT');
+  console.log('Target Project ID:', TARGET_PROJECT_ID);
+  console.log('Active Project ID:', projectId, isCorrectProject ? '✅' : `❌ (Expected ${TARGET_PROJECT_ID})`);
+  console.log('Active App ID:', appId, isPlaceholderApp ? '❌ (PLACEHOLDER DETECTED)' : '✅');
+  
   if (apiKey) {
-    console.log('API Key Preview:', `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}`);
+    const preview = `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}`;
+    console.log('API Key Status: ✅ PRESENT (' + preview + ')');
+  } else {
+    console.error('API Key Status: ❌ MISSING (Authentication will fail)');
   }
   console.groupEnd();
 
