@@ -216,6 +216,12 @@ export default function DocumentVaultPage() {
         </div>
       </div>
 
+      {!user && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-sm font-bold flex items-center gap-2">
+           Sign-in required to enable upload button.
+        </div>
+      )}
+
       {docsLoading ? (
         <div className="flex h-64 items-center justify-center"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
       ) : filteredDocs.length > 0 ? (

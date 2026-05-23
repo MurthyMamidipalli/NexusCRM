@@ -14,7 +14,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Target, Chrome, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Target, Chrome, Loader2, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { isFirebaseConfigValid, firebaseConfig } from '@/firebase/config';
 
@@ -24,46 +24,48 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [configError, setConfigError] = useState(false);
+  
   const auth = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
   useEffect(() => {
     setMounted(true);
-    isFirebaseConfigValid();
+    const valid = isFirebaseConfigValid();
+    if (!valid) setConfigError(true);
   }, []);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     
-    console.group('🔑 AUTH REPAIR: LOGIN ATTEMPT');
-    console.log('App Config ID:', auth.app.options.appId);
-    console.log('App Config Project:', auth.app.options.projectId);
-    if (firebaseConfig.apiKey) {
-      const k = firebaseConfig.apiKey;
-      console.log('API Key First/Last 4:', `${k.substring(0, 4)}...${k.substring(k.length - 4)}`);
+    if (!firebaseConfig.apiKey) {
+      toast({
+        variant: 'destructive',
+        title: 'Configuration Error',
+        description: 'Firebase API Key is missing. Please check your .env file.',
+      });
+      return;
     }
-    
+
+    setLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('SUCCESS: Authenticated as', userCredential.user.uid);
-      
       toast({
         title: 'Login Successful',
         description: `Welcome back, ${userCredential.user.email}`,
       });
-
       router.push('/dashboard');
     } catch (error: any) {
-      console.error('FAILURE: Authentication rejected by Firebase.', error);
+      console.error('Auth Error:', error);
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: error.message
+        description: error.message.includes('api-key-not-valid') 
+          ? 'Invalid API Key. Ensure your Firebase Project settings are synchronized.' 
+          : error.message
       });
     } finally {
-      console.groupEnd();
       setLoading(false);
     }
   };
@@ -110,6 +112,13 @@ export default function LoginPage() {
           <h1 className="font-headline text-3xl font-bold tracking-tight">NexusCRM</h1>
           <p className="text-muted-foreground">Sign in to orchestrate your professional intelligence.</p>
         </div>
+
+        {configError && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm animate-in fade-in slide-in-from-top-2">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <p><strong>Warning:</strong> Firebase Configuration is incomplete. Check the browser console (F12) for details.</p>
+          </div>
+        )}
 
         <Card className="border-none bg-card/50 backdrop-blur-md shadow-2xl">
           <CardHeader>

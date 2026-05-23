@@ -2,8 +2,7 @@
 
 /**
  * @fileOverview Authoritative Firebase Configuration
- * Forces the correct project identifiers to prevent host-environment overrides
- * from injecting placeholder values.
+ * Forces the correct project identifiers to prevent host-environment overrides.
  */
 
 const TARGET_PROJECT_ID = 'studio-3717134241-d7612';
@@ -33,13 +32,14 @@ export function isFirebaseConfigValid() {
   console.log('Active Project ID:', projectId, isCorrectProject ? '✅' : `❌ (Expected ${TARGET_PROJECT_ID})`);
   console.log('Active App ID:', appId, isPlaceholderApp ? '❌ (PLACEHOLDER DETECTED)' : '✅');
   
-  if (apiKey) {
+  if (apiKey && apiKey.length > 10) {
     const preview = `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}`;
-    console.log('API Key Status: ✅ PRESENT (' + preview + ')');
+    console.log('API Key Status: ✅ VALID FORMAT (' + preview + ')');
   } else {
-    console.error('API Key Status: ❌ MISSING (Authentication will fail)');
+    console.error('API Key Status: ❌ INVALID OR MISSING. Authentication will fail.');
+    console.warn('ACTION REQUIRED: Ensure NEXT_PUBLIC_FIREBASE_API_KEY is set in your .env file.');
   }
   console.groupEnd();
 
-  return !!apiKey && !!projectId;
+  return !!apiKey && !!projectId && !isPlaceholderApp;
 }
