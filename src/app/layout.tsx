@@ -15,6 +15,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // SERVER-SIDE DIAGNOSTIC LOG
+  console.log('--- SERVER ENVIRONMENT START ---');
+  console.log('NEXT_PUBLIC_FIREBASE_PROJECT_ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+  console.log('NEXT_PUBLIC_FIREBASE_API_KEY EXISTS:', !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+  console.log('--- SERVER ENVIRONMENT END ---');
+
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>

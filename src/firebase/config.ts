@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * @fileOverview Firebase Configuration Diagnostics
- * This file maps environment variables to the Firebase SDK.
+ * @fileOverview Firebase Configuration Trace & Audit
+ * This file captures and logs all environment variables to diagnose 
+ * project ID mismatches and invalid API keys.
  */
 
 export const firebaseConfig = {
@@ -15,29 +16,32 @@ export const firebaseConfig = {
 };
 
 /**
- * Performs a deep audit of the current Firebase configuration.
- * Logs status to console to identify 'auth/api-key-not-valid' issues.
+ * Exhaustive diagnostic audit of injected workspace environment variables.
  */
 export function isFirebaseConfigValid() {
-  const key = firebaseConfig.apiKey;
-  const pId = firebaseConfig.projectId;
-  const domain = firebaseConfig.authDomain;
-  
-  const hasKey = !!(key && key !== 'undefined' && key.length > 10);
-  const hasProjectId = !!(pId && pId !== 'undefined');
-  
   if (typeof window !== 'undefined') {
-    console.group('🔥 Firebase Configuration Audit');
-    console.log('NEXT_PUBLIC_FIREBASE_PROJECT_ID:', pId);
-    console.log('NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:', domain);
-    console.log('NEXT_PUBLIC_FIREBASE_API_KEY Exists:', !!key);
-    console.log('API Key Valid (Length/Format):', hasKey ? '✅' : '❌');
+    console.group('🔍 NEXUS HUB: ENVIRONMENT TRACE');
+    console.log('--- FIREBASE IDENTITY ---');
+    console.log('PROJECT_ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+    console.log('AUTH_DOMAIN:', process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN);
+    console.log('APP_ID:', process.env.NEXT_PUBLIC_FIREBASE_APP_ID);
     
-    if (!hasKey) {
-      console.error('CRITICAL: API Key is missing or invalid. Check project environment variables.');
-    }
+    console.log('--- AUTHENTICATION ---');
+    console.log('API_KEY (RAW):', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+    console.log('API_KEY EXISTS:', !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+    console.log('API_KEY VALID FORMAT:', !!(process.env.NEXT_PUBLIC_FIREBASE_API_KEY && process.env.NEXT_PUBLIC_FIREBASE_API_KEY.startsWith('AIza')));
+
+    console.log('--- INFRASTRUCTURE ---');
+    console.log('STORAGE_BUCKET:', process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
+    console.log('MESSAGING_SENDER_ID:', process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID);
+    
+    console.log('--- SUPABASE (CROSS-CLOUD) ---');
+    console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
     console.groupEnd();
   }
+  
+  const hasKey = !!(firebaseConfig.apiKey && firebaseConfig.apiKey !== 'undefined');
+  const hasProjectId = !!(firebaseConfig.projectId && firebaseConfig.projectId !== 'undefined');
   
   return hasKey && hasProjectId;
 }
