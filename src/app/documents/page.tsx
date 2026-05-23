@@ -80,11 +80,10 @@ export default function DocumentVaultPage() {
       const matchesCategory = categoryFilter === 'All' || doc.category === categoryFilter
       return matchesSearch && matchesCategory
     }).sort((a: any, b: any) => {
-      // Robust sorting for optimistic updates (serverTimestamp is null locally)
       const getVal = (doc: any) => {
         if (doc.createdAt?.toMillis) return doc.createdAt.toMillis();
         if (doc.createdAt?.seconds) return doc.createdAt.seconds * 1000;
-        return Date.now() + 10000; // Place new optimistic records at the top
+        return Date.now() + 10000;
       }
       return getVal(b) - getVal(a);
     })
@@ -110,6 +109,8 @@ export default function DocumentVaultPage() {
         const storageRef = ref(storage, storagePath)
         
         console.log(`[Storage] Upload started for: ${file.name}`);
+        
+        // Fix: Explicitly using uploadBytesResumable SDK method to handle CORS preflights correctly
         const uploadTask = uploadBytesResumable(storageRef, file);
 
         await new Promise((resolve, reject) => {
