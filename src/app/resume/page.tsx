@@ -16,8 +16,9 @@ import {
   Lock,
   Files,
   FileCheck,
-  CloudOff,
-  AlertCircle
+  CheckCircle2,
+  AlertCircle,
+  Eye
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -29,7 +30,8 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Progress } from '@/components/ui/progress'
+import { uploadWithProgress, supabase } from '@/lib/supabase'
 
 export default function ResumePage() {
   const db = useFirestore()
@@ -40,6 +42,7 @@ export default function ResumePage() {
   const [activeTab, setActiveTab] = useState('PDF')
   
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [selectedDocType, setSelectedDocType] = useState<string>("Resume")
@@ -58,9 +61,8 @@ export default function ResumePage() {
     if (!rawResumes) return []
     return [...rawResumes].sort((a: any, b: any) => {
       const getVal = (doc: any) => {
-        if (!doc.createdAt) return Date.now();
-        if (typeof doc.createdAt.toMillis === 'function') return doc.createdAt.toMillis();
-        if (doc.createdAt.seconds) return doc.createdAt.seconds * 1000;
+        if (doc.createdAt?.seconds) return doc.createdAt.seconds * 1000;
+        if (doc.created_at) return new Date(doc.created_at).getTime();
         return Date.now();
       }
       return getVal(b) - getVal(a);
@@ -85,17 +87,32 @@ export default function ResumePage() {
     try {
       if (activeTab === 'PDF') {
         for (const file of pendingFiles) {
+          const timestamp = Date.now()
+          const storagePath = `resumes/${uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
+          
+          // 1. Supabase Upload
+          const fileUrl = await uploadWithProgress(
+            'documents',
+            storagePath,
+            file,
+            (percent) => setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
+          )
+
           const data: any = {
             name: pendingFiles.length > 1 ? `${baseName} - ${file.name}` : baseName,
+            file_name: file.name,
             type: 'file',
             docType: selectedDocType,
             visibility: selectedVisibility,
             isPublic: selectedVisibility === 'Public',
             ownerId: uid,
-            fileName: file.name,
             fileSize: file.size,
             fileType: file.type,
-            storageStatus: 'Metadata Only'
+            file_url: fileUrl,
+            fileUrl: fileUrl,
+            filePath: storagePath,
+            created_at: new Date().toISOString(),
+            storageProvider: 'Supabase'
           }
           await createRecord(db, collections.RESUMES, data, uid)
         }
@@ -106,14 +123,16 @@ export default function ResumePage() {
           visibility: selectedVisibility,
           isPublic: selectedVisibility === 'Public',
           ownerId: uid,
-          url: formData.get('url') as string
+          url: formData.get('url') as string,
+          created_at: new Date().toISOString()
         }
         await createRecord(db, collections.RESUMES, data, uid)
       }
 
-      toast({ title: 'Record Saved', description: 'Your intelligence vault has been updated.' })
+      toast({ title: 'Record Saved', description: 'Files synchronized to Supabase.' })
       setIsDialogOpen(false)
       setPendingFiles([])
+      setUploadProgress({})
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Save Failed', description: err.message })
     } finally {
@@ -123,18 +142,31 @@ export default function ResumePage() {
 
   const handleDelete = async (resume: any) => {
     if (!db) return
-    await deleteRecord(db, collections.RESUMES, resume.id)
-    toast({ title: 'Removed' })
+    try {
+      await deleteRecord(db, collections.RESUMES, resume.id)
+      if (resume.filePath) {
+        await supabase.storage.from('documents').remove([resume.filePath])
+      }
+      toast({ title: 'Removed' })
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Delete Failed', description: err.message })
+    }
   }
+
+  const totalProgress = useMemo(() => {
+    if (pendingFiles.length === 0) return 0
+    const sum = Object.values(uploadProgress).reduce((a, b) => a + b, 0)
+    return Math.round(sum / pendingFiles.length)
+  }, [uploadProgress, pendingFiles])
 
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">📜 Resume & Links Vault</h1>
-          <p className="text-muted-foreground">Secure metadata-only tracking for your Resumes, CV'S and Links.</p>
+          <p className="text-muted-foreground">High-performance CV intelligence powered by Supabase Cloud.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!isSaving) setIsDialogOpen(o); if(!o) setPendingFiles([]); }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!isSaving) setIsDialogOpen(o); if(!o) { setPendingFiles([]); setUploadProgress({}); } }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white">
               <Plus className="h-4 w-4" /> {activeTab === 'PDF' ? 'Add Resumes & CV\'S' : 'Add Link'}
@@ -143,22 +175,13 @@ export default function ResumePage() {
           <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-2xl p-8">
             <DialogHeader className="mb-6">
               <DialogTitle className="text-2xl font-bold font-headline">
-                {activeTab === 'PDF' ? 'Secure Metadata' : 'Add Link'}
+                {activeTab === 'PDF' ? 'Supabase Sync' : 'Add Link'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Record document information. Note: Binary storage is disabled.
+                Securely host your professional records on Supabase Storage.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleFinalSave} className="space-y-6">
-              {activeTab === 'PDF' && (
-                <Alert variant="default" className="bg-orange-500/10 border-orange-500/20 text-orange-400">
-                  <CloudOff className="h-4 w-4" />
-                  <AlertDescription className="text-[10px] font-bold uppercase tracking-tight ml-2">
-                    File storage requires Firebase Storage to be enabled.
-                  </AlertDescription>
-                </Alert>
-              )}
-
               <div className="space-y-2">
                 <Label>Record Name / Folder Label</Label>
                 <Input name="name" required disabled={isSaving} className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="e.g. Senior Software Engineer CV" />
@@ -199,13 +222,13 @@ export default function ResumePage() {
                   <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,.doc,.docx" multiple onChange={handleFileSelection} disabled={isSaving} />
                   {pendingFiles.length > 0 ? (
                     <div className="text-primary text-center">
-                      <Files className="mx-auto mb-2 h-10 w-10" />
+                      <CheckCircle2 className="mx-auto mb-2 h-10 w-10" />
                       <span className="text-sm font-bold">{pendingFiles.length} Records Identified</span>
                     </div>
                   ) : (
                     <div className="text-center">
                       <Upload className="text-gray-500 mx-auto mb-2 h-10 w-10" />
-                      <span className="text-xs text-gray-500">Select Files for Metadata</span>
+                      <span className="text-xs text-gray-500">Select Files for Upload</span>
                     </div>
                   )}
                 </div>
@@ -215,11 +238,21 @@ export default function ResumePage() {
                   <Input name="url" required disabled={isSaving} className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="https://linkedin.com/in/username" />
                 </div>
               )}
+
+              {isSaving && activeTab === 'PDF' && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
+                    <span>Syncing to Supabase...</span>
+                    <span>{totalProgress}%</span>
+                  </div>
+                  <Progress value={totalProgress} className="h-1 bg-gray-800" />
+                </div>
+              )}
               
               <DialogFooter>
                 <Button type="submit" disabled={isSaving || (activeTab === 'PDF' && pendingFiles.length === 0)} className="w-full bg-primary h-12 rounded-xl font-bold">
                   {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
-                  {isSaving ? 'Saving...' : 'Secure in Vault'}
+                  {isSaving ? 'Synchronizing...' : 'Secure in Vault'}
                 </Button>
               </DialogFooter>
             </form>
@@ -300,22 +333,32 @@ function ResumeCard({ resume, onDelete }: { resume: any, onDelete: any }) {
           <div className="space-y-2">
             <h3 className="text-2xl font-bold truncate leading-tight">{resume.name}</h3>
             <p className="text-[10px] uppercase font-bold text-gray-500 tracking-[0.2em]">
-              {resume.type === 'file' ? 'METADATA RECORD' : 'EXTERNAL LINK'}
+              {resume.storageProvider || (resume.type === 'file' ? 'CLOUD RECORD' : 'EXTERNAL LINK')}
             </p>
           </div>
           
-          {resume.type === 'file' ? (
-            <div className="p-3 rounded-xl bg-orange-500/5 border border-orange-500/10 flex items-center gap-2 text-orange-400">
-              <AlertCircle className="h-3 w-3" />
-              <span className="text-[9px] font-bold uppercase tracking-tight leading-tight">File storage requires Firebase Storage.</span>
-            </div>
-          ) : (
-            <Button className="w-full bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
-              <a href={resume.url} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4" /> Visit Link
-              </a>
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {resume.type === 'file' ? (
+              <>
+                <Button variant="outline" className="flex-1 bg-white/5 border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
+                  <a href={resume.file_url || resume.fileUrl} target="_blank" rel="noopener noreferrer">
+                    <Eye className="h-4 w-4" /> View
+                  </a>
+                </Button>
+                <Button className="flex-1 bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
+                  <a href={resume.file_url || resume.fileUrl} download={resume.file_name || 'resume.pdf'}>
+                    <Files className="h-4 w-4" /> Download
+                  </a>
+                </Button>
+              </>
+            ) : (
+              <Button className="w-full bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
+                <a href={resume.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" /> Visit Link
+                </a>
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

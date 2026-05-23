@@ -13,10 +13,12 @@ import {
   Filter, 
   Upload, 
   Lock,
-  AlertCircle,
   FolderLock,
   Database,
-  CloudOff
+  Globe,
+  Eye,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -27,7 +29,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Progress } from '@/components/ui/progress'
+import { uploadWithProgress, supabase } from '@/lib/supabase'
 
 const DOCUMENT_CATEGORIES = [
   "Aadhaar Card", 
@@ -53,6 +56,7 @@ export default function DocumentVaultPage() {
   const [categoryFilter, setCategoryFilter] = useState('All')
   
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [selectedCategory, setSelectedCategory] = useState<string>(DOCUMENT_CATEGORIES[0])
@@ -72,15 +76,14 @@ export default function DocumentVaultPage() {
     if (!rawDocs) return []
     return rawDocs
       .filter((doc: any) => {
-        const matchesSearch = (doc.title || '').toLowerCase().includes(searchTerm.toLowerCase())
+        const matchesSearch = (doc.title || doc.file_name || '').toLowerCase().includes(searchTerm.toLowerCase())
         const matchesCategory = categoryFilter === 'All' || doc.category === categoryFilter
         return matchesSearch && matchesCategory
       })
       .sort((a: any, b: any) => {
         const getVal = (doc: any) => {
-          if (!doc.createdAt) return Date.now();
-          if (typeof doc.createdAt.toMillis === 'function') return doc.createdAt.toMillis();
-          if (doc.createdAt.seconds) return doc.createdAt.seconds * 1000;
+          if (doc.createdAt?.seconds) return doc.createdAt.seconds * 1000;
+          if (doc.created_at) return new Date(doc.created_at).getTime();
           return Date.now();
         };
         return getVal(b) - getVal(a);
@@ -98,7 +101,7 @@ export default function DocumentVaultPage() {
     if (!user || !db || isSaving) return
 
     if (pendingFiles.length === 0) {
-      toast({ variant: 'destructive', title: 'Selection Required', description: 'Please select files to record metadata.' })
+      toast({ variant: 'destructive', title: 'Selection Required', description: 'Please select files to upload.' })
       return
     }
 
@@ -109,28 +112,51 @@ export default function DocumentVaultPage() {
     setIsSaving(true)
 
     try {
+      console.log('🚀 Starting Supabase Batch Upload for:', pendingFiles.length, 'files')
+      
       for (const file of pendingFiles) {
+        const timestamp = Date.now()
+        const storagePath = `${uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
+        
+        // 1. Upload to Supabase Storage
+        const fileUrl = await uploadWithProgress(
+          'documents',
+          storagePath,
+          file,
+          (percent) => {
+            setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
+          }
+        )
+
+        console.log('✅ Supabase Upload Complete:', file.name, 'URL:', fileUrl)
+
+        // 2. Save Metadata to Firestore
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
+          file_name: file.name,
           category: selectedCategory,
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
           status: selectedStatus,
           visibility: selectedVisibility,
           isPublic: selectedVisibility === 'Public',
+          file_url: fileUrl,
+          fileUrl: fileUrl, // Keep original for UI
+          fileSize: file.size,
+          fileType: file.type,
+          filePath: storagePath,
           ownerId: uid,
-          uploadedAt: new Date().toISOString(),
-          storageStatus: 'Metadata Only'
+          created_at: new Date().toISOString(),
+          storageProvider: 'Supabase'
         }
 
         await createRecord(db, collections.DOCUMENTS, recordData, uid);
       }
 
-      toast({ title: 'Record Saved', description: 'Metadata has been secured in your hub.' })
+      toast({ title: 'Record Secured', description: 'Your files have been synchronized to Supabase.' })
       setIsDialogOpen(false)
       setPendingFiles([])
+      setUploadProgress({})
     } catch (err: any) {
+      console.error('❌ Upload Error:', err)
       toast({ variant: 'destructive', title: 'Vault Error', description: err.message });
     } finally {
       setIsSaving(false)
@@ -139,9 +165,22 @@ export default function DocumentVaultPage() {
 
   const handleDelete = async (doc: any) => {
     if (!db) return
-    await deleteRecord(db, collections.DOCUMENTS, doc.id)
-    toast({ title: 'Record Removed' })
+    try {
+      await deleteRecord(db, collections.DOCUMENTS, doc.id)
+      if (doc.filePath) {
+        await supabase.storage.from('documents').remove([doc.filePath])
+      }
+      toast({ title: 'Record Removed' })
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Delete Failed', description: err.message })
+    }
   }
+
+  const totalProgress = useMemo(() => {
+    if (pendingFiles.length === 0) return 0
+    const sum = Object.values(uploadProgress).reduce((a, b) => a + b, 0)
+    return Math.round(sum / pendingFiles.length)
+  }, [uploadProgress, pendingFiles])
 
   if (!mounted) return null
 
@@ -152,9 +191,9 @@ export default function DocumentVaultPage() {
           <h1 className="font-headline text-4xl font-bold tracking-tight flex items-center gap-3">
             📂 Document Vault <Database className="h-6 w-6 text-primary/40" />
           </h1>
-          <p className="text-muted-foreground">Secure metadata-only tracking for your professional records.</p>
+          <p className="text-muted-foreground">High-performance secure storage powered by Supabase Cloud.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { if (!isSaving) setIsDialogOpen(o); if (!o) setPendingFiles([]); }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { if (!isSaving) setIsDialogOpen(o); if (!o) { setPendingFiles([]); setUploadProgress({}); } }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl">
               <Plus className="h-5 w-5" /> Add New Record
@@ -162,19 +201,12 @@ export default function DocumentVaultPage() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[480px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden">
             <DialogHeader className="p-8 pb-4">
-              <DialogTitle className="text-3xl font-bold font-headline">Secure Metadata</DialogTitle>
+              <DialogTitle className="text-3xl font-bold font-headline">Secure Document</DialogTitle>
               <DialogDescription className="text-gray-400 text-sm mt-2">
-                Save record information to your hub. Note: Binary file storage is currently disabled.
+                Files are encrypted and stored in your private Supabase bucket.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleFinalSave} className="p-8 pt-0 space-y-6">
-              <Alert variant="default" className="bg-orange-500/10 border-orange-500/20 text-orange-400">
-                <CloudOff className="h-4 w-4" />
-                <AlertDescription className="text-[10px] font-bold uppercase tracking-tight ml-2">
-                  File storage requires Firebase Storage to be enabled.
-                </AlertDescription>
-              </Alert>
-
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-white">Document Name</Label>
                 <Input 
@@ -219,7 +251,7 @@ export default function DocumentVaultPage() {
                 <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
                   <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl focus:ring-0">
                     <div className="flex items-center gap-2">
-                      <Lock className="h-4 w-4 text-orange-400" />
+                      <Lock className="h-4 w-4 text-emerald-400" />
                       <SelectValue />
                     </div>
                   </SelectTrigger>
@@ -244,16 +276,26 @@ export default function DocumentVaultPage() {
                 />
                 {pendingFiles.length > 0 ? (
                   <div className="text-[#10b981] text-center">
-                    <FileText className="mx-auto mb-2 h-12 w-12" />
-                    <span className="text-sm font-bold">{pendingFiles.length} Records Identified</span>
+                    <CheckCircle2 className="mx-auto mb-2 h-12 w-12" />
+                    <span className="text-sm font-bold">{pendingFiles.length} Records Selected</span>
                   </div>
                 ) : (
                   <div className="text-center">
                     <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
-                    <p className="text-sm text-gray-500 font-medium">Select Files for Metadata</p>
+                    <p className="text-sm text-gray-500 font-medium">Select Files for Upload</p>
                   </div>
                 )}
               </div>
+
+              {isSaving && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                    <span>Synchronizing...</span>
+                    <span>{totalProgress}%</span>
+                  </div>
+                  <Progress value={totalProgress} className="h-1 bg-gray-800" />
+                </div>
+              )}
 
               <Button 
                 type="submit" 
@@ -261,7 +303,7 @@ export default function DocumentVaultPage() {
                 className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
-                {isSaving ? 'Saving...' : 'Save Record'}
+                {isSaving ? 'Uploading...' : 'Save Record'}
               </Button>
             </form>
           </DialogContent>
@@ -308,13 +350,20 @@ export default function DocumentVaultPage() {
                     <FileText className="h-8 w-8" />
                   </div>
                   <div className="flex items-center gap-1">
+                    {doc.fileUrl || doc.file_url ? (
+                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" asChild>
+                        <a href={doc.file_url || doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                          <Eye className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    ) : null}
                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDelete(doc)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <h3 className="font-headline font-bold text-xl truncate">{doc.title}</h3>
+                  <h3 className="font-headline font-bold text-xl truncate">{doc.title || doc.file_name}</h3>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="bg-[#10b981]/5 text-[#10b981] border-[#10b981]/20 text-[9px] uppercase font-bold tracking-widest px-2 py-0.5">
                       {doc.category}
@@ -325,12 +374,12 @@ export default function DocumentVaultPage() {
 
                 <div className="mt-8 flex flex-col gap-3 border-t border-border/50 pt-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">File Info</span>
-                    <span className="text-xs font-bold">{doc.fileName}</span>
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">Secured At</span>
+                    <span className="text-xs font-bold">{doc.createdAt?.seconds ? new Date(doc.createdAt.seconds * 1000).toLocaleDateString() : 'Just Now'}</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-orange-500/5 border border-orange-500/10 flex items-center gap-2 text-orange-400">
-                    <AlertCircle className="h-3 w-3" />
-                    <span className="text-[9px] font-bold uppercase tracking-tight">File storage requires Firebase Storage to be enabled.</span>
+                  <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10 flex items-center gap-2 text-emerald-400">
+                    <Globe className="h-3 w-3" />
+                    <span className="text-[9px] font-bold uppercase tracking-tight">Hosted on Supabase Cloud</span>
                   </div>
                 </div>
               </CardContent>
@@ -342,7 +391,7 @@ export default function DocumentVaultPage() {
           <FolderLock className="h-12 w-12 opacity-10" />
           <div className="text-center">
             <p className="font-bold">Vault Empty</p>
-            <p className="text-xs italic">Secure metadata will appear here.</p>
+            <p className="text-xs italic">Encrypted Supabase storage ready.</p>
           </div>
         </div>
       )}
