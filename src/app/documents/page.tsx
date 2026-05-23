@@ -100,56 +100,27 @@ export default function DocumentVaultPage() {
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
-    console.log("--- DOCUMENT SAVE DIAGNOSTICS ---");
-    console.log("USER OBJECT:", user);
-    console.log("DB OBJECT:", db);
-    console.log("IS SAVING:", isSaving);
-    console.log("AUTH LOADING:", authLoading);
-    console.log("SUPABASE CLIENT:", supabase ? "READY" : "NULL");
-    console.log("PENDING FILES:", pendingFiles.length);
-
     if (authLoading) {
-      toast({ title: 'Auth Pending', description: 'Still checking your session. Please try again in a moment.' });
+      toast({ title: 'Auth Pending', description: 'Still checking your session.' });
       return;
     }
 
     if (!user) {
-      console.error("[Vault] Aborted: User is not logged in");
-      toast({ 
-        variant: 'destructive', 
-        title: 'Authentication Required', 
-        description: 'Please sign in before uploading documents.' 
-      });
-      return;
-    }
-
-    if (!db) {
-      console.error("[Vault] Aborted: Database instance is null");
-      toast({ 
-        variant: 'destructive', 
-        title: 'Database Error', 
-        description: 'Database connection not ready.' 
-      });
-      return;
-    }
-
-    if (isSaving) {
-      console.warn("[Vault] Aborted: Save operation already in progress");
+      toast({ variant: 'destructive', title: 'Auth Required', description: 'Please sign in first.' });
       return;
     }
 
     if (!supabase) {
-      console.error("[Vault] Aborted: Supabase client is null");
       toast({ 
         variant: 'destructive', 
         title: 'Integration Inactive', 
-        description: 'Supabase URL or Anon Key is missing. Check your settings.' 
+        description: 'Check your Supabase URL and Key in Settings. This is often a CORS or configuration issue.' 
       });
       return;
     }
 
     if (pendingFiles.length === 0) {
-      toast({ variant: 'destructive', title: 'Files Required', description: 'Please select at least one document to upload.' });
+      toast({ variant: 'destructive', title: 'File Required', description: 'Please select at least one document.' });
       return;
     }
 
@@ -164,22 +135,14 @@ export default function DocumentVaultPage() {
         const timestamp = Date.now()
         const storagePath = `${uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         
-        console.log(`[Vault] Attempting upload: ${file.name}`);
-        let fileUrl;
-        
-        try {
-          fileUrl = await uploadWithProgress(
-            'documents',
-            storagePath,
-            file,
-            (percent) => {
-              setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
-            }
-          )
-        } catch (uploadErr: any) {
-          console.error("[Vault] Upload failed:", uploadErr);
-          throw new Error(`Upload failed for ${file.name}: ${uploadErr.message}`);
-        }
+        const fileUrl = await uploadWithProgress(
+          'documents',
+          storagePath,
+          file,
+          (percent) => {
+            setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
+          }
+        )
 
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
@@ -198,7 +161,6 @@ export default function DocumentVaultPage() {
           storageProvider: 'Supabase'
         }
 
-        console.log('[Vault] Writing to Firestore...');
         await createRecord(db, collections.DOCUMENTS, recordData, uid);
       }
 
@@ -207,7 +169,7 @@ export default function DocumentVaultPage() {
       setPendingFiles([])
       setUploadProgress({})
     } catch (err: any) {
-      console.error("[Vault] Final Save failure:", err);
+      console.error("[Vault] Save failure:", err);
       toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
     } finally {
       setIsSaving(false)
@@ -262,9 +224,9 @@ export default function DocumentVaultPage() {
               <div className="mx-8 mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3 text-destructive">
                 <AlertCircle className="h-5 w-5 shrink-0" />
                 <div className="space-y-1">
-                  <p className="text-xs font-bold">Integration Inactive</p>
+                  <p className="text-xs font-bold">Integration Status</p>
                   <p className="text-[10px] opacity-80">
-                    Missing configuration. Visit settings to configure Supabase keys.
+                    Supabase connection issue detected. Verify CORS and Bucket settings.
                   </p>
                 </div>
               </div>

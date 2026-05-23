@@ -60,10 +60,15 @@ export async function uploadWithProgress(
     xhr.onreadystatechange = () => {
       if (xhr.readyState === 4) {
         console.log(`[Supabase] XHR Complete - Status: ${xhr.status}`);
+        
         if (xhr.status === 200 || xhr.status === 201) {
           const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
           console.log(`[Supabase] Success! URL: ${publicUrl}`);
           resolve(publicUrl);
+        } else if (xhr.status === 0) {
+          const corsError = 'Network Error (Status 0). This usually means a CORS policy violation. Please ensure your Supabase Storage settings allow uploads from this domain and that the "documents" bucket exists.';
+          console.error(`[Supabase] CORS/Network Error: ${corsError}`);
+          reject(new Error(corsError));
         } else {
           let errorMessage = `Upload failed with status ${xhr.status}`;
           try {

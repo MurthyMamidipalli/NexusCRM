@@ -51,18 +51,12 @@ export default function EducationPage() {
   const handleSaveEdu = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
-    console.log("--- EDUCATION SAVE DIAGNOSTICS ---");
-    console.log("USER OBJECT:", user);
-    console.log("DB OBJECT:", db);
-    console.log("AUTH LOADING:", authLoading);
-
     if (authLoading) {
       toast({ title: 'Auth Pending', description: 'Still checking your session.' });
       return;
     }
 
     if (!user || !db) {
-      console.warn('[Education] Aborted: User or DB not ready');
       toast({ 
         variant: 'destructive', 
         title: 'Save Aborted', 
@@ -138,7 +132,7 @@ export default function EducationPage() {
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
-            <DialogHeader className="p-8 pb-4 relative">
+            <DialogHeader className="p-8 pb-4 relative border-b border-white/5">
               <DialogTitle className="text-3xl font-bold font-headline">
                 {editingEdu ? 'Edit Education' : 'Add Education'}
               </DialogTitle>
@@ -148,7 +142,7 @@ export default function EducationPage() {
             </DialogHeader>
             
             <form onSubmit={handleSaveEdu} className="flex flex-col flex-1 overflow-hidden">
-              <div className="flex-1 overflow-y-auto px-8 pb-8 space-y-6">
+              <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="institution" className="text-sm font-semibold text-white">Institution</Label>
                   <Input 
@@ -258,11 +252,11 @@ export default function EducationPage() {
                 </div>
               </div>
 
-              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
+              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
                 <Button 
                   type="submit" 
                   disabled={loading} 
-                  className="bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-8 rounded-xl border-none w-full"
+                  className="bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-8 rounded-xl border-none w-full shadow-lg shadow-emerald-500/20"
                 >
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Record
