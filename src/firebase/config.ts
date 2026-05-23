@@ -13,18 +13,30 @@ export const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
+/**
+ * Validates the configuration to prevent initialization crashes.
+ * Returns true if the configuration appears valid.
+ */
+export function isFirebaseConfigValid() {
+  return !!(
+    firebaseConfig.apiKey &&
+    firebaseConfig.apiKey !== 'your-api-key' &&
+    firebaseConfig.projectId
+  );
+}
+
 // Audit and validate configuration on startup
 if (typeof window !== 'undefined') {
   console.group('📡 Firebase Configuration Audit');
-  console.log('Project ID:', firebaseConfig.projectId);
-  console.log('Storage Bucket:', firebaseConfig.storageBucket || '❌ MISSING');
+  console.log('Project ID:', firebaseConfig.projectId || '❌ MISSING');
+  console.log('API Key Detected:', !!firebaseConfig.apiKey);
   
   if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('your-api-key')) {
-    console.error('Firebase Error: Invalid or missing API Key in .env file.');
+    console.error('Firebase Error: Invalid or missing API Key. Check your .env file and ensure NEXT_PUBLIC_FIREBASE_API_KEY is set.');
   }
   
   if (!firebaseConfig.storageBucket) {
-    console.error('Firebase Error: Storage Bucket is not configured. Uploads will fail with CORS or 404 errors.');
+    console.warn('Firebase Warning: Storage Bucket is not configured. Some legacy Firebase features may fail.');
   }
   console.groupEnd();
 }

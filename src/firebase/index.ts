@@ -10,7 +10,7 @@ import {
   persistentMultipleTabManager 
 } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { firebaseConfig } from './config';
+import { firebaseConfig, isFirebaseConfigValid } from './config';
 
 let app: FirebaseApp;
 let auth: Auth;
@@ -22,6 +22,10 @@ let storage: FirebaseStorage;
  * Ensures offline persistence is only configured on the client side once.
  */
 export function initializeFirebase() {
+  if (!isFirebaseConfigValid()) {
+    throw new Error('Firebase initialization failed: Missing configuration. Please ensure all NEXT_PUBLIC_FIREBASE_* environment variables are set in your .env file.');
+  }
+
   if (getApps().length === 0) {
     app = initializeApp(firebaseConfig);
   } else {

@@ -11,8 +11,9 @@ import { useUser, useFirestore, useDoc } from '@/firebase'
 import { doc } from 'firebase/firestore'
 import { collections } from '@/lib/firestore-service'
 import { usePersistentDocument } from '@/hooks/use-persistence'
-import { Settings, User, Bell, Shield, Eye, Loader2, Save } from 'lucide-react'
+import { Settings, User, Bell, Shield, Eye, Loader2, Save, Cloud, CheckCircle2, AlertCircle } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
+import { supabase } from '@/lib/supabase'
 
 const EMPTY_SETTINGS = {
   notifications: true,
@@ -53,6 +54,15 @@ export default function SettingsPage() {
       title: "Settings Saved",
       description: "Your preferences have been synchronized."
     })
+  }
+
+  // Runtime Environment Verification
+  const integrations = {
+    supabase: {
+      url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      initialized: !!supabase
+    }
   }
 
   if (!mounted || userLoading || profileLoading) {
@@ -149,6 +159,78 @@ export default function SettingsPage() {
                 Save Preferences
               </Button>
             </CardFooter>
+          </Card>
+
+          {/* Integration Diagnostics */}
+          <Card className="border-none bg-card/50 backdrop-blur-md shadow-xl overflow-hidden">
+            <CardHeader className="bg-muted/30">
+              <CardTitle className="font-headline text-xl flex items-center gap-2 text-primary">
+                <Cloud className="h-5 w-5" /> Cloud Integrations
+              </CardTitle>
+              <CardDescription>Verify your environment variable configuration at runtime.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <h4 className="text-sm font-bold">Supabase Storage</h4>
+                    <p className="text-xs text-muted-foreground">Required for document and resume uploads.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {integrations.supabase.initialized ? (
+                      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-[10px] font-bold uppercase tracking-widest border border-green-500/20">
+                        <CheckCircle2 className="h-3 w-3" /> Active
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold uppercase tracking-widest border border-destructive/20 animate-pulse">
+                        <AlertCircle className="h-3 w-3" /> Inactive
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl bg-muted/20 border border-border/50 space-y-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">NEXT_PUBLIC_SUPABASE_URL</Label>
+                    <div className="flex items-center gap-2">
+                      {integrations.supabase.url ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-destructive" />
+                      )}
+                      <span className="text-xs font-mono truncate max-w-[200px]">
+                        {integrations.supabase.url ? process.env.NEXT_PUBLIC_SUPABASE_URL : 'Missing in environment'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-xl bg-muted/20 border border-border/50 space-y-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">NEXT_PUBLIC_SUPABASE_ANON_KEY</Label>
+                    <div className="flex items-center gap-2">
+                      {integrations.supabase.key ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-destructive" />
+                      )}
+                      <span className="text-xs font-mono">
+                        {integrations.supabase.key ? '••••••••••••••••' : 'Missing in environment'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {!integrations.supabase.initialized && (
+                <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 text-xs leading-relaxed">
+                  <p className="font-bold text-primary mb-1">Configuration Guide:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                    <li>Open the <strong>.env</strong> file in Firebase Studio.</li>
+                    <li>Add your Supabase URL and Anon Key.</li>
+                    <li>Restart the development server if changes aren't picked up.</li>
+                    <li>For production, add these variables to your Vercel or App Hosting dashboard.</li>
+                  </ol>
+                </div>
+              )}
+            </CardContent>
           </Card>
         </div>
 
