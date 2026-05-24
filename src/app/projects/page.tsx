@@ -20,9 +20,8 @@ import {
   X,
   Calendar
 } from 'lucide-react'
-import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
+import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -31,14 +30,12 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
+import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
-const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
-
 export default function ProjectsPage() {
   const db = useFirestore()
-  const storage = useStorage()
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingProj, setEditingProj] = useState<any>(null)
@@ -78,17 +75,18 @@ export default function ProjectsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'pdf') => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > MAX_FILE_SIZE) {
-      toast({ variant: 'destructive', title: 'File Too Large', description: 'Maximum size is 500MB.' })
-      return
+    try {
+      validateFile(file);
+      if (type === 'image') setSelectedImage(file)
+      else setSelectedDoc(file)
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'File Error', description: err.message })
     }
-    if (type === 'image') setSelectedImage(file)
-    else setSelectedDoc(file)
   }
 
   const handleSaveProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db || !storage) return
+    if (!user || !db) return
     setLoading(true)
     setUploadProgress(0)
 
@@ -101,26 +99,26 @@ export default function ProjectsPage() {
       let documentName = editingProj?.documentName || ''
 
       if (selectedImage) {
-        const path = `projects/${user.uid}/images/${Date.now()}_${selectedImage.name}`
-        const storageRef = ref(storage, path)
-        const uploadTask = uploadBytesResumable(storageRef, selectedImage)
-        await new Promise((resolve, reject) => {
-          uploadTask.on('state_changed', (snap) => setUploadProgress((snap.bytesTransferred / snap.totalBytes) * 50), reject, () => resolve(null))
-        })
-        imageUrl = await getDownloadURL(uploadTask.snapshot.ref)
-        imagePath = path
+        // Migrated to Supabase Storage
+        const uploadResult = await uploadToSupabaseStorage(
+          selectedImage, 
+          `projects/${user.uid}/images`,
+          (p) => setUploadProgress((p * 0.5))
+        );
+        imageUrl = uploadResult.downloadURL;
+        imagePath = uploadResult.storagePath;
       }
 
       if (selectedDoc) {
-        const path = `projects/${user.uid}/docs/${Date.now()}_${selectedDoc.name}`
-        const storageRef = ref(storage, path)
-        const uploadTask = uploadBytesResumable(storageRef, selectedDoc)
-        await new Promise((resolve, reject) => {
-          uploadTask.on('state_changed', (snap) => setUploadProgress(50 + (snap.bytesTransferred / snap.totalBytes) * 50), reject, () => resolve(null))
-        })
-        documentUrl = await getDownloadURL(uploadTask.snapshot.ref)
-        documentPath = path
-        documentName = selectedDoc.name
+        // Migrated to Supabase Storage
+        const uploadResult = await uploadToSupabaseStorage(
+          selectedDoc, 
+          `projects/${user.uid}/docs`,
+          (p) => setUploadProgress(50 + (p * 0.5))
+        );
+        documentUrl = uploadResult.downloadURL;
+        documentPath = uploadResult.storagePath;
+        documentName = selectedDoc.name;
       }
 
       const data = {
@@ -169,10 +167,8 @@ export default function ProjectsPage() {
   }
 
   const handleDelete = async (proj: any) => {
-    if (!db || !storage) return
+    if (!db) return
     deleteRecord(db, collections.PROJECTS, proj.id).catch(console.error)
-    if (proj.imagePath) deleteObject(ref(storage, proj.imagePath)).catch(console.warn)
-    if (proj.documentPath) deleteObject(ref(storage, proj.documentPath)).catch(console.warn)
     toast({ title: 'Removed' })
   }
 
@@ -220,7 +216,7 @@ export default function ProjectsPage() {
               {loading && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                    <span>Syncing...</span>
+                    <span>Syncing with Supabase...</span>
                     <span>{Math.round(uploadProgress)}%</span>
                   </div>
                   <Progress value={uploadProgress} className="h-1 bg-gray-800" />

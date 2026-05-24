@@ -19,7 +19,7 @@ import {
   X,
   AlertCircle
 } from 'lucide-react'
-import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
+import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { useToast } from '@/hooks/use-toast'
@@ -30,7 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
-import { uploadToFirebaseStorage, validateFile } from '@/lib/storage-service'
+import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
@@ -49,7 +49,6 @@ const DOCUMENT_CATEGORIES = [
 
 export default function DocumentVaultPage() {
   const db = useFirestore()
-  const storage = useStorage()
   const { user, loading: authLoading } = useUser()
   const [mounted, setMounted] = useState(false)
   const { toast } = useToast()
@@ -95,7 +94,7 @@ export default function DocumentVaultPage() {
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
-    if (!user || !db || !storage) {
+    if (!user || !db) {
       toast({ variant: 'destructive', title: 'System Error', description: 'Services not initialized.' });
       return;
     }
@@ -114,17 +113,10 @@ export default function DocumentVaultPage() {
 
     try {
       for (const file of pendingFiles) {
-        // Validate each file
-        try {
-          validateFile(file);
-        } catch (vErr: any) {
-          toast({ variant: 'destructive', title: 'Validation Error', description: vErr.message });
-          throw vErr;
-        }
+        validateFile(file);
 
-        // Centralized Resilient Upload
-        const uploadResult = await uploadToFirebaseStorage(
-          storage, 
+        // Upload to Supabase Storage (Migration Complete)
+        const uploadResult = await uploadToSupabaseStorage(
           file, 
           `documents/${user.uid}`,
           (progress) => setUploadProgress(progress)

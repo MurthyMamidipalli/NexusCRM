@@ -21,9 +21,8 @@ import {
   Lock,
   AlertCircle
 } from 'lucide-react'
-import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
+import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
@@ -33,14 +32,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
-const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
-
 export default function CertificationsPage() {
   const db = useFirestore()
-  const storage = useStorage()
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCert, setEditingCert] = useState<any>(null)
@@ -85,16 +82,17 @@ export default function CertificationsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > MAX_FILE_SIZE) {
-      toast({ variant: 'destructive', title: 'File Too Large', description: 'Limit is 500MB.' })
-      return
+    try {
+      validateFile(file);
+      setSelectedFile(file)
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'File Error', description: err.message })
     }
-    setSelectedFile(file)
   }
 
   const handleSaveCert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db || !storage) return
+    if (!user || !db) return
     setLoading(true)
     setUploadProgress(0)
 
@@ -104,24 +102,15 @@ export default function CertificationsPage() {
       let filePath = editingCert?.filePath || ''
 
       if (selectedFile) {
-        const path = `credentials/${user.uid}/${Date.now()}_${selectedFile.name}`
-        const storageRef = ref(storage, path)
-        const uploadTask = uploadBytesResumable(storageRef, selectedFile)
-
-        await new Promise((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-              setUploadProgress(progress)
-            },
-            (error) => reject(error),
-            () => resolve(null)
-          )
-        })
+        // Migrated to Supabase Storage
+        const uploadResult = await uploadToSupabaseStorage(
+          selectedFile, 
+          `credentials/${user.uid}`,
+          (p) => setUploadProgress(p)
+        );
         
-        documentUrl = await getDownloadURL(uploadTask.snapshot.ref)
-        filePath = path
+        documentUrl = uploadResult.downloadURL;
+        filePath = uploadResult.storagePath;
       }
 
       const data = {
@@ -169,12 +158,8 @@ export default function CertificationsPage() {
   }
 
   const handleDelete = async (cert: any) => {
-    if (!db || !storage) return
+    if (!db) return
     deleteRecord(db, collections.CERTIFICATIONS, cert.id).catch(console.error);
-    if (cert.filePath) {
-      const storageRef = ref(storage, cert.filePath)
-      deleteObject(storageRef).catch(console.warn)
-    }
     toast({ title: 'Record Removed' })
   }
 
@@ -183,7 +168,7 @@ export default function CertificationsPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">🏆 Credentials & Grade Sheets</h1>
-          <p className="text-muted-foreground">Secure vault for academic and professional records (Max 500MB).</p>
+          <p className="text-muted-foreground">Secure vault for academic and professional records (Max 20MB).</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!loading) setIsDialogOpen(o); if (!o && !loading) resetForm(); }}>
           <DialogTrigger asChild>
@@ -196,7 +181,7 @@ export default function CertificationsPage() {
               <DialogTitle className="text-2xl font-bold font-headline">
                 {editingCert ? 'Edit Credential' : 'Add New Credential'}
               </DialogTitle>
-              <DialogDescription className="text-gray-400">Support for large files up to 500MB.</DialogDescription>
+              <DialogDescription className="text-gray-400">Migrated to Supabase Secure Storage.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveCert} className="space-y-6 pt-4">
               <div className="grid grid-cols-2 gap-4">
@@ -230,13 +215,13 @@ export default function CertificationsPage() {
               </div>
               <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => !loading && fileInputRef.current?.click()}>
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                {selectedFile ? (<div className="flex flex-col items-center gap-2"><CheckCircle2 className="h-10 w-10 text-primary" /><span className="text-xs font-bold text-primary truncate max-w-[200px]">{selectedFile.name}</span></div>) : editingCert?.documentUrl ? (<div className="flex flex-col items-center gap-2"><ShieldCheck className="h-10 w-10 text-primary/50" /><span className="text-xs font-bold text-gray-400">File stored</span></div>) : (<div className="flex flex-col items-center gap-2 text-center"><Upload className="h-10 w-10 text-gray-500 mb-2" /><span className="text-xs text-gray-500">Upload (Max 500MB)</span></div>)}
+                {selectedFile ? (<div className="flex flex-col items-center gap-2"><CheckCircle2 className="h-10 w-10 text-primary" /><span className="text-xs font-bold text-primary truncate max-w-[200px]">{selectedFile.name}</span></div>) : editingCert?.documentUrl ? (<div className="flex flex-col items-center gap-2"><ShieldCheck className="h-10 w-10 text-primary/50" /><span className="text-xs font-bold text-gray-400">File stored</span></div>) : (<div className="flex flex-col items-center gap-2 text-center"><Upload className="h-10 w-10 text-gray-500 mb-2" /><span className="text-xs text-gray-500">Upload (Max 20MB)</span></div>)}
               </div>
               
               {loading && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                    <span>Uploading...</span>
+                    <span>Uploading to Supabase...</span>
                     <span>{Math.round(uploadProgress)}%</span>
                   </div>
                   <Progress value={uploadProgress} className="h-1 bg-gray-800" />

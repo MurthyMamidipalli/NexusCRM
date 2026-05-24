@@ -1,11 +1,6 @@
 'use client';
 
-import { 
-  ref, 
-  uploadBytesResumable, 
-  getDownloadURL, 
-  FirebaseStorage 
-} from 'firebase/storage';
+import { supabase } from './supabase';
 
 export interface FileMetadata {
   fileName: string;
@@ -17,91 +12,60 @@ export interface FileMetadata {
 }
 
 /**
- * Robust file upload utility for Firebase Storage.
- * Features: Retries, Progress Tracking, Unique Naming, and Metadata Extraction.
+ * Robust file upload utility for Supabase Storage.
+ * Migrated from Firebase Storage as per system requirements.
  */
-export async function uploadToFirebaseStorage(
-  storage: FirebaseStorage,
+export async function uploadToSupabaseStorage(
   file: File,
-  pathPrefix: string,
-  onProgress?: (progress: number) => void,
-  maxRetries = 3
+  pathPrefix: string, // This will be used as part of the path, e.g., 'documents' or 'resumes'
+  onProgress?: (progress: number) => void
 ): Promise<FileMetadata> {
-  const timestamp = Date.now();
-  const randomStr = Math.random().toString(36).substring(2, 8);
-  const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-  const uniqueName = `${timestamp}_${randomStr}_${cleanFileName}`;
-  const storagePath = `${pathPrefix}/${uniqueName}`;
-  const storageRef = ref(storage, storagePath);
-
-  let attempt = 0;
-  
-  const performUpload = async (): Promise<FileMetadata> => {
-    return new Promise((resolve, reject) => {
-      console.log(`[Storage] Uploading ${file.name} to ${storagePath} (Attempt ${attempt + 1})`);
-      
-      const uploadTask = uploadBytesResumable(storageRef, file);
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          if (onProgress) onProgress(progress);
-          console.log(`[Storage] ${file.name} progress: ${Math.round(progress)}%`);
-        },
-        (error) => {
-          console.error(`[Storage] Task error for ${file.name}:`, error.code, error.message);
-          reject(error);
-        },
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            console.log(`[Storage] ${file.name} upload complete!`);
-            resolve({
-              fileName: uniqueName,
-              originalName: file.name,
-              downloadURL,
-              storagePath,
-              fileSize: file.size,
-              fileType: file.type,
-            });
-          } catch (urlErr) {
-            reject(urlErr);
-          }
-        }
-      );
-    });
-  };
-
-  while (attempt < maxRetries) {
-    try {
-      return await performUpload();
-    } catch (err: any) {
-      attempt++;
-      const isCORS = err.message?.toLowerCase().includes('cors') || err.code === 'storage/retry-limit-exceeded';
-      const isPermission = err.code === 'storage/unauthorized';
-
-      if (isCORS) {
-        console.warn('⚠️ [Storage] CORS Block detected. Ensure bucket configuration allows this origin.');
-      }
-      
-      if (isPermission) {
-        console.error('❌ [Storage] Permission Denied. Check Security Rules.');
-        throw new Error('Access Denied: You do not have permission to upload to this folder.');
-      }
-
-      if (attempt >= maxRetries) {
-        console.error(`❌ [Storage] Upload failed after ${maxRetries} attempts.`);
-        throw err;
-      }
-
-      const delay = Math.pow(2, attempt) * 1000;
-      console.log(`[Storage] Retrying in ${delay}ms...`);
-      await new Promise(r => setTimeout(r, delay));
-    }
+  if (!supabase) {
+    throw new Error('Supabase Client not initialized. Verify environment variables.');
   }
 
-  throw new Error('Upload process terminated unexpectedly.');
+  const timestamp = Date.now();
+  const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+  // Format: {pathPrefix}/{timestamp}-{filename}
+  const storagePath = `${pathPrefix}/${timestamp}-${cleanFileName}`;
+  
+  console.log('Uploading to Supabase...');
+  console.log('Bucket:', 'documents');
+  console.log('Path:', storagePath);
+
+  // Supabase doesn't natively support progress in the simple upload call, 
+  // so we simulate the initial trigger for the UI.
+  if (onProgress) onProgress(10);
+
+  const { data, error } = await supabase.storage
+    .from('documents')
+    .upload(storagePath, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+
+  if (error) {
+    console.error('[Supabase] Upload Error:', error);
+    throw error;
+  }
+
+  if (onProgress) onProgress(100);
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('documents')
+    .getPublicUrl(storagePath);
+
+  console.log('Upload Success');
+  console.log('Generated URL:', publicUrl);
+
+  return {
+    fileName: `${timestamp}-${cleanFileName}`,
+    originalName: file.name,
+    downloadURL: publicUrl,
+    storagePath: storagePath,
+    fileSize: file.size,
+    fileType: file.type,
+  };
 }
 
 /**

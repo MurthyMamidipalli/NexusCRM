@@ -20,7 +20,7 @@ import {
   Eye,
   X
 } from 'lucide-react'
-import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
+import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
@@ -31,12 +31,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { uploadToFirebaseStorage, validateFile } from '@/lib/storage-service'
-import { deleteObject, ref } from 'firebase/storage'
+import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
 
 export default function ResumePage() {
   const db = useFirestore()
-  const storage = useStorage()
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -78,7 +76,7 @@ export default function ResumePage() {
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db || !storage || isSaving) return
+    if (!user || !db || isSaving) return
     
     const formData = new FormData(e.currentTarget)
     const baseName = formData.get('name') as string
@@ -98,8 +96,8 @@ export default function ResumePage() {
         for (const file of pendingFiles) {
           validateFile(file);
           
-          const uploadResult = await uploadToFirebaseStorage(
-            storage,
+          // Migrated to Supabase Storage
+          const uploadResult = await uploadToSupabaseStorage(
             file,
             `resumes/${uid}`,
             (p) => setUploadProgress(p)
@@ -117,7 +115,7 @@ export default function ResumePage() {
             fileType: uploadResult.fileType,
             fileUrl: uploadResult.downloadURL,
             filePath: uploadResult.storagePath,
-            storageProvider: 'Firebase'
+            storageProvider: 'Supabase'
           }
           await createRecord(db, collections.RESUMES, data, uid)
         }
@@ -146,12 +144,9 @@ export default function ResumePage() {
   }
 
   const handleDelete = async (resume: any) => {
-    if (!db || !storage) return
+    if (!db) return
     try {
       await deleteRecord(db, collections.RESUMES, resume.id)
-      if (resume.filePath) {
-        await deleteObject(ref(storage, resume.filePath)).catch(console.warn)
-      }
       toast({ title: 'Removed' })
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Delete Failed', description: err.message })
@@ -163,7 +158,7 @@ export default function ResumePage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">📜 Resume & Links Vault</h1>
-          <p className="text-muted-foreground">High-performance CV intelligence powered by Cloud Storage.</p>
+          <p className="text-muted-foreground">High-performance CV intelligence powered by Supabase Storage.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!isSaving) setIsDialogOpen(o); if(!o) setPendingFiles([]); }}>
           <DialogTrigger asChild>
@@ -177,7 +172,7 @@ export default function ResumePage() {
                 {activeTab === 'PDF' ? 'Secure Upload' : 'Add Link'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Securely host your professional records in the cloud vault.
+                Securely host your professional records in the Supabase cloud vault.
               </DialogDescription>
             </DialogHeader>
 
@@ -243,7 +238,7 @@ export default function ResumePage() {
                 {isSaving && activeTab === 'PDF' && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                      <span>Syncing...</span>
+                      <span>Syncing with Supabase...</span>
                       <span>{Math.round(uploadProgress)}%</span>
                     </div>
                     <Progress value={uploadProgress} className="h-1 bg-gray-800" />
