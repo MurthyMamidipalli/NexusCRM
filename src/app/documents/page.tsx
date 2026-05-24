@@ -36,6 +36,8 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/e
 import { getSignedUrlAction } from '@/app/actions/storage-actions'
 
 const DOCUMENT_CATEGORIES = [
+  "My self",
+  "Family",
   "Aadhaar Card", 
   "PAN Card", 
   "Driving Licence", 
@@ -117,6 +119,7 @@ export default function DocumentVaultPage() {
       for (const file of pendingFiles) {
         validateFile(file);
 
+        // Path Prefix: Just the userId. The service handles unique timestamp and filename.
         const uploadResult = await uploadToSupabaseStorage(
           file, 
           user.uid, 
@@ -213,7 +216,7 @@ export default function DocumentVaultPage() {
         </Button>
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o) setPendingFiles([]); }}>
+      <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!isSaving) setIsDialogOpen(o); if(!o) setPendingFiles([]); }}>
         <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
             <DialogTitle className="text-3xl font-bold font-headline text-white">Secure Document</DialogTitle>

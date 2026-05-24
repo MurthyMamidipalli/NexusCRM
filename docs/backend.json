@@ -106,7 +106,7 @@
       "type": "object",
       "properties": {
         "title": { "type": "string" },
-        "category": { "type": "string", "enum": ["Aadhaar Card", "PAN Card", "Driving Licence", "Passport", "Voter ID", "Property Documents", "Insurance Documents", "Tax Documents", "Medical Records", "Other Documents"] },
+        "category": { "type": "string", "enum": ["My self", "Family", "Aadhaar Card", "PAN Card", "Driving Licence", "Passport", "Voter ID", "Property Documents", "Insurance Documents", "Tax Documents", "Medical Records", "Other Documents"] },
         "description": { "type": "string" },
         "fileUrl": { "type": "string" },
         "filePath": { "type": "string" },
