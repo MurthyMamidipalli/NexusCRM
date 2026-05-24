@@ -86,18 +86,11 @@ export default function DocumentVaultPage() {
   const filteredDocs = useMemo(() => {
     if (!rawDocs) return []
     return rawDocs.filter((doc: any) => {
-      // 1. Filter by Folder/Tab (Group)
-      // Handles migration: if vaultGroup doesn't exist, check if category was previously set to the group name
       const docGroup = doc.vaultGroup || (VAULT_GROUPS.includes(doc.category) ? doc.category : "My self")
       const matchesTab = docGroup === activeTab
-
-      // 2. Search Term
       const title = (doc.title || doc.file_name || '').toLowerCase()
       const matchesSearch = title.includes(searchTerm.toLowerCase())
-
-      // 3. Category Filter
       const matchesCategory = categoryFilter === 'All' || doc.category === categoryFilter
-
       return matchesTab && matchesSearch && matchesCategory
     }).sort((a: any, b: any) => {
       const getVal = (doc: any) => {
@@ -111,41 +104,26 @@ export default function DocumentVaultPage() {
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    
-    if (!user || !db) {
-      toast({ variant: 'destructive', title: 'System Error', description: 'Services not initialized.' });
-      return;
-    }
-
+    if (!user || !db) return
     if (pendingFiles.length === 0) {
       toast({ variant: 'destructive', title: 'File Missing', description: 'Please select a document to upload.' });
       return
     }
 
-    const formData = new FormData(e.currentTarget)
-    const baseTitle = formData.get('title') as string
-    const description = formData.get('description') as string
-    
     setIsSaving(true)
     setUploadProgress(0)
 
     try {
       for (const file of pendingFiles) {
         validateFile(file);
-
-        // Path Prefix: Just the userId. The service handles unique timestamp and filename.
-        const uploadResult = await uploadToSupabaseStorage(
-          file, 
-          user.uid, 
-          (progress) => setUploadProgress(progress)
-        );
+        const uploadResult = await uploadToSupabaseStorage(file, user.uid, (p) => setUploadProgress(p));
 
         const recordData = {
-          title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
+          title: pendingFiles.length > 1 ? file.name : (new FormData(e.currentTarget).get('title') || file.name),
           file_name: uploadResult.originalName,
           vaultGroup: selectedGroup,
           category: selectedCategory,
-          description: description || '',
+          description: new FormData(e.currentTarget).get('description') || '',
           isPublic: selectedVisibility === 'Public',
           fileUrl: uploadResult.downloadURL,
           fileSize: uploadResult.fileSize,
@@ -153,10 +131,8 @@ export default function DocumentVaultPage() {
           ownerId: user.uid,
           status: 'active'
         }
-
         await createRecord(db, collections.DOCUMENTS, recordData, user.uid);
       }
-
       toast({ title: 'Record Secured', description: 'Records synchronized to your cloud vault.' })
       setIsDialogOpen(false)
       setPendingFiles([])
@@ -170,29 +146,16 @@ export default function DocumentVaultPage() {
 
   const handleViewFile = async (doc: any) => {
     if (!doc.filePath) {
-      toast({ variant: 'destructive', title: 'Error', description: 'File path not found in record.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'File path not found.' });
       return;
     }
-
     setViewingId(doc.id);
     try {
       const response = await getSignedUrlAction(doc.filePath);
-      
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (response.signedUrl) {
-        window.open(response.signedUrl, '_blank');
-      } else {
-        throw new Error('The storage server did not return a valid access link.');
-      }
+      if (response.signedUrl) window.open(response.signedUrl, '_blank');
+      else throw new Error(response.error || 'Access link generation failed.');
     } catch (err: any) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Access Denied', 
-        description: err.message || 'Could not generate secure access link.' 
-      });
+      toast({ variant: 'destructive', title: 'Access Denied', description: err.message });
     } finally {
       setViewingId(null);
     }
@@ -200,15 +163,7 @@ export default function DocumentVaultPage() {
 
   const handleDelete = (doc: any) => {
     if (!db) return
-    deleteRecord(db, collections.DOCUMENTS, doc.id)
-      .catch(async (err: any) => {
-        const permissionError = new FirestorePermissionError({
-          path: `${collections.DOCUMENTS}/${doc.id}`,
-          operation: 'delete',
-          originalError: err
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      })
+    deleteRecord(db, collections.DOCUMENTS, doc.id).catch(console.error);
     toast({ title: 'Record Removed' })
   }
 
@@ -234,12 +189,10 @@ export default function DocumentVaultPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
         <TabsList className="bg-card/30 p-1 rounded-2xl border border-border/50 h-14">
           <TabsTrigger value="My self" className="px-10 h-12 rounded-xl font-bold gap-2 text-sm data-[state=active]:bg-primary data-[state=active]:text-white">
-            <User className="h-4 w-4" />
-            My self
+            <User className="h-4 w-4" /> My self
           </TabsTrigger>
           <TabsTrigger value="Family" className="px-10 h-12 rounded-xl font-bold gap-2 text-sm data-[state=active]:bg-primary data-[state=active]:text-white">
-            <Users className="h-4 w-4" />
-            Family
+            <Users className="h-4 w-4" /> Family
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -265,9 +218,7 @@ export default function DocumentVaultPage() {
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Vault Folder</Label>
                   <Select value={selectedGroup} onValueChange={setSelectedGroup} disabled={isSaving}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white">
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
                       {VAULT_GROUPS.map(group => <SelectItem key={group} value={group}>{group}</SelectItem>)}
                     </SelectContent>
@@ -276,9 +227,7 @@ export default function DocumentVaultPage() {
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-white">Category Type</Label>
                   <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isSaving}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white">
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
                       {DOCUMENT_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                     </SelectContent>
@@ -341,9 +290,7 @@ export default function DocumentVaultPage() {
         </div>
         <div className="md:col-span-2 flex justify-end">
            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-[180px] bg-card/50 border-none rounded-xl h-11">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
+              <SelectTrigger className="w-[180px] bg-card/50 border-none rounded-xl h-11"><SelectValue placeholder="Category" /></SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="All">All Types</SelectItem>
                 {DOCUMENT_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
@@ -363,19 +310,11 @@ export default function DocumentVaultPage() {
                   <div className="p-4 rounded-2xl bg-[#10b981]/10 text-[#10b981]"><FileText className="h-8 w-8" /></div>
                   <div className="flex items-center gap-1">
                     {(doc.filePath || doc.fileUrl) && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="rounded-full"
-                        onClick={() => handleViewFile(doc)}
-                        disabled={viewingId === doc.id}
-                      >
+                      <Button variant="ghost" size="icon" className="rounded-full" onClick={() => handleViewFile(doc)} disabled={viewingId === doc.id}>
                         {viewingId === doc.id ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" className="hover:text-destructive rounded-full" onClick={() => handleDelete(doc)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <Button variant="ghost" size="icon" className="hover:text-destructive rounded-full" onClick={() => handleDelete(doc)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
                 <h3 className="font-headline font-bold text-xl truncate mb-2">{doc.title || doc.file_name}</h3>
@@ -383,18 +322,14 @@ export default function DocumentVaultPage() {
                   <Badge variant="outline" className="bg-[#10b981]/5 text-[#10b981] border-[#10b981]/20 text-[9px] uppercase font-bold tracking-widest">{doc.category}</Badge>
                   {doc.isPublic ? <Globe className="h-3 w-3 text-muted-foreground" /> : <Lock className="h-3 w-3 text-muted-foreground" />}
                 </div>
-                {doc.description && (
-                  <p className="text-xs text-muted-foreground line-clamp-2 italic">{doc.description}</p>
-                )}
+                {doc.description && <p className="text-xs text-muted-foreground line-clamp-2 italic">{doc.description}</p>}
               </CardContent>
             </Card>
           ))}
         </div>
       ) : (
         <div className="flex h-64 flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-border/50 bg-card/30 text-muted-foreground italic">
-          <div className="p-4 rounded-full bg-muted/20 mb-4">
-            <Database className="h-10 w-10 opacity-20" />
-          </div>
+          <div className="p-4 rounded-full bg-muted/20 mb-4"><Database className="h-10 w-10 opacity-20" /></div>
           No documents found in {activeTab}
         </div>
       )}

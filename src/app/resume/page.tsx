@@ -15,7 +15,6 @@ import {
   Globe,
   ExternalLink,
   Lock,
-  Files,
   FileCheck,
   CheckCircle2,
   Eye,
@@ -55,7 +54,6 @@ export default function ResumePage() {
 
   useEffect(() => { setMounted(true) }, [])
 
-  // Sync internal state when editing
   useEffect(() => {
     if (editingResume) {
       setSelectedDocType(editingResume.docType || "Resume")
@@ -78,17 +76,11 @@ export default function ResumePage() {
     return [...rawResumes].sort((a: any, b: any) => {
       const getVal = (doc: any) => {
         if (doc.createdAt?.seconds) return doc.createdAt.seconds * 1000;
-        if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
         return Date.now();
       }
       return getVal(b) - getVal(a);
     })
   }, [rawResumes])
-
-  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
-    setPendingFiles(prev => [...prev, ...files])
-  }
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -96,146 +88,71 @@ export default function ResumePage() {
     
     const formData = new FormData(e.currentTarget)
     const baseName = formData.get('name') as string
-    const uid = user.uid
-
     setIsSaving(true)
-    setUploadProgress(0)
 
     try {
       if (activeTab === 'PDF') {
-        // Only require file if we aren't editing, or if we ARE editing and want to replace the file
-        if (!editingResume && pendingFiles.length === 0) {
-          toast({ variant: 'destructive', title: 'File Required', description: 'Please select a PDF file.' })
-          setIsSaving(false)
-          return
-        }
-
+        if (!editingResume && pendingFiles.length === 0) throw new Error('Please select a file.');
         if (pendingFiles.length > 0) {
           for (const file of pendingFiles) {
             validateFile(file);
-            
-            const uploadResult = await uploadToSupabaseStorage(
-              file,
-              `resumes/${uid}`,
-              (p) => setUploadProgress(p)
-            );
-
-            const data: any = {
+            const uploadResult = await uploadToSupabaseStorage(file, `resumes/${user.uid}`, (p) => setUploadProgress(p));
+            const data = {
               name: pendingFiles.length > 1 ? `${baseName} - ${file.name}` : baseName,
               file_name: uploadResult.originalName,
               type: 'file',
               docType: selectedDocType,
               visibility: selectedVisibility,
               isPublic: selectedVisibility === 'Public',
-              ownerId: uid,
-              fileSize: uploadResult.fileSize,
-              fileType: uploadResult.fileType,
-              fileUrl: uploadResult.downloadURL,
+              ownerId: user.uid,
               filePath: uploadResult.storagePath,
               storageProvider: 'Supabase'
             }
-
-            if (editingResume) {
-              await updateRecord(db, collections.RESUMES, editingResume.id, data)
-            } else {
-              await createRecord(db, collections.RESUMES, data, uid)
-            }
+            if (editingResume) await updateRecord(db, collections.RESUMES, editingResume.id, data);
+            else await createRecord(db, collections.RESUMES, data, user.uid);
           }
         } else if (editingResume) {
-          // Just update metadata if no new file provided
-          const data = {
-            name: baseName,
-            docType: selectedDocType,
-            visibility: selectedVisibility,
-            isPublic: selectedVisibility === 'Public',
-          }
-          await updateRecord(db, collections.RESUMES, editingResume.id, data)
+          await updateRecord(db, collections.RESUMES, editingResume.id, { name: baseName, docType: selectedDocType, visibility: selectedVisibility, isPublic: selectedVisibility === 'Public' });
         }
       } else {
-        const data: any = {
-          name: baseName,
-          type: 'link',
-          visibility: selectedVisibility,
-          isPublic: selectedVisibility === 'Public',
-          ownerId: uid,
-          url: formData.get('url') as string,
-        }
-        
-        if (editingResume) {
-          await updateRecord(db, collections.RESUMES, editingResume.id, data)
-        } else {
-          await createRecord(db, collections.RESUMES, data, uid)
-        }
+        const data = { name: baseName, type: 'link', visibility: selectedVisibility, isPublic: selectedVisibility === 'Public', ownerId: user.uid, url: formData.get('url') as string };
+        if (editingResume) await updateRecord(db, collections.RESUMES, editingResume.id, data);
+        else await createRecord(db, collections.RESUMES, data, user.uid);
       }
-
-      toast({ title: editingResume ? 'Record Updated' : 'Record Saved' })
-      setIsDialogOpen(false)
-      resetForm()
+      toast({ title: 'Record Saved' });
+      setIsDialogOpen(false);
+      resetForm();
     } catch (err: any) {
-      console.error('[Vault] Save Error:', err)
-      toast({ variant: 'destructive', title: 'Save Failed', description: err.message })
+      toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
     } finally {
-      setIsSaving(false)
-      setUploadProgress(0)
+      setIsSaving(false);
     }
   }
 
   const handleViewFile = async (resume: any) => {
-    if (resume.type === 'link') {
-      window.open(resume.url, '_blank');
-      return;
-    }
-
-    if (!resume.filePath) {
-      toast({ variant: 'destructive', title: 'Error', description: 'File path not found in record.' });
-      return;
-    }
-
+    if (resume.type === 'link') { window.open(resume.url, '_blank'); return; }
+    if (!resume.filePath) { toast({ variant: 'destructive', title: 'Error', description: 'File path missing.' }); return; }
     setViewingId(resume.id);
     try {
       const response = await getSignedUrlAction(resume.filePath);
-      
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (response.signedUrl) {
-        window.open(response.signedUrl, '_blank');
-      } else {
-        throw new Error('Access link generation returned empty.');
-      }
+      if (response.signedUrl) window.open(response.signedUrl, '_blank');
+      else throw new Error(response.error || 'Failed to generate link.');
     } catch (err: any) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Access Denied', 
-        description: err.message || 'Could not generate secure access link.' 
-      });
+      toast({ variant: 'destructive', title: 'Access Denied', description: err.message });
     } finally {
       setViewingId(null);
     }
   };
 
-  const resetForm = () => {
-    setEditingResume(null)
-    setPendingFiles([])
-    setUploadProgress(0)
-  }
+  const resetForm = () => { setEditingResume(null); setPendingFiles([]); setUploadProgress(0); }
 
   const handleDelete = async (resume: any) => {
     if (!db) return
-    try {
-      await deleteRecord(db, collections.RESUMES, resume.id)
-      toast({ title: 'Removed' })
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Delete Failed', description: err.message })
-    }
+    await deleteRecord(db, collections.RESUMES, resume.id);
+    toast({ title: 'Removed' });
   }
 
-  const handleEdit = (resume: any) => {
-    setEditingResume(resume)
-    setActiveTab(resume.type === 'file' ? 'PDF' : 'Link')
-    setIsDialogOpen(true)
-  }
+  if (!mounted) return null
 
   return (
     <CRMLayout>
@@ -251,116 +168,58 @@ export default function ResumePage() {
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
-            <DialogHeader className="p-8 pb-4 relative">
-              <DialogTitle className="text-2xl font-bold font-headline">
-                {editingResume ? (activeTab === 'PDF' ? 'Edit Resume' : 'Edit Link') : (activeTab === 'PDF' ? 'Secure Upload' : 'Add Link')}
-              </DialogTitle>
-              <DialogDescription className="text-gray-400">
-                {editingResume ? 'Update your professional record details.' : 'Securely host your professional records in the Supabase cloud vault.'}
-              </DialogDescription>
-              <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
-                <X className="h-5 w-5" />
-              </DialogClose>
+            <DialogHeader className="p-8 pb-4 relative shrink-0 text-left">
+              <DialogTitle className="text-3xl font-bold font-headline text-white">{editingResume ? 'Edit Record' : 'Secure Upload'}</DialogTitle>
+              <DialogDescription className="text-gray-400">Host your professional records in the cloud vault.</DialogDescription>
+              <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors"><X className="h-5 w-5" /></DialogClose>
             </DialogHeader>
 
             <form onSubmit={handleFinalSave} className="flex flex-col flex-1 overflow-hidden">
               <div className="flex-1 overflow-y-auto px-8 pb-8 space-y-6">
                 <div className="space-y-2">
-                  <Label>Record Name / Folder Label</Label>
-                  <Input 
-                    name="name" 
-                    required 
-                    disabled={isSaving} 
-                    defaultValue={editingResume?.name || ''}
-                    className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" 
-                    placeholder="e.g. Senior Software Engineer CV" 
-                  />
+                  <Label>Record Name</Label>
+                  <Input name="name" required disabled={isSaving} defaultValue={editingResume?.name || ''} className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="e.g. Senior CV" />
                 </div>
-                
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Document Type</Label>
                     <Select value={selectedDocType} onValueChange={setSelectedDocType} disabled={isSaving}>
-                      <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                        <SelectItem value="Resume">Resume</SelectItem>
-                        <SelectItem value="CV">CV</SelectItem>
-                      </SelectContent>
+                      <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white"><SelectItem value="Resume">Resume</SelectItem><SelectItem value="CV">CV</SelectItem></SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Visibility</Label>
                     <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
-                      <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                        <SelectItem value="Private">🔒 Private</SelectItem>
-                        <SelectItem value="Public">🌍 Public</SelectItem>
-                      </SelectContent>
+                      <SelectTrigger className="bg-[#1c1c1f] border-none h-12 rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white"><SelectItem value="Private">🔒 Private</SelectItem><SelectItem value="Public">🌍 Public</SelectItem></SelectContent>
                     </Select>
                   </div>
                 </div>
 
                 {activeTab === 'PDF' ? (
                   <div className="space-y-4">
-                    <div 
-                      className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" 
-                      onClick={() => !isSaving && fileInputRef.current?.click()}
-                    >
-                      <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,.doc,.docx" multiple onChange={handleFileSelection} disabled={isSaving} />
+                    <div className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-800 p-12 bg-[#1c1c1f]/50 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => !isSaving && fileInputRef.current?.click()}>
+                      <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" multiple onChange={(e) => setPendingFiles(Array.from(e.target.files || []))} disabled={isSaving} />
                       {pendingFiles.length > 0 ? (
-                        <div className="text-primary text-center">
-                          <CheckCircle2 className="mx-auto mb-2 h-10 w-10" />
-                          <span className="text-sm font-bold">{pendingFiles.length} Selected</span>
-                        </div>
+                        <div className="text-primary text-center"><CheckCircle2 className="mx-auto mb-2 h-10 w-10" /><span className="text-sm font-bold">{pendingFiles.length} Selected</span></div>
                       ) : (
-                        <div className="text-center">
-                          <Upload className="text-gray-500 mx-auto mb-2 h-10 w-10" />
-                          <span className="text-xs text-gray-500">
-                            {editingResume ? 'Replace File (Max 20MB)' : 'Select Files (Max 20MB)'}
-                          </span>
-                        </div>
+                        <div className="text-center"><Upload className="text-gray-500 mx-auto mb-2 h-10 w-10" /><span className="text-xs text-gray-500">{editingResume ? 'Replace File' : 'Select Files (Max 20MB)'}</span></div>
                       )}
                     </div>
-                    {editingResume?.file_name && !pendingFiles.length && (
-                      <p className="text-[10px] text-muted-foreground text-center italic">
-                        Current: {editingResume.file_name}
-                      </p>
-                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <Label>Link URL</Label>
-                    <Input 
-                      name="url" 
-                      required 
-                      disabled={isSaving} 
-                      defaultValue={editingResume?.url || ''}
-                      className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" 
-                      placeholder="https://linkedin.com/in/username" 
-                    />
+                    <Input name="url" required disabled={isSaving} defaultValue={editingResume?.url || ''} className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" placeholder="https://..." />
                   </div>
                 )}
-
                 {isSaving && activeTab === 'PDF' && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                      <span>Syncing with Supabase...</span>
-                      <span>{Math.round(uploadProgress)}%</span>
-                    </div>
-                    <Progress value={uploadProgress} className="h-1 bg-gray-800" />
-                  </div>
+                  <div className="space-y-2"><Progress value={uploadProgress} className="h-1 bg-gray-800" /></div>
                 )}
               </div>
-              
-              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214]">
-                <Button type="submit" disabled={isSaving} className="w-full bg-primary h-12 rounded-xl font-bold">
-                  {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
-                  {isSaving ? 'Synchronizing...' : (editingResume ? 'Update Record' : 'Secure in Vault')}
-                </Button>
+              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
+                <Button type="submit" disabled={isSaving} className="w-full bg-primary h-12 rounded-xl font-bold">{isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}{isSaving ? 'Synchronizing...' : 'Save Record'}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -369,114 +228,44 @@ export default function ResumePage() {
 
       <Tabs defaultValue="PDF" value={activeTab} onValueChange={(val) => { if(!editingResume) setActiveTab(val); }} className="space-y-8">
         <TabsList className="bg-card/30 p-1 rounded-2xl border border-border/50">
-          <TabsTrigger value="PDF" className="px-8 py-2.5 rounded-xl font-bold">
-            <FileText className="mr-2 h-4 w-4" /> Resumes & CV'S
-          </TabsTrigger>
-          <TabsTrigger value="Link" className="px-8 py-2.5 rounded-xl font-bold">
-            <LinkIcon className="mr-2 h-4 w-4" /> Links
-          </TabsTrigger>
+          <TabsTrigger value="PDF" className="px-8 py-2.5 rounded-xl font-bold"><FileText className="mr-2 h-4 w-4" /> Resumes & CV'S</TabsTrigger>
+          <TabsTrigger value="Link" className="px-8 py-2.5 rounded-xl font-bold"><LinkIcon className="mr-2 h-4 w-4" /> Links</TabsTrigger>
         </TabsList>
-        <TabsContent value="PDF">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {resumes.filter(r => r.type === 'file').map(r => (
-              <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onEdit={handleEdit} onView={handleViewFile} viewingId={viewingId} />
-            ))}
-            {resumes.filter(r => r.type === 'file').length === 0 && !resumeLoading && (
-              <div className="col-span-full flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground">
-                <FileText className="h-10 w-10 opacity-20 mb-4" />
-                <p className="italic">Resumes folder is empty.</p>
-              </div>
-            )}
-            {resumeLoading && (
-              <div className="col-span-full flex h-64 items-center justify-center">
-                <Loader2 className="animate-spin text-primary h-10 w-10" />
-              </div>
-            )}
-          </div>
+        <TabsContent value="PDF" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {resumes.filter(r => r.type === 'file').map(r => <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onEdit={(r) => { setEditingResume(r); setActiveTab('PDF'); setIsDialogOpen(true); }} onView={handleViewFile} viewingId={viewingId} />)}
         </TabsContent>
-        <TabsContent value="Link">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {resumes.filter(r => r.type === 'link').map(r => (
-              <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onEdit={handleEdit} onView={handleViewFile} viewingId={viewingId} />
-            ))}
-            {resumes.filter(r => r.type === 'link').length === 0 && !resumeLoading && (
-              <div className="col-span-full flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground">
-                <LinkIcon className="h-10 w-10 opacity-20 mb-4" />
-                <p className="italic">Links folder is empty.</p>
-              </div>
-            )}
-          </div>
+        <TabsContent value="Link" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {resumes.filter(r => r.type === 'link').map(r => <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onEdit={(r) => { setEditingResume(r); setActiveTab('Link'); setIsDialogOpen(true); }} onView={handleViewFile} viewingId={viewingId} />)}
         </TabsContent>
       </Tabs>
     </CRMLayout>
   )
 }
 
-function ResumeCard({ resume, onDelete, onEdit, onView, viewingId }: { resume: any, onDelete: any, onEdit: any, onView: any, viewingId: string | null }) {
+function ResumeCard({ resume, onDelete, onEdit, onView, viewingId }: any) {
   const isLoading = viewingId === resume.id;
   return (
     <Card className="relative group border-none bg-[#0f1115] text-white shadow-xl rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-300">
       <CardContent className="p-8">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex gap-2">
-            <Badge variant="outline" className={resume.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}>
-              {resume.isPublic ? <Globe className="h-3 w-3 mr-1.5" /> : <Lock className="h-3 w-3 mr-1.5" />}
-              {resume.visibility || (resume.isPublic ? 'Public' : 'Private')}
-            </Badge>
-            {resume.docType && (
-              <Badge variant="outline" className="border-primary/20 text-primary bg-primary/5">
-                <FileCheck className="h-3 w-3 mr-1.5" />
-                {resume.docType}
-              </Badge>
-            )}
-          </div>
+          <Badge variant="outline" className={resume.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}>{resume.isPublic ? <Globe className="h-3 w-3 mr-1.5" /> : <Lock className="h-3 w-3 mr-1.5" />}{resume.visibility || (resume.isPublic ? 'Public' : 'Private')}</Badge>
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => onEdit(resume)} className="p-2 text-gray-500 hover:text-primary transition-colors">
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button onClick={() => onDelete(resume)} className="p-2 text-gray-500 hover:text-destructive transition-colors">
-              <Trash2 className="h-5 w-5" />
-            </button>
+            <button onClick={() => onEdit(resume)} className="p-2 text-gray-500 hover:text-primary transition-colors"><Pencil className="h-4 w-4" /></button>
+            <button onClick={() => onDelete(resume)} className="p-2 text-gray-500 hover:text-destructive transition-colors"><Trash2 className="h-5 w-5" /></button>
           </div>
         </div>
         <div className="flex flex-col gap-6">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
-            {resume.type === 'file' ? <FileText className="h-8 w-8" /> : <Globe className="h-8 w-8" />}
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-2xl font-bold truncate leading-tight">{resume.name}</h3>
-            <p className="text-[10px] uppercase font-bold text-gray-500 tracking-[0.2em]">
-              {resume.storageProvider || (resume.type === 'file' ? 'CLOUD RECORD' : 'EXTERNAL LINK')}
-            </p>
-          </div>
-          
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">{resume.type === 'file' ? <FileText className="h-8 w-8" /> : <Globe className="h-8 w-8" />}</div>
+          <div className="space-y-2"><h3 className="text-2xl font-bold truncate leading-tight">{resume.name}</h3><p className="text-[10px] uppercase font-bold text-gray-500 tracking-[0.2em]">{resume.storageProvider || 'CLOUD RECORD'}</p></div>
           <div className="flex gap-2">
             {resume.type === 'file' ? (
-              <Button 
-                variant="outline" 
-                className="w-full bg-white/5 border-none h-12 rounded-xl text-xs font-bold gap-2 hover:bg-white/10"
-                onClick={() => onView(resume)}
-                disabled={isLoading}
-              >
+              <Button variant="outline" className="w-full bg-white/5 border-none h-12 rounded-xl text-xs font-bold gap-2 hover:bg-white/10" onClick={() => onView(resume)} disabled={isLoading}>
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />} View Resume
               </Button>
             ) : (
               <div className="grid grid-cols-2 gap-2 w-full">
-                <Button 
-                  variant="outline"
-                  className="bg-white/5 border-none h-12 rounded-xl text-xs font-bold gap-2 hover:bg-white/10"
-                  onClick={() => onEdit(resume)}
-                >
-                  <Pencil className="h-4 w-4" /> Edit
-                </Button>
-                <Button 
-                  className="bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2"
-                  asChild
-                >
-                  <a href={resume.url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4" /> Visit
-                  </a>
-                </Button>
+                <Button variant="outline" className="bg-white/5 border-none h-12 rounded-xl text-xs font-bold gap-2" onClick={() => onEdit(resume)}><Pencil className="h-4 w-4" /> Edit</Button>
+                <Button className="bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2" asChild><a href={resume.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /> Visit</a></Button>
               </div>
             )}
           </div>
