@@ -121,10 +121,13 @@ export default function DocumentVaultPage() {
         console.log('Step 1: Attempting Storage upload...');
         let snapshot;
         try {
+          // Use standard uploadBytes to minimize preflight complexity
           snapshot = await uploadBytes(storageRef, file);
           console.log('✅ Step 1 SUCCESS: File uploaded.');
         } catch (uploadErr: any) {
           console.error('❌ Step 1 FAILED: CORS or Network Error.');
+          console.error('DIAGNOSTIC: This usually means the Firebase Storage bucket needs a CORS configuration for this domain.');
+          console.info('TROUBLESHOOTING: Run "gsutil cors set cors.json gs://your-bucket" with: [{"origin": ["*"], "method": ["GET", "POST", "PUT", "DELETE", "HEAD"], "maxAgeSeconds": 3600}]');
           throw new Error('Upload blocked by browser security (CORS). Please ensure your Storage bucket allows this domain.');
         }
 
