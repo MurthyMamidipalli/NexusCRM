@@ -1,93 +1,109 @@
+'use client';
 
-"use client"
-
-import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
   createUserWithEmailAndPassword, 
   signInWithPopup, 
   GoogleAuthProvider,
   updateProfile
-} from 'firebase/auth'
-import { useAuth } from '@/firebase'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Target, Chrome, Loader2, Eye, EyeOff } from 'lucide-react'
-import { toast } from '@/hooks/use-toast'
+} from 'firebase/auth';
+import { useAuth } from '@/firebase';
+import { supabase } from '@/lib/supabase';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Target, Chrome, Loader2, Eye, EyeOff } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 export default function SignupPage() {
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const auth = useAuth()
-  const router = useRouter()
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  
+  const auth = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
+    setMounted(true);
+  }, []);
 
   const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     
     if (password !== confirmPassword) {
       toast({
         variant: 'destructive',
         title: 'Validation Error',
         description: 'Passwords do not match.'
-      })
-      return
+      });
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      // 1. Firebase Signup
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       if (userCredential.user) {
         await updateProfile(userCredential.user, {
           displayName: name
-        })
+        });
       }
+
+      // 2. Supabase Bridge
+      if (supabase) {
+        console.log('[Auth Bridge] Synchronizing Supabase identity...');
+        // Note: This creates a shadow account in Supabase with identical credentials.
+        // Ensure "Confirm Email" is disabled in Supabase provider settings for instant access.
+        const { error: sbError } = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: { data: { full_name: name } }
+        });
+        if (sbError) console.warn('[Auth Bridge] Supabase signup bypass:', sbError.message);
+      }
+
       toast({
         title: 'Account Created',
         description: 'Welcome to NexusCRM!'
-      })
-      router.push('/dashboard')
+      });
+      router.push('/dashboard');
     } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Signup Failed',
         description: error.message
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleGoogleLogin = async () => {
-    setLoading(true)
-    const provider = new GoogleAuthProvider()
+    setLoading(true);
+    const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider)
-      router.push('/dashboard')
+      await signInWithPopup(auth, provider);
+      router.push('/dashboard');
     } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Google Login Failed',
         description: error.message
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  if (!mounted) return null
+  if (!mounted) return null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4 sm:p-8">
@@ -200,5 +216,5 @@ export default function SignupPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

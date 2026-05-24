@@ -1,6 +1,7 @@
 'use client';
 
 import { supabase } from './supabase';
+import { auth as firebaseAuth } from './firebase';
 
 export interface FileMetadata {
   fileName: string;
@@ -13,7 +14,7 @@ export interface FileMetadata {
 
 /**
  * Authoritative upload service for Supabase Storage.
- * Exclusively uses the 'documents' bucket for all professional assets.
+ * Enhanced with deep diagnostic tracing for RLS and Auth validation.
  */
 export async function uploadToSupabaseStorage(
   file: File,
@@ -24,31 +25,40 @@ export async function uploadToSupabaseStorage(
     throw new Error('Supabase Client not initialized. Verify environment variables.');
   }
 
-  // 1. Log Session (Requirement 1 & 10)
+  // 1. Log Firebase Auth State
+  const fbUser = firebaseAuth.currentUser;
+  
+  // 2. Log Supabase Auth State (Session & User)
   const { data: { session } } = await supabase.auth.getSession();
-  console.log('📡 [Supabase] Session:', session);
-
-  // 2. Log User (Requirement 2)
   const { data: { user: sbUser } } = await supabase.auth.getUser();
-  console.log('👤 [Supabase] User:', sbUser);
+
+  console.group('🔍 [Supabase] PRE-UPLOAD AUTH AUDIT');
+  console.log('Firebase UID:', fbUser?.uid || 'NULL');
+  console.log('Supabase UID:', sbUser?.id || 'NULL');
+  console.log('Supabase Session Active:', !!session);
+  console.log('Supabase JWT Present:', !!session?.access_token);
+  if (session?.access_token) {
+    console.log('Supabase JWT Snippet:', `${session.access_token.substring(0, 10)}...`);
+  }
+  console.groupEnd();
 
   const timestamp = Date.now();
   const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
   
-  // Requirement: Upload path format documents/{userId}/{timestamp}-{filename}
-  // If pathPrefix already contains 'documents/', we strip it because we are inside the 'documents' bucket.
+  // Enforce consistent path structure: {userId}/{timestamp}-{filename}
   const correctedPrefix = pathPrefix.startsWith('documents/') 
     ? pathPrefix.replace('documents/', '') 
     : pathPrefix;
 
   const storagePath = `${correctedPrefix}/${timestamp}-${cleanFileName}`;
   
-  // 3. Log Exact Call Details (Requirement 3 & 9)
-  console.group('🚀 Supabase Storage Upload Attempt');
+  // 3. Log Exact Call Details
+  console.group('🚀 [Supabase] STORAGE UPLOAD ATTEMPT');
   console.log('Bucket Name:', 'documents');
   console.log('Target Path:', storagePath);
-  console.log('Options:', { cacheControl: '3600', upsert: false });
-  console.log('Auth State:', session ? 'AUTHENTICATED' : 'ANONYMOUS (Firebase Auth active, but Supabase Auth null)');
+  console.log('File Name:', file.name);
+  console.log('File Size:', (file.size / 1024 / 1024).toFixed(2) + ' MB');
+  console.log('Auth Role:', session ? 'AUTHENTICATED' : 'ANONYMOUS');
   console.groupEnd();
 
   if (onProgress) onProgress(10);
@@ -61,9 +71,13 @@ export async function uploadToSupabaseStorage(
     });
 
   if (error) {
-    // 4. Log full error object (Requirement 4)
+    // 4. Log full error object for RLS debugging
     console.error('❌ [Supabase] StorageApiError Detected:');
     console.error(JSON.stringify(error, null, 2));
+    
+    if ((error as any).status === 403 || error.message.includes('row-level security')) {
+      console.warn('💡 RLS TROUBLESHOOTING: Your Supabase session does not match the required UID or role for this path.');
+    }
     throw error;
   }
 
@@ -71,7 +85,7 @@ export async function uploadToSupabaseStorage(
     .from('documents')
     .getPublicUrl(storagePath);
 
-  console.log('✅ Upload Success');
+  console.log('✅ [Supabase] Upload Success');
   console.log('Generated URL:', publicUrl);
 
   if (onProgress) onProgress(100);
