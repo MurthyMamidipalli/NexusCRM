@@ -158,8 +158,17 @@ export default function DocumentVaultPage() {
 
     setViewingId(doc.id);
     try {
-      const { signedUrl } = await getSignedUrlAction(doc.filePath);
-      window.open(signedUrl, '_blank');
+      const response = await getSignedUrlAction(doc.filePath);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response.signedUrl) {
+        window.open(response.signedUrl, '_blank');
+      } else {
+        throw new Error('The storage server did not return a valid access link.');
+      }
     } catch (err: any) {
       toast({ 
         variant: 'destructive', 

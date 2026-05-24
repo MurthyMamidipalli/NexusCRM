@@ -142,15 +142,6 @@ export default function ProjectsPage() {
       setIsDialogOpen(false)
       resetForm()
 
-      mutation.catch(async (err: any) => {
-        const permissionError = new FirestorePermissionError({
-          path: editingProj ? `${collections.PROJECTS}/${editingProj.id}` : collections.PROJECTS,
-          operation: 'write',
-          requestResourceData: data,
-          originalError: err
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      })
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
     } finally {
@@ -166,13 +157,22 @@ export default function ProjectsPage() {
 
     setViewingId(proj.id);
     try {
-      const { signedUrl } = await getSignedUrlAction(proj.documentPath);
-      setPreviewDoc({ url: signedUrl, name: proj.documentName || proj.title });
+      const response = await getSignedUrlAction(proj.documentPath);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response.signedUrl) {
+        setPreviewDoc({ url: response.signedUrl, name: proj.documentName || proj.title });
+      } else {
+        throw new Error('Could not generate documentation access link.');
+      }
     } catch (err: any) {
       toast({ 
         variant: 'destructive', 
         title: 'Access Denied', 
-        description: err.message || 'Could not generate secure access link.' 
+        description: err.message || 'Could not generate access link.' 
       });
     } finally {
       setViewingId(null);

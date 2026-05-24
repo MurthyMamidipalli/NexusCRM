@@ -158,8 +158,17 @@ export default function ResumePage() {
 
     setViewingId(resume.id);
     try {
-      const { signedUrl } = await getSignedUrlAction(resume.filePath);
-      window.open(signedUrl, '_blank');
+      const response = await getSignedUrlAction(resume.filePath);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response.signedUrl) {
+        window.open(response.signedUrl, '_blank');
+      } else {
+        throw new Error('Access link generation returned empty.');
+      }
     } catch (err: any) {
       toast({ 
         variant: 'destructive', 

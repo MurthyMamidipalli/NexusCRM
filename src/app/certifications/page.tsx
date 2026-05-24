@@ -134,16 +134,6 @@ export default function CertificationsPage() {
       setIsDialogOpen(false)
       resetForm()
 
-      mutation.catch(async (err: any) => {
-        const permissionError = new FirestorePermissionError({
-          path: editingCert ? `${collections.CERTIFICATIONS}/${editingCert.id}` : collections.CERTIFICATIONS,
-          operation: 'write',
-          requestResourceData: data,
-          originalError: err
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      })
-
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
     } finally {
@@ -159,8 +149,17 @@ export default function CertificationsPage() {
 
     setViewingId(cert.id);
     try {
-      const { signedUrl } = await getSignedUrlAction(cert.filePath);
-      setPreviewDoc({ url: signedUrl, name: cert.title });
+      const response = await getSignedUrlAction(cert.filePath);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response.signedUrl) {
+        setPreviewDoc({ url: response.signedUrl, name: cert.title });
+      } else {
+        throw new Error('Access link generation failed.');
+      }
     } catch (err: any) {
       toast({ 
         variant: 'destructive', 
@@ -235,7 +234,7 @@ export default function CertificationsPage() {
                 <div className="space-y-2"><Label>Verification Link</Label><Input id="externalLink" name="externalLink" defaultValue={editingCert?.externalLink} placeholder="https://verify..." className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" /></div>
               </div>
               <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => !loading && fileInputRef.current?.click()}>
-                <input type="file" border-none ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
                 {selectedFile ? (<div className="flex flex-col items-center gap-2"><CheckCircle2 className="h-10 w-10 text-primary" /><span className="text-xs font-bold text-primary truncate max-w-[200px]">{selectedFile.name}</span></div>) : editingCert?.filePath ? (<div className="flex flex-col items-center gap-2"><ShieldCheck className="h-10 w-10 text-primary/50" /><span className="text-xs font-bold text-gray-400">File stored</span></div>) : (<div className="flex flex-col items-center gap-2 text-center"><Upload className="h-10 w-10 text-gray-500 mb-2" /><span className="text-xs text-gray-500">Upload (Max 20MB)</span></div>)}
               </div>
               
