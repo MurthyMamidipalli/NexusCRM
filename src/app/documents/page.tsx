@@ -17,7 +17,9 @@ import {
   Globe,
   Eye,
   CheckCircle2,
-  X
+  X,
+  User,
+  Users
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -30,14 +32,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 import { getSignedUrlAction } from '@/app/actions/storage-actions'
 
+const VAULT_GROUPS = ["My self", "Family"];
+
 const DOCUMENT_CATEGORIES = [
-  "My self",
-  "Family",
   "Aadhaar Card", 
   "PAN Card", 
   "Driving Licence", 
@@ -62,10 +65,12 @@ export default function DocumentVaultPage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
+  const [activeTab, setActiveTab] = useState<string>("My self")
   
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [selectedGroup, setSelectedGroup] = useState<string>("My self")
   const [selectedCategory, setSelectedCategory] = useState<string>(DOCUMENT_CATEGORIES[0])
   const [selectedVisibility, setSelectedVisibility] = useState<string>("Private")
 
@@ -81,10 +86,19 @@ export default function DocumentVaultPage() {
   const filteredDocs = useMemo(() => {
     if (!rawDocs) return []
     return rawDocs.filter((doc: any) => {
+      // 1. Filter by Folder/Tab (Group)
+      // Handles migration: if vaultGroup doesn't exist, check if category was previously set to the group name
+      const docGroup = doc.vaultGroup || (VAULT_GROUPS.includes(doc.category) ? doc.category : "My self")
+      const matchesTab = docGroup === activeTab
+
+      // 2. Search Term
       const title = (doc.title || doc.file_name || '').toLowerCase()
       const matchesSearch = title.includes(searchTerm.toLowerCase())
+
+      // 3. Category Filter
       const matchesCategory = categoryFilter === 'All' || doc.category === categoryFilter
-      return matchesSearch && matchesCategory
+
+      return matchesTab && matchesSearch && matchesCategory
     }).sort((a: any, b: any) => {
       const getVal = (doc: any) => {
         if (doc.updatedAt?.toMillis) return doc.updatedAt.toMillis();
@@ -93,7 +107,7 @@ export default function DocumentVaultPage() {
       }
       return getVal(b) - getVal(a);
     })
-  }, [rawDocs, searchTerm, categoryFilter])
+  }, [rawDocs, searchTerm, categoryFilter, activeTab])
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -129,6 +143,7 @@ export default function DocumentVaultPage() {
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
           file_name: uploadResult.originalName,
+          vaultGroup: selectedGroup,
           category: selectedCategory,
           description: description || '',
           isPublic: selectedVisibility === 'Public',
@@ -216,6 +231,19 @@ export default function DocumentVaultPage() {
         </Button>
       </div>
 
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
+        <TabsList className="bg-card/30 p-1 rounded-2xl border border-border/50 h-14">
+          <TabsTrigger value="My self" className="px-10 h-12 rounded-xl font-bold gap-2 text-sm data-[state=active]:bg-primary data-[state=active]:text-white">
+            <User className="h-4 w-4" />
+            My self
+          </TabsTrigger>
+          <TabsTrigger value="Family" className="px-10 h-12 rounded-xl font-bold gap-2 text-sm data-[state=active]:bg-primary data-[state=active]:text-white">
+            <Users className="h-4 w-4" />
+            Family
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!isSaving) setIsDialogOpen(o); if(!o) setPendingFiles([]); }}>
         <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
@@ -232,19 +260,38 @@ export default function DocumentVaultPage() {
                 <Label className="text-sm font-semibold text-white">Document Name</Label>
                 <Input name="title" disabled={isSaving} required className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white focus:ring-1 focus:ring-[#10b981]" placeholder="e.g. Identity Record" />
               </div>
+
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label className="text-sm font-semibold text-white">Category</Label>
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-white">Vault Folder</Label>
+                  <Select value={selectedGroup} onValueChange={setSelectedGroup} disabled={isSaving}>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                      {VAULT_GROUPS.map(group => <SelectItem key={group} value={group}>{group}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-white">Category Type</Label>
                   <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isSaving}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">{DOCUMENT_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
+                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                      {DOCUMENT_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2"><Label className="text-sm font-semibold text-white">Visibility</Label>
-                  <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white"><SelectItem value="Private">🔒 Private</SelectItem><SelectItem value="Public">🌍 Public</SelectItem></SelectContent>
-                  </Select>
-                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-white">Visibility</Label>
+                <Select value={selectedVisibility} onValueChange={setSelectedVisibility} disabled={isSaving}>
+                  <SelectTrigger className="bg-[#1c1c1f] border-none h-14 rounded-2xl text-white"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white"><SelectItem value="Private">🔒 Private</SelectItem><SelectItem value="Public">🌍 Public</SelectItem></SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -290,7 +337,7 @@ export default function DocumentVaultPage() {
       <div className="mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="md:col-span-2 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search document titles..." className="pl-10 bg-card/50 border-none h-11 rounded-xl focus:ring-1 focus:ring-primary" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <Input placeholder={`Search in ${activeTab}...`} className="pl-10 bg-card/50 border-none h-11 rounded-xl focus:ring-1 focus:ring-primary" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <div className="md:col-span-2 flex justify-end">
            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -298,7 +345,7 @@ export default function DocumentVaultPage() {
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent className="bg-card border-border">
-                <SelectItem value="All">All Categories</SelectItem>
+                <SelectItem value="All">All Types</SelectItem>
                 {DOCUMENT_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
               </SelectContent>
            </Select>
@@ -348,7 +395,7 @@ export default function DocumentVaultPage() {
           <div className="p-4 rounded-full bg-muted/20 mb-4">
             <Database className="h-10 w-10 opacity-20" />
           </div>
-          Vault Empty
+          No documents found in {activeTab}
         </div>
       )}
     </CRMLayout>
