@@ -18,7 +18,7 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/e
 
 export default function EducationPage() {
   const db = useFirestore()
-  const { user, loading: authLoading } = useUser()
+  const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingEdu, setEditingEdu] = useState<any>(null)
   const [loading, setLoading] = useState(false)
@@ -67,7 +67,6 @@ export default function EducationPage() {
       ? updateRecord(db, collections.EDUCATION, editingEdu.id, data)
       : createRecord(db, collections.EDUCATION, data, user.uid)
 
-    // Close immediately for a snappy feel
     toast({ title: editingEdu ? 'Record Updated' : 'Record Created' })
     setIsDialogOpen(false)
     setEditingEdu(null)

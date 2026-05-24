@@ -12,12 +12,12 @@ export interface FileMetadata {
 }
 
 /**
- * Robust file upload utility for Supabase Storage.
- * Migrated from Firebase Storage as per system requirements.
+ * Authoritative upload service for Supabase Storage.
+ * Exclusively uses the 'documents' bucket for all professional assets.
  */
 export async function uploadToSupabaseStorage(
   file: File,
-  pathPrefix: string, // This will be used as part of the path, e.g., 'documents' or 'resumes'
+  pathPrefix: string,
   onProgress?: (progress: number) => void
 ): Promise<FileMetadata> {
   if (!supabase) {
@@ -33,8 +33,7 @@ export async function uploadToSupabaseStorage(
   console.log('Bucket:', 'documents');
   console.log('Path:', storagePath);
 
-  // Supabase doesn't natively support progress in the simple upload call, 
-  // so we simulate the initial trigger for the UI.
+  // Initial trigger for UI progress bar
   if (onProgress) onProgress(10);
 
   const { data, error } = await supabase.storage
@@ -45,11 +44,9 @@ export async function uploadToSupabaseStorage(
     });
 
   if (error) {
-    console.error('[Supabase] Upload Error:', error);
+    console.error('[Supabase] SDK Upload Error:', error);
     throw error;
   }
-
-  if (onProgress) onProgress(100);
 
   const { data: { publicUrl } } = supabase.storage
     .from('documents')
@@ -57,6 +54,8 @@ export async function uploadToSupabaseStorage(
 
   console.log('Upload Success');
   console.log('Generated URL:', publicUrl);
+
+  if (onProgress) onProgress(100);
 
   return {
     fileName: `${timestamp}-${cleanFileName}`,
@@ -69,10 +68,10 @@ export async function uploadToSupabaseStorage(
 }
 
 /**
- * Client-side file validation.
+ * Client-side file validation for production security.
  */
 export function validateFile(file: File) {
-  const MAX_SIZE = 20 * 1024 * 1024; // 20MB
+  const MAX_SIZE = 20 * 1024 * 1024; // 20MB Limit
   const ALLOWED_TYPES = [
     'application/pdf',
     'application/msword',
@@ -85,7 +84,7 @@ export function validateFile(file: File) {
   ];
 
   if (file.size > MAX_SIZE) {
-    throw new Error(`File "${file.name}" is too large. Maximum size is 20MB.`);
+    throw new Error(`File "${file.name}" exceeds the 20MB limit.`);
   }
 
   if (!ALLOWED_TYPES.includes(file.type)) {
