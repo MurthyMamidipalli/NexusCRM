@@ -21,7 +21,6 @@ import {
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { useToast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from '@/components/ui/dialog'
@@ -30,6 +29,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
+import { Progress } from '@/components/ui/progress'
+import { uploadToFirebaseStorage, validateFile } from '@/lib/storage-service'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
 
@@ -55,6 +56,7 @@ export default function DocumentVaultPage() {
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
   
@@ -106,66 +108,57 @@ export default function DocumentVaultPage() {
     const formData = new FormData(e.currentTarget)
     const baseTitle = formData.get('title') as string
     const description = formData.get('description') as string
+    
     setIsSaving(true)
-
-    console.group('📁 [Vault] Save Attempt Started');
+    setUploadProgress(0)
 
     try {
       for (const file of pendingFiles) {
-        console.log(`🚀 Processing file: ${file.name}`);
-        
-        const timestamp = Date.now()
-        const storagePath = `documents/${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
-        const storageRef = ref(storage, storagePath)
-        
-        console.log('Step 1: Attempting Storage upload...');
-        let snapshot;
+        // Validate each file
         try {
-          // Use standard uploadBytes to minimize preflight complexity
-          snapshot = await uploadBytes(storageRef, file);
-          console.log('✅ Step 1 SUCCESS: File uploaded.');
-        } catch (uploadErr: any) {
-          console.error('❌ Step 1 FAILED: CORS or Network Error.');
-          console.error('DIAGNOSTIC: This usually means the Firebase Storage bucket needs a CORS configuration for this domain.');
-          console.info('TROUBLESHOOTING: Run "gsutil cors set cors.json gs://your-bucket" with: [{"origin": ["*"], "method": ["GET", "POST", "PUT", "DELETE", "HEAD"], "maxAgeSeconds": 3600}]');
-          throw new Error('Upload blocked by browser security (CORS). Please ensure your Storage bucket allows this domain.');
+          validateFile(file);
+        } catch (vErr: any) {
+          toast({ variant: 'destructive', title: 'Validation Error', description: vErr.message });
+          throw vErr;
         }
 
-        console.log('Step 2: Generating download URL...');
-        const fileUrl = await getDownloadURL(snapshot.ref);
-        console.log('✅ Step 2 SUCCESS:', fileUrl);
+        // Centralized Resilient Upload
+        const uploadResult = await uploadToFirebaseStorage(
+          storage, 
+          file, 
+          `documents/${user.uid}`,
+          (progress) => setUploadProgress(progress)
+        );
 
         const recordData = {
           title: pendingFiles.length > 1 ? file.name : (baseTitle || file.name),
-          file_name: file.name,
+          file_name: uploadResult.originalName,
           category: selectedCategory,
           description: description || '',
           isPublic: selectedVisibility === 'Public',
-          fileUrl: fileUrl,
-          fileSize: file.size,
-          filePath: storagePath,
+          fileUrl: uploadResult.downloadURL,
+          fileSize: uploadResult.fileSize,
+          filePath: uploadResult.storagePath,
           ownerId: user.uid,
           status: 'active'
         }
 
-        console.log('Step 3: Creating Firestore record...');
         await createRecord(db, collections.DOCUMENTS, recordData, user.uid);
-        console.log('✅ Step 3 SUCCESS: Record saved.');
       }
 
-      toast({ title: 'Record Secured', description: 'Document added to your vault.' })
+      toast({ title: 'Record Secured', description: 'Your documents have been synchronized to the cloud vault.' })
       setIsDialogOpen(false)
       setPendingFiles([])
     } catch (err: any) {
-      console.error('🔥 Save Execution Failed:', err);
+      console.error('[Vault] Save Execution Failed:', err);
       toast({ 
         variant: 'destructive', 
-        title: 'Save Failed', 
-        description: err.message || 'An unexpected error occurred.'
+        title: 'Sync Failed', 
+        description: err.message || 'An unexpected error occurred during cloud synchronization.'
       });
     } finally {
       setIsSaving(false)
-      console.groupEnd();
+      setUploadProgress(0)
     }
   }
 
@@ -180,7 +173,7 @@ export default function DocumentVaultPage() {
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       })
-    toast({ title: 'Record Deleted' })
+    toast({ title: 'Record Removed' })
   }
 
   if (!mounted) return null
@@ -190,7 +183,7 @@ export default function DocumentVaultPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight text-foreground">📂 Document Vault</h1>
-          <p className="text-muted-foreground">Secure storage for sensitive professional records.</p>
+          <p className="text-muted-foreground">Secure cloud storage for sensitive professional records.</p>
         </div>
         <Button 
           className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl" 
@@ -198,15 +191,15 @@ export default function DocumentVaultPage() {
           disabled={!user || isSaving}
         >
           {isSaving ? <Loader2 className="animate-spin h-5 w-5" /> : <Plus className="h-5 w-5" />}
-          {isSaving ? 'Processing...' : 'Add Record'}
+          {isSaving ? 'Synchronizing...' : 'Add Record'}
         </Button>
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={(o) => setIsDialogOpen(o)}>
+      <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!isSaving) setIsDialogOpen(o); if(!o) setPendingFiles([]); }}>
         <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
             <DialogTitle className="text-3xl font-bold font-headline text-white">Secure Document</DialogTitle>
-            <DialogDescription className="text-gray-400">Files are stored privately in your secure cloud vault.</DialogDescription>
+            <DialogDescription className="text-gray-400">Files are encrypted and stored in your private cloud vault.</DialogDescription>
             <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
               <X className="h-5 w-5" />
             </DialogClose>
@@ -248,10 +241,20 @@ export default function DocumentVaultPage() {
                 ) : (
                   <div className="text-center">
                     <Upload className="text-gray-600 mx-auto mb-3 h-12 w-12" />
-                    <p className="text-sm text-gray-500 font-medium">Click to select files</p>
+                    <p className="text-sm text-gray-500 font-medium">Click to select files (Max 20MB)</p>
                   </div>
                 )}
               </div>
+
+              {isSaving && (
+                <div className="space-y-2 animate-in fade-in">
+                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-[#10b981]">
+                    <span>Uploading to Vault...</span>
+                    <span>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-1 bg-gray-800" />
+                </div>
+              )}
             </div>
             <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
               <Button type="submit" disabled={isSaving} className="w-full bg-[#10b981] hover:bg-[#0da372] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-emerald-500/20">

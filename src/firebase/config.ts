@@ -5,7 +5,6 @@
  * Forces the correct project identifiers to prevent host-environment overrides or placeholders.
  */
 
-// Authoritative values provided from the Firebase Console
 const AUTH_CONFIG = {
   apiKey: "AIzaSyD1MHSiCtKTqko36dBT58Tks1e0paGmblA",
   authDomain: "studio-3717134241-d7612.firebaseapp.com",
@@ -30,12 +29,13 @@ export const firebaseConfig = {
 export function isFirebaseConfigValid() {
   if (typeof window === 'undefined') return false;
 
-  const { projectId, appId, apiKey } = firebaseConfig;
+  const { projectId, appId, apiKey, storageBucket } = firebaseConfig;
   const isPlaceholderApp = appId.includes('1234567890');
   
   console.group('🔍 NEXUS HUB: RUNTIME ENVIRONMENT AUDIT');
   console.log('Project ID:', projectId);
   console.log('App ID:', appId);
+  console.log('Storage Bucket:', storageBucket);
   
   if (apiKey && apiKey.length > 10) {
     const preview = `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}`;

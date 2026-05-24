@@ -17,10 +17,10 @@ import {
   Files,
   FileCheck,
   CheckCircle2,
-  AlertCircle,
-  Eye
+  Eye,
+  X
 } from 'lucide-react'
-import { useFirestore, useCollection, useUser } from '@/firebase'
+import { useFirestore, useCollection, useUser, useStorage } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, createRecord, deleteRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
@@ -31,10 +31,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { uploadWithProgress, supabase } from '@/lib/supabase'
+import { uploadToFirebaseStorage, validateFile } from '@/lib/storage-service'
+import { deleteObject, ref } from 'firebase/storage'
 
 export default function ResumePage() {
   const db = useFirestore()
+  const storage = useStorage()
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -42,7 +44,7 @@ export default function ResumePage() {
   const [activeTab, setActiveTab] = useState('PDF')
   
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
-  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
+  const [uploadProgress, setUploadProgress] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [selectedDocType, setSelectedDocType] = useState<string>("Resume")
@@ -62,7 +64,7 @@ export default function ResumePage() {
     return [...rawResumes].sort((a: any, b: any) => {
       const getVal = (doc: any) => {
         if (doc.createdAt?.seconds) return doc.createdAt.seconds * 1000;
-        if (doc.created_at) return new Date(doc.created_at).getTime();
+        if (doc.updatedAt?.seconds) return doc.updatedAt.seconds * 1000;
         return Date.now();
       }
       return getVal(b) - getVal(a);
@@ -76,22 +78,14 @@ export default function ResumePage() {
 
   const handleFinalSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || !db || isSaving) return
+    if (!user || !db || !storage || isSaving) return
     
-    if (!supabase && activeTab === 'PDF') {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Integration Inactive', 
-        description: 'Verify your Supabase credentials in Settings.' 
-      })
-      return
-    }
-
     const formData = new FormData(e.currentTarget)
     const baseName = formData.get('name') as string
     const uid = user.uid
 
     setIsSaving(true)
+    setUploadProgress(0)
 
     try {
       if (activeTab === 'PDF') {
@@ -102,31 +96,28 @@ export default function ResumePage() {
         }
 
         for (const file of pendingFiles) {
-          const timestamp = Date.now()
-          const storagePath = `resumes/${uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
+          validateFile(file);
           
-          const fileUrl = await uploadWithProgress(
-            'documents',
-            storagePath,
+          const uploadResult = await uploadToFirebaseStorage(
+            storage,
             file,
-            (percent) => setUploadProgress(prev => ({ ...prev, [file.name]: percent }))
-          )
+            `resumes/${uid}`,
+            (p) => setUploadProgress(p)
+          );
 
           const data: any = {
             name: pendingFiles.length > 1 ? `${baseName} - ${file.name}` : baseName,
-            file_name: file.name,
+            file_name: uploadResult.originalName,
             type: 'file',
             docType: selectedDocType,
             visibility: selectedVisibility,
             isPublic: selectedVisibility === 'Public',
             ownerId: uid,
-            fileSize: file.size,
-            fileType: file.type,
-            file_url: fileUrl,
-            fileUrl: fileUrl,
-            filePath: storagePath,
-            created_at: new Date().toISOString(),
-            storageProvider: 'Supabase'
+            fileSize: uploadResult.fileSize,
+            fileType: uploadResult.fileType,
+            fileUrl: uploadResult.downloadURL,
+            filePath: uploadResult.storagePath,
+            storageProvider: 'Firebase'
           }
           await createRecord(db, collections.RESUMES, data, uid)
         }
@@ -138,7 +129,6 @@ export default function ResumePage() {
           isPublic: selectedVisibility === 'Public',
           ownerId: uid,
           url: formData.get('url') as string,
-          created_at: new Date().toISOString()
         }
         await createRecord(db, collections.RESUMES, data, uid)
       }
@@ -146,21 +136,21 @@ export default function ResumePage() {
       toast({ title: 'Record Saved', description: 'Records synchronized successfully.' })
       setIsDialogOpen(false)
       setPendingFiles([])
-      setUploadProgress({})
     } catch (err: any) {
       console.error('[Vault] Save Error:', err)
       toast({ variant: 'destructive', title: 'Save Failed', description: err.message })
     } finally {
       setIsSaving(false)
+      setUploadProgress(0)
     }
   }
 
   const handleDelete = async (resume: any) => {
-    if (!db) return
+    if (!db || !storage) return
     try {
       await deleteRecord(db, collections.RESUMES, resume.id)
-      if (resume.filePath && supabase) {
-        await supabase.storage.from('documents').remove([resume.filePath])
+      if (resume.filePath) {
+        await deleteObject(ref(storage, resume.filePath)).catch(console.warn)
       }
       toast({ title: 'Removed' })
     } catch (err: any) {
@@ -168,32 +158,26 @@ export default function ResumePage() {
     }
   }
 
-  const totalProgress = useMemo(() => {
-    if (pendingFiles.length === 0) return 0
-    const sum = Object.values(uploadProgress).reduce((a, b) => a + b, 0)
-    return Math.round(sum / pendingFiles.length)
-  }, [uploadProgress, pendingFiles])
-
   return (
     <CRMLayout>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight">📜 Resume & Links Vault</h1>
-          <p className="text-muted-foreground">High-performance CV intelligence powered by Supabase Cloud.</p>
+          <p className="text-muted-foreground">High-performance CV intelligence powered by Cloud Storage.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!isSaving) setIsDialogOpen(o); if(!o) { setPendingFiles([]); setUploadProgress({}); } }}>
+        <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!isSaving) setIsDialogOpen(o); if(!o) setPendingFiles([]); }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white">
               <Plus className="h-4 w-4" /> {activeTab === 'PDF' ? 'Add Resumes & CV\'S' : 'Add Link'}
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-2xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
             <DialogHeader className="p-8 pb-4">
               <DialogTitle className="text-2xl font-bold font-headline">
-                {activeTab === 'PDF' ? 'Supabase Sync' : 'Add Link'}
+                {activeTab === 'PDF' ? 'Secure Upload' : 'Add Link'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Securely host your professional records on Supabase Storage.
+                Securely host your professional records in the cloud vault.
               </DialogDescription>
             </DialogHeader>
 
@@ -240,12 +224,12 @@ export default function ResumePage() {
                     {pendingFiles.length > 0 ? (
                       <div className="text-primary text-center">
                         <CheckCircle2 className="mx-auto mb-2 h-10 w-10" />
-                        <span className="text-sm font-bold">{pendingFiles.length} Records Identified</span>
+                        <span className="text-sm font-bold">{pendingFiles.length} Selected</span>
                       </div>
                     ) : (
                       <div className="text-center">
                         <Upload className="text-gray-500 mx-auto mb-2 h-10 w-10" />
-                        <span className="text-xs text-gray-500">Select Files for Upload</span>
+                        <span className="text-xs text-gray-500">Select Files (Max 20MB)</span>
                       </div>
                     )}
                   </div>
@@ -260,9 +244,9 @@ export default function ResumePage() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
                       <span>Syncing...</span>
-                      <span>{totalProgress}%</span>
+                      <span>{Math.round(uploadProgress)}%</span>
                     </div>
-                    <Progress value={totalProgress} className="h-1 bg-gray-800" />
+                    <Progress value={uploadProgress} className="h-1 bg-gray-800" />
                   </div>
                 )}
               </div>
@@ -359,12 +343,12 @@ function ResumeCard({ resume, onDelete }: { resume: any, onDelete: any }) {
             {resume.type === 'file' ? (
               <>
                 <Button variant="outline" className="flex-1 bg-white/5 border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
-                  <a href={resume.file_url || resume.fileUrl} target="_blank" rel="noopener noreferrer">
+                  <a href={resume.fileUrl} target="_blank" rel="noopener noreferrer">
                     <Eye className="h-4 w-4" /> View
                   </a>
                 </Button>
                 <Button className="flex-1 bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
-                  <a href={resume.file_url || resume.fileUrl} download={resume.file_name || 'resume.pdf'}>
+                  <a href={resume.fileUrl} download={resume.file_name || 'resume.pdf'}>
                     <Files className="h-4 w-4" /> Download
                   </a>
                 </Button>
