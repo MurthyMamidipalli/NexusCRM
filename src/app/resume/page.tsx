@@ -388,7 +388,7 @@ function ResumeCard({ resume, onDelete, onView, viewingId }: { resume: any, onDe
                   onClick={() => onView(resume)}
                   disabled={isLoading}
                 >
-                  <Files className="h-4 w-4" /> Secure
+                  <ExternalLink className="h-4 w-4" /> Open
                 </Button>
               </>
             ) : (
