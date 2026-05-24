@@ -41,7 +41,6 @@ import {
 const navItems = [
   { label: 'Overview', icon: LayoutDashboard, href: '/dashboard', emoji: '🏠' },
   { label: 'Personal Profile', icon: User, href: '/profile', emoji: '👤' },
-  { label: 'Document Vault', icon: FolderLock, href: '/documents', emoji: '📂' },
   { label: 'Skills & Expertise', icon: Hammer, href: '/skills', emoji: '🛠' },
   { label: 'Education', icon: GraduationCap, href: '/education', emoji: '🎓' },
   { label: 'Certifications', icon: Trophy, href: '/certifications', emoji: '🏆' },
@@ -54,6 +53,7 @@ const navItems = [
   { label: 'Contacts', icon: Phone, href: '/customers', emoji: '📞' },
   { label: 'Achievements & Awards', icon: Target, href: '/achievements', emoji: '🎯' },
   { label: 'Testimonials', icon: Quote, href: '/testimonials', emoji: '🌟' },
+  { label: 'Document Vault', icon: FolderLock, href: '/documents', emoji: '📂' },
   { label: 'Public Share', icon: Globe, href: '/share', emoji: '🌐' },
 ]
 
