@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState, useMemo, useRef, useEffect } from 'react'
@@ -32,7 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
-import { supabase } from '@/lib/supabase'
+import { getSignedUrlAction } from '@/app/actions/storage-actions'
 
 export default function ResumePage() {
   const db = useFirestore()
@@ -150,49 +151,20 @@ export default function ResumePage() {
       return;
     }
 
-    if (!resume.filePath || !supabase) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Secure path not found or service disconnected.' });
+    if (!resume.filePath) {
+      toast({ variant: 'destructive', title: 'Error', description: 'File path not found in record.' });
       return;
     }
 
     setViewingId(resume.id);
     try {
-      let cleanPath = resume.filePath;
-      if (cleanPath.startsWith('documents/')) {
-        cleanPath = cleanPath.replace('documents/', '');
-      }
-
-      console.group('🔍 [Resume] Signed URL Diagnostic');
-      const sessionRes = await supabase.auth.getSession();
-      const userRes = await supabase.auth.getUser();
-      console.log('Supabase Session:', sessionRes.data.session);
-      console.log('Supabase User:', userRes.data.user);
-      console.log('Bucket:', 'documents');
-      console.log('File Path:', cleanPath);
-
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(cleanPath, 3600);
-
-      console.log('Signed URL Data:', data);
-      if (error) {
-        console.error('Signed URL Error Object:', error);
-        console.log('Error Message:', error.message);
-        if ((error as any).status) console.log('Error Status Code:', (error as any).status);
-      }
-      console.groupEnd();
-
-      if (error) throw error;
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
-      } else {
-        throw new Error('Signed URL was not generated.');
-      }
+      const { signedUrl } = await getSignedUrlAction(resume.filePath);
+      window.open(signedUrl, '_blank');
     } catch (err: any) {
       toast({ 
         variant: 'destructive', 
         title: 'Access Denied', 
-        description: `Could not generate secure access link: ${err.message}` 
+        description: err.message || 'Could not generate secure access link.' 
       });
     } finally {
       setViewingId(null);

@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useRef, useEffect } from 'react'
@@ -33,9 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
-import { errorEmitter } from '@/firebase/error-emitter'
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
-import { supabase } from '@/lib/supabase'
+import { getSignedUrlAction } from '@/app/actions/storage-actions'
 
 export default function CertificationsPage() {
   const db = useFirestore()
@@ -153,49 +152,20 @@ export default function CertificationsPage() {
   }
 
   const handlePreviewFile = async (cert: any) => {
-    if (!cert.filePath || !supabase) {
-      toast({ variant: 'destructive', title: 'Error', description: 'File path not found or service disconnected.' });
+    if (!cert.filePath) {
+      toast({ variant: 'destructive', title: 'Error', description: 'File path not found in record.' });
       return;
     }
 
     setViewingId(cert.id);
     try {
-      let cleanPath = cert.filePath;
-      if (cleanPath.startsWith('documents/')) {
-        cleanPath = cleanPath.replace('documents/', '');
-      }
-
-      console.group('🔍 [Credential] Signed URL Diagnostic');
-      const sessionRes = await supabase.auth.getSession();
-      const userRes = await supabase.auth.getUser();
-      console.log('Supabase Session:', sessionRes.data.session);
-      console.log('Supabase User:', userRes.data.user);
-      console.log('Bucket:', 'documents');
-      console.log('File Path:', cleanPath);
-
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(cleanPath, 3600);
-
-      console.log('Signed URL Data:', data);
-      if (error) {
-        console.error('Signed URL Error Object:', error);
-        console.log('Error Message:', error.message);
-        if ((error as any).status) console.log('Error Status Code:', (error as any).status);
-      }
-      console.groupEnd();
-
-      if (error) throw error;
-      if (data?.signedUrl) {
-        setPreviewDoc({ url: data.signedUrl, name: cert.title });
-      } else {
-        throw new Error('Signed URL was not generated.');
-      }
+      const { signedUrl } = await getSignedUrlAction(cert.filePath);
+      setPreviewDoc({ url: signedUrl, name: cert.title });
     } catch (err: any) {
       toast({ 
         variant: 'destructive', 
         title: 'Access Denied', 
-        description: `Could not generate access link: ${err.message}` 
+        description: err.message || 'Could not generate access link.' 
       });
     } finally {
       setViewingId(null);

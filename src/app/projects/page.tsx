@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useEffect, useRef } from 'react'
@@ -31,9 +32,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
-import { errorEmitter } from '@/firebase/error-emitter'
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
-import { supabase } from '@/lib/supabase'
+import { getSignedUrlAction } from '@/app/actions/storage-actions'
 
 export default function ProjectsPage() {
   const db = useFirestore()
@@ -160,49 +159,20 @@ export default function ProjectsPage() {
   }
 
   const handlePreviewFile = async (proj: any) => {
-    if (!proj.documentPath || !supabase) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Documentation path or service not found.' });
+    if (!proj.documentPath) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Documentation path not found in record.' });
       return;
     }
 
     setViewingId(proj.id);
     try {
-      let cleanPath = proj.documentPath;
-      if (cleanPath.startsWith('documents/')) {
-        cleanPath = cleanPath.replace('documents/', '');
-      }
-
-      console.group('🔍 [Project] Signed URL Diagnostic');
-      const sessionRes = await supabase.auth.getSession();
-      const userRes = await supabase.auth.getUser();
-      console.log('Supabase Session:', sessionRes.data.session);
-      console.log('Supabase User:', userRes.data.user);
-      console.log('Bucket:', 'documents');
-      console.log('File Path:', cleanPath);
-
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(cleanPath, 3600);
-
-      console.log('Signed URL Data:', data);
-      if (error) {
-        console.error('Signed URL Error Object:', error);
-        console.log('Error Message:', error.message);
-        if ((error as any).status) console.log('Error Status Code:', (error as any).status);
-      }
-      console.groupEnd();
-
-      if (error) throw error;
-      if (data?.signedUrl) {
-        setPreviewDoc({ url: data.signedUrl, name: proj.documentName || proj.title });
-      } else {
-        throw new Error('Signed URL was not generated.');
-      }
+      const { signedUrl } = await getSignedUrlAction(proj.documentPath);
+      setPreviewDoc({ url: signedUrl, name: proj.documentName || proj.title });
     } catch (err: any) {
       toast({ 
         variant: 'destructive', 
         title: 'Access Denied', 
-        description: `Could not generate secure access link: ${err.message}` 
+        description: err.message || 'Could not generate secure access link.' 
       });
     } finally {
       setViewingId(null);
