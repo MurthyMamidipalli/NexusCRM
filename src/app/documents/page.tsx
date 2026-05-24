@@ -16,8 +16,7 @@ import {
   Globe,
   Eye,
   CheckCircle2,
-  X,
-  AlertCircle
+  X
 } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
@@ -49,7 +48,7 @@ const DOCUMENT_CATEGORIES = [
 
 export default function DocumentVaultPage() {
   const db = useFirestore()
-  const { user, loading: authLoading } = useUser()
+  const { user } = useUser()
   const [mounted, setMounted] = useState(false)
   const { toast } = useToast()
   
@@ -115,10 +114,9 @@ export default function DocumentVaultPage() {
       for (const file of pendingFiles) {
         validateFile(file);
 
-        // Fix: Removed bucket name from pathPrefix. uploadToSupabaseStorage uses 'documents' bucket.
         const uploadResult = await uploadToSupabaseStorage(
           file, 
-          user.uid, // Correct path structure: {userId}/{timestamp}-{filename}
+          user.uid, 
           (progress) => setUploadProgress(progress)
         );
 
@@ -135,15 +133,7 @@ export default function DocumentVaultPage() {
           status: 'active'
         }
 
-        createRecord(db, collections.DOCUMENTS, recordData, user.uid).catch(async (err) => {
-          const permissionError = new FirestorePermissionError({
-            path: collections.DOCUMENTS,
-            operation: 'create',
-            requestResourceData: recordData,
-            originalError: err
-          } satisfies SecurityRuleContext);
-          errorEmitter.emit('permission-error', permissionError);
-        });
+        await createRecord(db, collections.DOCUMENTS, recordData, user.uid);
       }
 
       toast({ title: 'Record Secured', description: 'Records synchronized to your cloud vault.' })
@@ -190,7 +180,7 @@ export default function DocumentVaultPage() {
         </Button>
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={(o) => { if(!isSaving) setIsDialogOpen(o); if(!o) setPendingFiles([]); }}>
+      <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if(!o) setPendingFiles([]); }}>
         <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
             <DialogTitle className="text-3xl font-bold font-headline text-white">Secure Document</DialogTitle>
@@ -289,8 +279,16 @@ export default function DocumentVaultPage() {
                 <div className="flex justify-between items-start mb-6">
                   <div className="p-4 rounded-2xl bg-[#10b981]/10 text-[#10b981]"><FileText className="h-8 w-8" /></div>
                   <div className="flex items-center gap-1">
-                    {doc.fileUrl && <Button variant="ghost" size="icon" asChild className="rounded-full"><a href={doc.fileUrl} target="_blank" rel="noopener noreferrer"><Eye className="h-4 w-4" /></a></Button>}
-                    <Button variant="ghost" size="icon" className="hover:text-destructive rounded-full" onClick={() => handleDelete(doc)}><Trash2 className="h-4 w-4" /></Button>
+                    {doc.fileUrl && (
+                      <Button variant="ghost" size="icon" asChild className="rounded-full">
+                        <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                          <Eye className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" className="hover:text-destructive rounded-full" onClick={() => handleDelete(doc)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
                 <h3 className="font-headline font-bold text-xl truncate mb-2">{doc.title || doc.file_name}</h3>
@@ -307,7 +305,9 @@ export default function DocumentVaultPage() {
         </div>
       ) : (
         <div className="flex h-64 flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-border/50 bg-card/30 text-muted-foreground italic">
-          <Database className="h-12 w-12 opacity-10 mb-4" />
+          <div className="p-4 rounded-full bg-muted/20 mb-4">
+            <Database className="h-10 w-10 opacity-20" />
+          </div>
           Vault Empty
         </div>
       )}
