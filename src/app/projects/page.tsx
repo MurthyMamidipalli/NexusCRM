@@ -260,6 +260,62 @@ export default function ProjectsPage() {
   )
 }
 
+function ProjectCardImage({ storagePath, imageUrl, title }: { storagePath?: string, imageUrl?: string, title: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // If we already have a public URL (legacy), use it
+    if (imageUrl) {
+      setUrl(imageUrl);
+      return;
+    }
+
+    // If we only have a storage path, fetch a signed URL
+    if (!storagePath) return;
+    
+    async function fetchUrl() {
+      setLoading(true);
+      try {
+        const response = await getSignedUrlAction(storagePath!);
+        if (response.signedUrl) {
+          setUrl(response.signedUrl);
+        }
+      } catch (err) {
+        console.error("Failed to fetch image URL", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchUrl();
+  }, [storagePath, imageUrl]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-[#1c1c1f]">
+        <Loader2 className="h-6 w-6 animate-spin text-primary/40" />
+      </div>
+    );
+  }
+
+  if (!url) {
+    return (
+      <div className="w-full h-full flex items-center justify-center opacity-10 bg-[#1c1c1f]">
+        <Rocket className="h-16 w-16" />
+      </div>
+    );
+  }
+
+  return (
+    <img 
+      src={url} 
+      alt={title} 
+      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+    />
+  );
+}
+
 function ProjectGrid({ items, onDelete, onEdit, onPreview, viewingId }: { items: any[], onDelete: (proj: any) => void, onEdit: (item: any) => void, onPreview: (item: any) => void, viewingId: string | null }) {
   if (items.length === 0) return <div className="flex h-64 items-center justify-center border-2 border-dashed border-border/50 rounded-2xl italic text-muted-foreground">No entries found.</div>
   return (
@@ -269,7 +325,11 @@ function ProjectGrid({ items, onDelete, onEdit, onPreview, viewingId }: { items:
         return (
           <Card key={proj.id} className="group overflow-hidden border-none bg-[#121214] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-[24px]">
             <div className="relative aspect-[16/10] overflow-hidden bg-[#1c1c1f]">
-              {proj.imageUrl ? <img src={proj.imageUrl} alt={proj.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-10"><Rocket className="h-16 w-16" /></div>}
+              <ProjectCardImage 
+                storagePath={proj.imagePath} 
+                imageUrl={proj.imageUrl} 
+                title={proj.title} 
+              />
               <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="secondary" size="icon" onClick={() => onEdit(proj)} className="bg-black/60"><Pencil className="h-4 w-4" /></Button><Button variant="secondary" size="icon" onClick={() => onDelete(proj)} className="bg-black/60 hover:bg-destructive"><Trash2 className="h-4 w-4" /></Button></div>
             </div>
             <div className="p-8 space-y-4">
