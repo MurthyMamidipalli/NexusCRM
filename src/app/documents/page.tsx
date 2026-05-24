@@ -94,7 +94,7 @@ export default function DocumentVaultPage() {
     e.preventDefault()
     
     if (!user || !db || !storage) {
-      console.error('❌ Service validation failed: user, db, or storage missing.');
+      toast({ variant: 'destructive', title: 'System Error', description: 'Services not initialized.' });
       return;
     }
 
@@ -108,31 +108,24 @@ export default function DocumentVaultPage() {
     const description = formData.get('description') as string
     setIsSaving(true)
 
-    console.group('📁 [Vault] Final Save Initiated');
+    console.group('📁 [Vault] Save Attempt Started');
 
     try {
       for (const file of pendingFiles) {
-        console.log(`🚀 Starting sync for: ${file.name}`);
+        console.log(`🚀 Processing file: ${file.name}`);
         
         const timestamp = Date.now()
         const storagePath = `documents/${user.uid}/${timestamp}_${file.name.replace(/\s+/g, '_')}`
         const storageRef = ref(storage, storagePath)
         
-        // Simple uploadBytes is the most robust against CORS preflight issues
-        console.log('Step 1: Attempting simple Storage upload...');
+        console.log('Step 1: Attempting Storage upload...');
         let snapshot;
         try {
           snapshot = await uploadBytes(storageRef, file);
-          console.log('✅ Step 1 SUCCESS: Storage snapshot received.');
+          console.log('✅ Step 1 SUCCESS: File uploaded.');
         } catch (uploadErr: any) {
-          console.error('❌ Step 1 FAILED: Storage upload was blocked or failed.');
-          console.error('Error Code:', uploadErr.code);
-          console.error('Error Message:', uploadErr.message);
-          
-          if (uploadErr.message?.includes('CORS') || uploadErr.code === 'storage/unknown') {
-            console.warn('⚠️ DIAGNOSIS: This is likely a Bucket CORS Policy issue. The origin *.cloudworkstations.dev is not allowed by the Storage bucket.');
-          }
-          throw uploadErr; // Exit the loop and trigger the main catch block
+          console.error('❌ Step 1 FAILED: CORS or Network Error.');
+          throw new Error('Upload blocked by browser security (CORS). Please ensure your Storage bucket allows this domain.');
         }
 
         console.log('Step 2: Generating download URL...');
@@ -154,18 +147,18 @@ export default function DocumentVaultPage() {
 
         console.log('Step 3: Creating Firestore record...');
         await createRecord(db, collections.DOCUMENTS, recordData, user.uid);
-        console.log('✅ Step 3 SUCCESS: Firestore synchronized.');
+        console.log('✅ Step 3 SUCCESS: Record saved.');
       }
 
-      toast({ title: 'Record Secured', description: 'Vault synchronized successfully.' })
+      toast({ title: 'Record Secured', description: 'Document added to your vault.' })
       setIsDialogOpen(false)
       setPendingFiles([])
     } catch (err: any) {
-      console.error('🔥 Execution Termination:', err);
+      console.error('🔥 Save Execution Failed:', err);
       toast({ 
         variant: 'destructive', 
-        title: 'Upload Failed', 
-        description: 'The upload was blocked by browser security (CORS). Check the console for a detailed diagnosis.'
+        title: 'Save Failed', 
+        description: err.message || 'An unexpected error occurred.'
       });
     } finally {
       setIsSaving(false)
@@ -194,7 +187,7 @@ export default function DocumentVaultPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-headline text-4xl font-bold tracking-tight text-foreground">📂 Document Vault</h1>
-          <p className="text-muted-foreground">Secure high-performance storage for sensitive professional records.</p>
+          <p className="text-muted-foreground">Secure storage for sensitive professional records.</p>
         </div>
         <Button 
           className="gap-2 shadow-lg shadow-emerald-500/20 bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-12 px-6 rounded-xl" 
@@ -206,11 +199,11 @@ export default function DocumentVaultPage() {
         </Button>
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={(o) => { if (!isSaving) setIsDialogOpen(o); }}>
+      <Dialog open={isDialogOpen} onOpenChange={(o) => setIsDialogOpen(o)}>
         <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
             <DialogTitle className="text-3xl font-bold font-headline text-white">Secure Document</DialogTitle>
-            <DialogDescription className="text-gray-400">Files are encrypted and stored privately in the cloud.</DialogDescription>
+            <DialogDescription className="text-gray-400">Files are stored privately in your secure cloud vault.</DialogDescription>
             <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
               <X className="h-5 w-5" />
             </DialogClose>
