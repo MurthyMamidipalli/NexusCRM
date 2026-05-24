@@ -374,23 +374,14 @@ function ResumeCard({ resume, onDelete, onView, viewingId }: { resume: any, onDe
           
           <div className="flex gap-2">
             {resume.type === 'file' ? (
-              <>
-                <Button 
-                  variant="outline" 
-                  className="flex-1 bg-white/5 border-none h-12 rounded-xl text-xs font-bold gap-2"
-                  onClick={() => onView(resume)}
-                  disabled={isLoading}
-                >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />} View
-                </Button>
-                <Button 
-                  className="flex-1 bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2"
-                  onClick={() => onView(resume)}
-                  disabled={isLoading}
-                >
-                  <ExternalLink className="h-4 w-4" /> Open
-                </Button>
-              </>
+              <Button 
+                variant="outline" 
+                className="w-full bg-white/5 border-none h-12 rounded-xl text-xs font-bold gap-2 hover:bg-white/10"
+                onClick={() => onView(resume)}
+                disabled={isLoading}
+              >
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />} View Resume
+              </Button>
             ) : (
               <Button 
                 className="w-full bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2"
