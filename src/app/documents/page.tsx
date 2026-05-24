@@ -115,10 +115,10 @@ export default function DocumentVaultPage() {
       for (const file of pendingFiles) {
         validateFile(file);
 
-        // Upload to Supabase Storage
+        // Fix: Removed bucket name from pathPrefix. uploadToSupabaseStorage uses 'documents' bucket.
         const uploadResult = await uploadToSupabaseStorage(
           file, 
-          `documents/${user.uid}`,
+          user.uid, // Correct path structure: {userId}/{timestamp}-{filename}
           (progress) => setUploadProgress(progress)
         );
 
@@ -135,7 +135,6 @@ export default function DocumentVaultPage() {
           status: 'active'
         }
 
-        // Non-blocking firestore save
         createRecord(db, collections.DOCUMENTS, recordData, user.uid).catch(async (err) => {
           const permissionError = new FirestorePermissionError({
             path: collections.DOCUMENTS,

@@ -14,8 +14,6 @@ export interface FileMetadata {
 /**
  * Authoritative upload service for Supabase Storage.
  * Exclusively uses the 'documents' bucket for all professional assets.
- * 
- * Path Format: {category}/{userId}/{timestamp}-{filename}
  */
 export async function uploadToSupabaseStorage(
   file: File,
@@ -26,16 +24,33 @@ export async function uploadToSupabaseStorage(
     throw new Error('Supabase Client not initialized. Verify environment variables.');
   }
 
+  // 1. Log Session (Requirement 1 & 10)
+  const { data: { session } } = await supabase.auth.getSession();
+  console.log('📡 [Supabase] Session:', session);
+
+  // 2. Log User (Requirement 2)
+  const { data: { user: sbUser } } = await supabase.auth.getUser();
+  console.log('👤 [Supabase] User:', sbUser);
+
   const timestamp = Date.now();
   const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-  // pathPrefix is expected to be something like 'documents/UID' or 'resumes/UID'
-  const storagePath = `${pathPrefix}/${timestamp}-${cleanFileName}`;
   
-  console.log('Uploading to Supabase...');
-  console.log('Bucket:', 'documents');
-  console.log('Path:', storagePath);
+  // Requirement: Upload path format documents/{userId}/{timestamp}-{filename}
+  // If pathPrefix already contains 'documents/', we strip it because we are inside the 'documents' bucket.
+  const correctedPrefix = pathPrefix.startsWith('documents/') 
+    ? pathPrefix.replace('documents/', '') 
+    : pathPrefix;
 
-  // Initial trigger for UI progress bar
+  const storagePath = `${correctedPrefix}/${timestamp}-${cleanFileName}`;
+  
+  // 3. Log Exact Call Details (Requirement 3 & 9)
+  console.group('🚀 Supabase Storage Upload Attempt');
+  console.log('Bucket Name:', 'documents');
+  console.log('Target Path:', storagePath);
+  console.log('Options:', { cacheControl: '3600', upsert: false });
+  console.log('Auth State:', session ? 'AUTHENTICATED' : 'ANONYMOUS (Firebase Auth active, but Supabase Auth null)');
+  console.groupEnd();
+
   if (onProgress) onProgress(10);
 
   const { data, error } = await supabase.storage
@@ -46,7 +61,9 @@ export async function uploadToSupabaseStorage(
     });
 
   if (error) {
-    console.error('[Supabase] SDK Upload Error:', error);
+    // 4. Log full error object (Requirement 4)
+    console.error('❌ [Supabase] StorageApiError Detected:');
+    console.error(JSON.stringify(error, null, 2));
     throw error;
   }
 
@@ -54,7 +71,7 @@ export async function uploadToSupabaseStorage(
     .from('documents')
     .getPublicUrl(storagePath);
 
-  console.log('Upload Success');
+  console.log('✅ Upload Success');
   console.log('Generated URL:', publicUrl);
 
   if (onProgress) onProgress(100);
@@ -69,11 +86,8 @@ export async function uploadToSupabaseStorage(
   };
 }
 
-/**
- * Client-side file validation for production security.
- */
 export function validateFile(file: File) {
-  const MAX_SIZE = 20 * 1024 * 1024; // 20MB Limit
+  const MAX_SIZE = 20 * 1024 * 1024;
   const ALLOWED_TYPES = [
     'application/pdf',
     'application/msword',
@@ -90,7 +104,7 @@ export function validateFile(file: File) {
   }
 
   if (!ALLOWED_TYPES.includes(file.type)) {
-    throw new Error(`File type "${file.type}" is not supported. Please upload PDF, Word, Excel, or Images.`);
+    throw new Error(`File type "${file.type}" is not supported.`);
   }
 
   return true;
