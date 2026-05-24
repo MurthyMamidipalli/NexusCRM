@@ -14,6 +14,8 @@ export interface FileMetadata {
 /**
  * Authoritative upload service for Supabase Storage.
  * Exclusively uses the 'documents' bucket for all professional assets.
+ * 
+ * Path Format: {category}/{userId}/{timestamp}-{filename}
  */
 export async function uploadToSupabaseStorage(
   file: File,
@@ -26,7 +28,7 @@ export async function uploadToSupabaseStorage(
 
   const timestamp = Date.now();
   const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-  // Format: {pathPrefix}/{timestamp}-{filename}
+  // pathPrefix is expected to be something like 'documents/UID' or 'resumes/UID'
   const storagePath = `${pathPrefix}/${timestamp}-${cleanFileName}`;
   
   console.log('Uploading to Supabase...');

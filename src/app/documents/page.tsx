@@ -115,7 +115,7 @@ export default function DocumentVaultPage() {
       for (const file of pendingFiles) {
         validateFile(file);
 
-        // Upload to Supabase Storage (Migration Complete)
+        // Upload to Supabase Storage
         const uploadResult = await uploadToSupabaseStorage(
           file, 
           `documents/${user.uid}`,
@@ -135,19 +135,23 @@ export default function DocumentVaultPage() {
           status: 'active'
         }
 
-        await createRecord(db, collections.DOCUMENTS, recordData, user.uid);
+        // Non-blocking firestore save
+        createRecord(db, collections.DOCUMENTS, recordData, user.uid).catch(async (err) => {
+          const permissionError = new FirestorePermissionError({
+            path: collections.DOCUMENTS,
+            operation: 'create',
+            requestResourceData: recordData,
+            originalError: err
+          } satisfies SecurityRuleContext);
+          errorEmitter.emit('permission-error', permissionError);
+        });
       }
 
-      toast({ title: 'Record Secured', description: 'Your documents have been synchronized to the cloud vault.' })
+      toast({ title: 'Record Secured', description: 'Records synchronized to your cloud vault.' })
       setIsDialogOpen(false)
       setPendingFiles([])
     } catch (err: any) {
-      console.error('[Vault] Save Execution Failed:', err);
-      toast({ 
-        variant: 'destructive', 
-        title: 'Sync Failed', 
-        description: err.message || 'An unexpected error occurred during cloud synchronization.'
-      });
+      toast({ variant: 'destructive', title: 'Sync Failed', description: err.message });
     } finally {
       setIsSaving(false)
       setUploadProgress(0)
@@ -275,12 +279,6 @@ export default function DocumentVaultPage() {
            </Select>
         </div>
       </div>
-
-      {!user && !authLoading && (
-        <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-sm font-bold flex items-center gap-2">
-           <AlertCircle className="h-4 w-4" /> Sign-in required to enable upload feature.
-        </div>
-      )}
 
       {docsLoading ? (
         <div className="flex h-64 items-center justify-center"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
