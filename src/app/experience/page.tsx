@@ -9,7 +9,7 @@ import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription, DialogClose } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -154,104 +154,104 @@ export default function ExperiencePage() {
               Add Experience
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-bold font-headline">
+          <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
+              <DialogTitle className="text-3xl font-bold font-headline text-white">
                 {editingExp ? 'Edit Work Experience' : 'Add Work Experience'}
               </DialogTitle>
-              <DialogDescription className="text-muted-foreground">
-                Enter the details of your role and add links to projects you worked on.
+              <DialogDescription className="text-gray-400">
+                Enter the details of your role and add links to projects.
               </DialogDescription>
+              <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
+                <X className="h-5 w-5" />
+              </DialogClose>
             </DialogHeader>
-            <form onSubmit={handleSaveExp} className="space-y-6 py-4">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="company">Company Name</Label>
-                  <Input id="company" name="company" defaultValue={editingExp?.company || ''} placeholder="Redson Engineers" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Job Title</Label>
-                  <Input id="role" name="role" defaultValue={editingExp?.role || ''} placeholder="Junior Manager" required />
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="location">Location (Optional)</Label>
-                <Input id="location" name="location" defaultValue={editingExp?.location || ''} placeholder="Hyderabad , Jeedimetla" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">Start Date</Label>
-                  <Input id="startDate" name="startDate" type="date" defaultValue={editingExp?.startDate || ''} required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endDate">End Date (Optional)</Label>
-                  <Input id="endDate" name="endDate" type="date" defaultValue={editingExp?.endDate || ''} />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Responsibilities & Achievements</Label>
-                <Textarea 
-                  id="description" 
-                  name="description" 
-                  defaultValue={editingExp?.description || ''} 
-                  placeholder="Summarize your impact and core contributions..." 
-                  className="min-h-[120px]" 
-                />
-              </div>
-
-              <Separator className="bg-border/50" />
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-bold font-headline">Project Links</h3>
-                
-                <div className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
+            <form onSubmit={handleSaveExp} className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+                <div className="grid grid-cols-1 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-xs">Project Name</Label>
-                    <Input 
-                      placeholder="e.g. GitHub Repo / Demo" 
-                      value={newProjectName} 
-                      onChange={(e) => setNewProjectName(e.target.value)}
-                    />
+                    <Label htmlFor="company" className="text-sm font-semibold text-white">Company Name</Label>
+                    <Input id="company" name="company" defaultValue={editingExp?.company || ''} placeholder="Acme Corp" required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl focus:ring-1 focus:ring-primary" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Project URL</Label>
-                    <Input 
-                      placeholder="https://..." 
-                      value={newProjectUrl} 
-                      onChange={(e) => setNewProjectUrl(e.target.value)}
-                    />
+                    <Label htmlFor="role" className="text-sm font-semibold text-white">Job Title</Label>
+                    <Input id="role" name="role" defaultValue={editingExp?.role || ''} placeholder="Senior Engineer" required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl focus:ring-1 focus:ring-primary" />
                   </div>
-                  <Button type="button" size="icon" onClick={handleAddProjectLink} className="bg-card hover:bg-muted border border-border shadow-none h-10 w-10">
-                    <Plus className="h-4 w-4" />
-                  </Button>
                 </div>
 
-                {projectLinks.length > 0 && (
-                  <div className="space-y-2 pt-2">
-                    {projectLinks.map((link, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border border-border/50">
-                        <div className="flex items-center gap-3">
-                          <LinkIcon className="h-3 w-3 text-primary" />
-                          <div className="flex flex-col">
-                            <span className="text-sm font-bold">{link.name}</span>
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{link.url}</span>
-                          </div>
-                        </div>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveProjectLink(idx)}>
-                          <X className="h-4 w-4" />
+                <div className="space-y-2">
+                  <Label htmlFor="location" className="text-sm font-semibold text-white">Location (Optional)</Label>
+                  <Input id="location" name="location" defaultValue={editingExp?.location || ''} placeholder="Remote / City" className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl focus:ring-1 focus:ring-primary" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="startDate" className="text-sm font-semibold text-white">Start Date</Label>
+                    <Input id="startDate" name="startDate" type="date" defaultValue={editingExp?.startDate || ''} required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl [color-scheme:dark] focus:ring-1 focus:ring-primary" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="endDate" className="text-sm font-semibold text-white">End Date</Label>
+                    <Input id="endDate" name="endDate" type="date" defaultValue={editingExp?.endDate || ''} className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl [color-scheme:dark] focus:ring-1 focus:ring-primary" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-sm font-semibold text-white">Responsibilities & Impact</Label>
+                  <Textarea 
+                    id="description" 
+                    name="description" 
+                    defaultValue={editingExp?.description || ''} 
+                    placeholder="Describe your core contributions..." 
+                    className="bg-[#1c1c1f] border-none min-h-[120px] rounded-2xl focus:ring-1 focus:ring-primary" 
+                  />
+                </div>
+
+                <Separator className="bg-white/5" />
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold font-headline text-white">Project Links</h3>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-gray-400 uppercase font-bold">Link Label</Label>
+                      <Input placeholder="GitHub Repo" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-gray-400 uppercase font-bold">Link URL</Label>
+                      <div className="flex gap-2">
+                        <Input placeholder="https://..." value={newProjectUrl} onChange={(e) => setNewProjectUrl(e.target.value)} className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" />
+                        <Button type="button" onClick={handleAddProjectLink} className="h-12 w-12 bg-primary/20 text-primary border-none hover:bg-primary/30 rounded-xl shrink-0">
+                          <Plus className="h-5 w-5" />
                         </Button>
                       </div>
-                    ))}
+                    </div>
                   </div>
-                )}
+
+                  {projectLinks.length > 0 && (
+                    <div className="space-y-2 pt-2">
+                      {projectLinks.map((link, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <LinkIcon className="h-4 w-4 text-primary shrink-0" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-bold text-white truncate">{link.name}</span>
+                              <span className="text-[10px] text-muted-foreground truncate">{link.url}</span>
+                            </div>
+                          </div>
+                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0" onClick={() => handleRemoveProjectLink(idx)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <DialogFooter className="pt-6">
-                <Button type="submit" disabled={loading} className="w-full sm:w-auto px-8">
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Experience'}
+              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
+                <Button type="submit" disabled={loading} className="w-full bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-14 rounded-2xl shadow-lg shadow-emerald-500/20 text-lg">
+                  {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+                  Save Experience
                 </Button>
               </DialogFooter>
             </form>

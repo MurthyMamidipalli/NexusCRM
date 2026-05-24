@@ -4,12 +4,12 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Loader2, Trash2, Calendar, Trophy, Pencil } from 'lucide-react'
+import { Plus, Loader2, Trash2, Calendar, Trophy, Pencil, X } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription, DialogClose } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -112,31 +112,38 @@ export default function AchievementsPage() {
               Add Record
             </Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingAch ? 'Edit Achievement' : 'Add Achievement'}</DialogTitle>
-              <DialogDescription>Record your professional milestones and awards.</DialogDescription>
+          <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
+              <DialogTitle className="text-3xl font-bold font-headline text-white">{editingAch ? 'Edit Achievement' : 'Add Achievement'}</DialogTitle>
+              <DialogDescription className="text-gray-400">Record your professional milestones and awards.</DialogDescription>
+              <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
+                <X className="h-5 w-5" />
+              </DialogClose>
             </DialogHeader>
-            <form onSubmit={handleSaveAch} className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
-                <Input id="title" name="title" defaultValue={editingAch?.title || ''} placeholder="Employee of the Year" required />
+            
+            <form onSubmit={handleSaveAch} className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="title" className="text-sm font-semibold text-white">Achievement Title</Label>
+                  <Input id="title" name="title" defaultValue={editingAch?.title || ''} placeholder="Employee of the Year" required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl focus:ring-1 focus:ring-primary" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="issuer" className="text-sm font-semibold text-white">Issued by</Label>
+                  <Input id="issuer" name="issuer" defaultValue={editingAch?.issuer || ''} placeholder="Global Tech Corp" required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl focus:ring-1 focus:ring-primary" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="date" className="text-sm font-semibold text-white">Date Received</Label>
+                  <Input id="date" name="date" type="date" defaultValue={editingAch?.date || ''} required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl [color-scheme:dark] focus:ring-1 focus:ring-primary" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-sm font-semibold text-white">Significance / Description</Label>
+                  <Textarea id="description" name="description" defaultValue={editingAch?.description || ''} placeholder="Briefly describe why you received this award..." className="bg-[#1c1c1f] border-none min-h-[120px] rounded-2xl focus:ring-1 focus:ring-primary" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="issuer">Issued by</Label>
-                <Input id="issuer" name="issuer" defaultValue={editingAch?.issuer || ''} placeholder="Global Tech Corp" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="date">Date</Label>
-                <Input id="date" name="date" type="date" defaultValue={editingAch?.date || ''} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea id="description" name="description" defaultValue={editingAch?.description || ''} placeholder="Briefly describe the significance..." />
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={loading}>
-                  Save Record
+              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
+                <Button type="submit" disabled={loading} className="w-full bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-14 rounded-2xl shadow-lg shadow-emerald-500/20 text-lg">
+                  {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+                  Save Achievement
                 </Button>
               </DialogFooter>
             </form>

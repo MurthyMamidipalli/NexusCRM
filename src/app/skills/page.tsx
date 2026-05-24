@@ -4,12 +4,12 @@ import React, { useMemo, useState } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Hammer, Loader2, Trash2, Award, Pencil } from 'lucide-react'
+import { Plus, Hammer, Loader2, Trash2, Award, Pencil, X } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription, DialogClose } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -108,45 +108,57 @@ export default function SkillsPage() {
               Add Skill
             </Button>
           </DialogTrigger>
-          <DialogContent className="bg-[#121214] text-white border-none rounded-2xl p-8">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-bold font-headline">{editingSkill ? 'Edit Expertise' : 'Add New Expertise'}</DialogTitle>
+          <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
+              <DialogTitle className="text-3xl font-bold font-headline text-white">{editingSkill ? 'Edit Expertise' : 'Add New Expertise'}</DialogTitle>
+              <DialogDescription className="text-gray-400">Add detailed skills to your professional profile.</DialogDescription>
+              <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
+                <X className="h-5 w-5" />
+              </DialogClose>
             </DialogHeader>
-            <form onSubmit={handleSaveSkill} className="space-y-6 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm font-semibold">Skill Name</Label>
-                <Input id="name" name="name" defaultValue={editingSkill?.name || ''} placeholder="e.g. React.js, Sales Strategy" required className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl" />
+
+            <form onSubmit={handleSaveSkill} className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-sm font-semibold text-white">Skill Name</Label>
+                  <Input id="name" name="name" defaultValue={editingSkill?.name || ''} placeholder="e.g. React.js, Strategic Sales" required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl focus:ring-1 focus:ring-primary px-4" />
+                </div>
+
+                <div className="grid grid-cols-1 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="category" className="text-sm font-semibold text-white">Category</Label>
+                    <Select name="category" defaultValue={editingSkill?.category || "Technical"}>
+                      <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-14 px-4 focus:ring-1 focus:ring-primary rounded-2xl">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                        <SelectItem value="Technical">Technical</SelectItem>
+                        <SelectItem value="Soft Skills">Soft Skills</SelectItem>
+                        <SelectItem value="Tools">Tools</SelectItem>
+                        <SelectItem value="Languages">Languages</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="level" className="text-sm font-semibold text-white">Proficiency Level</Label>
+                    <Select onValueChange={setLevel} defaultValue={editingSkill?.level || "Medium"}>
+                      <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-14 px-4 focus:ring-1 focus:ring-primary rounded-2xl">
+                        <SelectValue placeholder="Level" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                        <SelectItem value="High">High</SelectItem>
+                        <SelectItem value="Medium">Medium</SelectItem>
+                        <SelectItem value="Low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category" className="text-sm font-semibold">Category</Label>
-                  <Select name="category" defaultValue={editingSkill?.category || "Technical"}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"><SelectValue placeholder="Category" /></SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                      <SelectItem value="Technical">Technical</SelectItem>
-                      <SelectItem value="Soft Skills">Soft Skills</SelectItem>
-                      <SelectItem value="Tools">Tools</SelectItem>
-                      <SelectItem value="Languages">Languages</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="level" className="text-sm font-semibold">Proficiency Level</Label>
-                  <Select onValueChange={setLevel} defaultValue={editingSkill?.level || "Medium"}>
-                    <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 px-4 focus:ring-1 focus:ring-primary rounded-xl"><SelectValue placeholder="Level" /></SelectTrigger>
-                    <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                      <SelectItem value="High">High</SelectItem>
-                      <SelectItem value="Medium">Medium</SelectItem>
-                      <SelectItem value="Low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button type="submit" disabled={loading} className="bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 rounded-xl border-none w-full sm:w-auto">
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Skill'}
+              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
+                <Button type="submit" disabled={loading} className="w-full bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-14 rounded-2xl shadow-lg shadow-emerald-500/20 text-lg">
+                  {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+                  Save Expertise
                 </Button>
               </DialogFooter>
             </form>

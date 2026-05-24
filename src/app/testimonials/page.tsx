@@ -1,16 +1,15 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect } from 'react'
 import { CRMLayout } from '@/components/layout/crm-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Quote, Loader2, Trash2, User, Pencil } from 'lucide-react'
+import { Plus, Quote, Loader2, Trash2, User, Pencil, X } from 'lucide-react'
 import { useFirestore, useCollection, useUser } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { collections, deleteRecord, createRecord, updateRecord } from '@/lib/firestore-service'
 import { toast } from '@/hooks/use-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription, DialogClose } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -123,32 +122,39 @@ export default function TestimonialsPage() {
               Add Testimonial
             </Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingTest ? 'Edit Endorsement' : 'Add New Endorsement'}</DialogTitle>
-              <DialogDescription>Share feedback from your colleagues and clients.</DialogDescription>
+          <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
+              <DialogTitle className="text-3xl font-bold font-headline text-white">{editingTest ? 'Edit Endorsement' : 'Add New Endorsement'}</DialogTitle>
+              <DialogDescription className="text-gray-400">Share professional feedback from your network.</DialogDescription>
+              <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
+                <X className="h-5 w-5" />
+              </DialogClose>
             </DialogHeader>
-            <form onSubmit={handleSaveTest} className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="author">Author Name</Label>
-                <Input id="author" name="author" defaultValue={editingTest?.author || ''} placeholder="Jane Cooper" required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+
+            <form onSubmit={handleSaveTest} className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
-                  <Input id="role" name="role" defaultValue={editingTest?.role || ''} placeholder="CTO" required />
+                  <Label htmlFor="author" className="text-sm font-semibold text-white">Author Name</Label>
+                  <Input id="author" name="author" defaultValue={editingTest?.author || ''} placeholder="Jane Cooper" required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl focus:ring-1 focus:ring-primary px-4" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="role" className="text-sm font-semibold text-white">Role</Label>
+                    <Input id="role" name="role" defaultValue={editingTest?.role || ''} placeholder="CTO" required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl focus:ring-1 focus:ring-primary px-4" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="company" className="text-sm font-semibold text-white">Company</Label>
+                    <Input id="company" name="company" defaultValue={editingTest?.company || ''} placeholder="Acme Inc." required className="bg-[#1c1c1f] border-none text-white h-14 rounded-2xl focus:ring-1 focus:ring-primary px-4" />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="company">Company</Label>
-                  <Input id="company" name="company" defaultValue={editingTest?.company || ''} placeholder="Acme Inc." required />
+                  <Label htmlFor="content" className="text-sm font-semibold text-white">Testimonial Content</Label>
+                  <Textarea id="content" name="content" defaultValue={editingTest?.content || ''} placeholder="Share the specific feedback received..." className="bg-[#1c1c1f] border-none min-h-[150px] rounded-2xl focus:ring-1 focus:ring-primary" required />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="content">Testimonial Content</Label>
-                <Textarea id="content" name="content" defaultValue={editingTest?.content || ''} placeholder="Share the feedback..." className="min-h-[120px]" required />
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={loading}>
+              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
+                <Button type="submit" disabled={loading} className="w-full bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-14 rounded-2xl shadow-lg shadow-emerald-500/20 text-lg">
+                  {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                   Save Endorsement
                 </Button>
               </DialogFooter>

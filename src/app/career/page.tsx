@@ -16,7 +16,8 @@ import {
   Laptop,
   Pencil,
   Plus,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react'
 import { useUser, useFirestore, useDoc } from '@/firebase'
 import { doc } from 'firebase/firestore'
@@ -29,7 +30,8 @@ import {
   DialogTitle, 
   DialogFooter,
   DialogDescription,
-  DialogTrigger
+  DialogTrigger,
+  DialogClose
 } from '@/components/ui/dialog'
 import {
   Select,
@@ -105,126 +107,121 @@ export default function CareerPage() {
               {currentJob.company ? 'Edit Job Role' : 'Add Job Role'}
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] bg-[#121214] text-white border-none rounded-2xl p-8">
-            <DialogHeader className="mb-6">
-              <DialogTitle className="text-2xl font-bold font-headline">Add Job Role</DialogTitle>
+          <DialogContent className="sm:max-w-[550px] bg-[#121214] text-white border-none rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <DialogHeader className="p-8 pb-4 border-b border-white/5 relative shrink-0 text-left">
+              <DialogTitle className="text-3xl font-bold font-headline text-white">Current Job Role</DialogTitle>
               <DialogDescription className="text-gray-400">
-                Enter details about your professional position.
+                Update your active professional position.
               </DialogDescription>
+              <DialogClose className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors">
+                <X className="h-5 w-5" />
+              </DialogClose>
             </DialogHeader>
-            <form onSubmit={handleSaveJob} className="space-y-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="company" className="text-sm font-semibold text-white">Company Name</Label>
-                  <div className="relative">
-                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input 
-                      id="company" 
-                      name="company" 
-                      defaultValue={currentJob.company || ''}
-                      placeholder="e.g. Acme Corp" 
-                      className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl"
-                      required 
-                    />
+
+            <form onSubmit={handleSaveJob} className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="company" className="text-sm font-semibold text-white">Company Name</Label>
+                    <div className="relative">
+                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input 
+                        id="company" 
+                        name="company" 
+                        defaultValue={currentJob.company || ''}
+                        placeholder="e.g. Acme Corp" 
+                        className="bg-[#1c1c1f] border-none text-white h-14 pl-12 focus:ring-1 focus:ring-primary rounded-2xl"
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="title" className="text-sm font-semibold text-white">Your Role / Title</Label>
+                    <div className="relative">
+                      <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input 
+                        id="title" 
+                        name="title" 
+                        defaultValue={currentJob.title || ''}
+                        placeholder="e.g. Senior Director" 
+                        className="bg-[#1c1c1f] border-none text-white h-14 pl-12 focus:ring-1 focus:ring-primary rounded-2xl"
+                        required 
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="text-sm font-semibold text-white">Your Role / Title</Label>
-                  <div className="relative">
-                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input 
-                      id="title" 
-                      name="title" 
-                      defaultValue={currentJob.title || ''}
-                      placeholder="e.g. Senior Software Engineer" 
-                      className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl"
-                      required 
-                    />
+
+                <div className="grid grid-cols-1 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="startDate" className="text-sm font-semibold text-white">Joining Date</Label>
+                    <div className="relative">
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input 
+                        id="startDate" 
+                        name="startDate" 
+                        type="date"
+                        defaultValue={currentJob.startDate || ''}
+                        className="bg-[#1c1c1f] border-none text-white h-14 pl-12 focus:ring-1 focus:ring-primary rounded-2xl [color-scheme:dark]"
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="endDate" className="text-sm font-semibold text-white">End Date (Optional)</Label>
+                    <div className="relative">
+                      <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input 
+                        id="endDate" 
+                        name="endDate" 
+                        type="date"
+                        defaultValue={currentJob.endDate || ''}
+                        className="bg-[#1c1c1f] border-none text-white h-14 pl-12 focus:ring-1 focus:ring-primary rounded-2xl [color-scheme:dark]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-white">Employment Type</Label>
+                    <div className="relative">
+                      <Users className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
+                      <Select name="employmentType" defaultValue={currentJob.employmentType || "Full-time"}>
+                        <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-14 pl-12 focus:ring-1 focus:ring-primary rounded-2xl">
+                          <SelectValue placeholder="Full-time" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                          <SelectItem value="Full-time">Full-time</SelectItem>
+                          <SelectItem value="Part-time">Part-time</SelectItem>
+                          <SelectItem value="Contract">Contract</SelectItem>
+                          <SelectItem value="Freelance">Freelance</SelectItem>
+                          <SelectItem value="Internship">Internship</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-white">Work Setting</Label>
+                    <div className="relative">
+                      <Laptop className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
+                      <Select name="workSetting" defaultValue={currentJob.workSetting || "Remote"}>
+                        <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-14 pl-12 focus:ring-1 focus:ring-primary rounded-2xl">
+                          <SelectValue placeholder="Remote" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
+                          <SelectItem value="Remote">Remote</SelectItem>
+                          <SelectItem value="Hybrid">Hybrid</SelectItem>
+                          <SelectItem value="On-site">On-site</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="startDate" className="text-sm font-semibold text-white">Joining Date</Label>
-                  <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input 
-                      id="startDate" 
-                      name="startDate" 
-                      type="date"
-                      defaultValue={currentJob.startDate || ''}
-                      className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl [color-scheme:dark]"
-                      required 
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endDate" className="text-sm font-semibold text-white">End Date (Optional)</Label>
-                  <div className="relative">
-                    <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input 
-                      id="endDate" 
-                      name="endDate" 
-                      type="date"
-                      defaultValue={currentJob.endDate || ''}
-                      className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl [color-scheme:dark]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-white">Employment Type</Label>
-                  <div className="relative">
-                    <Users className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
-                    <Select name="employmentType" defaultValue={currentJob.employmentType || "Full-time"}>
-                      <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl">
-                        <SelectValue placeholder="Full-time" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                        <SelectItem value="Full-time">Full-time</SelectItem>
-                        <SelectItem value="Part-time">Part-time</SelectItem>
-                        <SelectItem value="Contract">Contract</SelectItem>
-                        <SelectItem value="Freelance">Freelance</SelectItem>
-                        <SelectItem value="Internship">Internship</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-white">Work Setting</Label>
-                  <div className="relative">
-                    <Laptop className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
-                    <Select name="workSetting" defaultValue={currentJob.workSetting || "Remote"}>
-                      <SelectTrigger className="bg-[#1c1c1f] border-none text-white h-12 pl-12 focus:ring-1 focus:ring-primary rounded-xl">
-                        <SelectValue placeholder="Remote" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#1c1c1f] border-gray-800 text-white">
-                        <SelectItem value="Remote">Remote</SelectItem>
-                        <SelectItem value="Hybrid">Hybrid</SelectItem>
-                        <SelectItem value="On-site">On-site</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              <DialogFooter className="pt-4 gap-3">
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  onClick={() => setIsDialogOpen(false)}
-                  className="bg-[#1c1c1f] hover:bg-gray-800 text-white font-bold h-12 px-8 rounded-xl border-none"
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  className="bg-[#7299f0] hover:bg-[#6387d9] text-white font-bold h-12 px-8 rounded-xl border-none"
-                >
-                  {currentJob.company ? 'Save Changes' : 'Add Job'}
+              <DialogFooter className="p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
+                <Button type="submit" className="w-full bg-[#10b981] hover:bg-[#0da372] text-white font-bold h-14 rounded-2xl shadow-lg shadow-emerald-500/20 text-lg">
+                  {currentJob.company ? 'Save Position Changes' : 'Add Active Job'}
                 </Button>
               </DialogFooter>
             </form>
