@@ -154,7 +154,7 @@ export default function CertificationsPage() {
 
   const handlePreviewFile = async (cert: any) => {
     if (!cert.filePath || !supabase) {
-      toast({ variant: 'destructive', title: 'Error', description: 'File path not available.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'File path not found or service disconnected.' });
       return;
     }
 
@@ -165,14 +165,38 @@ export default function CertificationsPage() {
         cleanPath = cleanPath.replace('documents/', '');
       }
 
+      console.group('🔍 [Credential] Signed URL Diagnostic');
+      const sessionRes = await supabase.auth.getSession();
+      const userRes = await supabase.auth.getUser();
+      console.log('Supabase Session:', sessionRes.data.session);
+      console.log('Supabase User:', userRes.data.user);
+      console.log('Bucket:', 'documents');
+      console.log('File Path:', cleanPath);
+
       const { data, error } = await supabase.storage
         .from('documents')
         .createSignedUrl(cleanPath, 3600);
 
+      console.log('Signed URL Data:', data);
+      if (error) {
+        console.error('Signed URL Error Object:', error);
+        console.log('Error Message:', error.message);
+        if ((error as any).status) console.log('Error Status Code:', (error as any).status);
+      }
+      console.groupEnd();
+
       if (error) throw error;
-      setPreviewDoc({ url: data.signedUrl, name: cert.title });
+      if (data?.signedUrl) {
+        setPreviewDoc({ url: data.signedUrl, name: cert.title });
+      } else {
+        throw new Error('Signed URL was not generated.');
+      }
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Access Denied', description: 'Could not generate access link.' });
+      toast({ 
+        variant: 'destructive', 
+        title: 'Access Denied', 
+        description: `Could not generate access link: ${err.message}` 
+      });
     } finally {
       setViewingId(null);
     }
@@ -241,7 +265,7 @@ export default function CertificationsPage() {
                 <div className="space-y-2"><Label>Verification Link</Label><Input id="externalLink" name="externalLink" defaultValue={editingCert?.externalLink} placeholder="https://verify..." className="bg-[#1c1c1f] border-none text-white h-12 rounded-xl" /></div>
               </div>
               <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => !loading && fileInputRef.current?.click()}>
-                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                <input type="file" border-none ref={fileInputRef} className="hidden" onChange={handleFileChange} />
                 {selectedFile ? (<div className="flex flex-col items-center gap-2"><CheckCircle2 className="h-10 w-10 text-primary" /><span className="text-xs font-bold text-primary truncate max-w-[200px]">{selectedFile.name}</span></div>) : editingCert?.filePath ? (<div className="flex flex-col items-center gap-2"><ShieldCheck className="h-10 w-10 text-primary/50" /><span className="text-xs font-bold text-gray-400">File stored</span></div>) : (<div className="flex flex-col items-center gap-2 text-center"><Upload className="h-10 w-10 text-gray-500 mb-2" /><span className="text-xs text-gray-500">Upload (Max 20MB)</span></div>)}
               </div>
               

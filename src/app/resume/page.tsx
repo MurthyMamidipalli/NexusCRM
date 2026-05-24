@@ -145,9 +145,13 @@ export default function ResumePage() {
   }
 
   const handleViewFile = async (resume: any) => {
+    if (resume.type === 'link') {
+      window.open(resume.url, '_blank');
+      return;
+    }
+
     if (!resume.filePath || !supabase) {
-      if (resume.type === 'link') window.open(resume.url, '_blank');
-      else toast({ variant: 'destructive', title: 'Error', description: 'Secure path not found.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Secure path not found or service disconnected.' });
       return;
     }
 
@@ -158,14 +162,38 @@ export default function ResumePage() {
         cleanPath = cleanPath.replace('documents/', '');
       }
 
+      console.group('🔍 [Resume] Signed URL Diagnostic');
+      const sessionRes = await supabase.auth.getSession();
+      const userRes = await supabase.auth.getUser();
+      console.log('Supabase Session:', sessionRes.data.session);
+      console.log('Supabase User:', userRes.data.user);
+      console.log('Bucket:', 'documents');
+      console.log('File Path:', cleanPath);
+
       const { data, error } = await supabase.storage
         .from('documents')
         .createSignedUrl(cleanPath, 3600);
 
+      console.log('Signed URL Data:', data);
+      if (error) {
+        console.error('Signed URL Error Object:', error);
+        console.log('Error Message:', error.message);
+        if ((error as any).status) console.log('Error Status Code:', (error as any).status);
+      }
+      console.groupEnd();
+
       if (error) throw error;
-      window.open(data.signedUrl, '_blank');
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      } else {
+        throw new Error('Signed URL was not generated.');
+      }
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Access Denied', description: 'Could not generate access link.' });
+      toast({ 
+        variant: 'destructive', 
+        title: 'Access Denied', 
+        description: `Could not generate secure access link: ${err.message}` 
+      });
     } finally {
       setViewingId(null);
     }
