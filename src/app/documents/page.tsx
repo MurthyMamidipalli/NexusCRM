@@ -32,6 +32,7 @@ import { Progress } from '@/components/ui/progress'
 import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
+import { supabase } from '@/lib/supabase'
 
 const DOCUMENT_CATEGORIES = [
   "Aadhaar Card", 
@@ -54,6 +55,7 @@ export default function DocumentVaultPage() {
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [viewingId, setViewingId] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
@@ -146,6 +148,40 @@ export default function DocumentVaultPage() {
       setUploadProgress(0)
     }
   }
+
+  const handleViewFile = async (doc: any) => {
+    if (!doc.filePath || !supabase) {
+      toast({ variant: 'destructive', title: 'Error', description: 'File path not found.' });
+      return;
+    }
+
+    setViewingId(doc.id);
+    try {
+      let cleanPath = doc.filePath;
+      if (cleanPath.startsWith('documents/')) {
+        cleanPath = cleanPath.replace('documents/', '');
+      }
+
+      console.log('Bucket:', 'documents');
+      console.log('File Path:', cleanPath);
+
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(cleanPath, 3600);
+
+      if (error) {
+        console.error('Signed URL Error:', error);
+        throw error;
+      }
+
+      console.log('Signed URL:', data?.signedUrl);
+      window.open(data.signedUrl, '_blank');
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Access Denied', description: 'Could not generate secure access link.' });
+    } finally {
+      setViewingId(null);
+    }
+  };
 
   const handleDelete = (doc: any) => {
     if (!db) return
@@ -279,11 +315,15 @@ export default function DocumentVaultPage() {
                 <div className="flex justify-between items-start mb-6">
                   <div className="p-4 rounded-2xl bg-[#10b981]/10 text-[#10b981]"><FileText className="h-8 w-8" /></div>
                   <div className="flex items-center gap-1">
-                    {doc.fileUrl && (
-                      <Button variant="ghost" size="icon" asChild className="rounded-full">
-                        <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
-                          <Eye className="h-4 w-4" />
-                        </a>
+                    {(doc.filePath || doc.fileUrl) && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="rounded-full"
+                        onClick={() => handleViewFile(doc)}
+                        disabled={viewingId === doc.id}
+                      >
+                        {viewingId === doc.id ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     )}
                     <Button variant="ghost" size="icon" className="hover:text-destructive rounded-full" onClick={() => handleDelete(doc)}>

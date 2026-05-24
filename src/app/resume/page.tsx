@@ -32,12 +32,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
+import { supabase } from '@/lib/supabase'
 
 export default function ResumePage() {
   const db = useFirestore()
   const { user } = useUser()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [viewingId, setViewingId] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState('PDF')
   
@@ -96,7 +98,6 @@ export default function ResumePage() {
         for (const file of pendingFiles) {
           validateFile(file);
           
-          // Migrated to Supabase Storage
           const uploadResult = await uploadToSupabaseStorage(
             file,
             `resumes/${uid}`,
@@ -142,6 +143,33 @@ export default function ResumePage() {
       setUploadProgress(0)
     }
   }
+
+  const handleViewFile = async (resume: any) => {
+    if (!resume.filePath || !supabase) {
+      if (resume.type === 'link') window.open(resume.url, '_blank');
+      else toast({ variant: 'destructive', title: 'Error', description: 'Secure path not found.' });
+      return;
+    }
+
+    setViewingId(resume.id);
+    try {
+      let cleanPath = resume.filePath;
+      if (cleanPath.startsWith('documents/')) {
+        cleanPath = cleanPath.replace('documents/', '');
+      }
+
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(cleanPath, 3600);
+
+      if (error) throw error;
+      window.open(data.signedUrl, '_blank');
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Access Denied', description: 'Could not generate access link.' });
+    } finally {
+      setViewingId(null);
+    }
+  };
 
   const handleDelete = async (resume: any) => {
     if (!db) return
@@ -269,7 +297,7 @@ export default function ResumePage() {
         <TabsContent value="PDF">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {resumes.filter(r => r.type === 'file').map(r => (
-              <ResumeCard key={r.id} resume={r} onDelete={handleDelete} />
+              <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onView={handleViewFile} viewingId={viewingId} />
             ))}
             {resumes.filter(r => r.type === 'file').length === 0 && !resumeLoading && (
               <div className="col-span-full flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground">
@@ -287,7 +315,7 @@ export default function ResumePage() {
         <TabsContent value="Link">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {resumes.filter(r => r.type === 'link').map(r => (
-              <ResumeCard key={r.id} resume={r} onDelete={handleDelete} />
+              <ResumeCard key={r.id} resume={r} onDelete={handleDelete} onView={handleViewFile} viewingId={viewingId} />
             ))}
             {resumes.filter(r => r.type === 'link').length === 0 && !resumeLoading && (
               <div className="col-span-full flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground">
@@ -302,7 +330,8 @@ export default function ResumePage() {
   )
 }
 
-function ResumeCard({ resume, onDelete }: { resume: any, onDelete: any }) {
+function ResumeCard({ resume, onDelete, onView, viewingId }: { resume: any, onDelete: any, onView: any, viewingId: string | null }) {
+  const isLoading = viewingId === resume.id;
   return (
     <Card className="relative group border-none bg-[#0f1115] text-white shadow-xl rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-300">
       <CardContent className="p-8">
@@ -337,19 +366,27 @@ function ResumeCard({ resume, onDelete }: { resume: any, onDelete: any }) {
           <div className="flex gap-2">
             {resume.type === 'file' ? (
               <>
-                <Button variant="outline" className="flex-1 bg-white/5 border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
-                  <a href={resume.fileUrl} target="_blank" rel="noopener noreferrer">
-                    <Eye className="h-4 w-4" /> View
-                  </a>
+                <Button 
+                  variant="outline" 
+                  className="flex-1 bg-white/5 border-none h-12 rounded-xl text-xs font-bold gap-2"
+                  onClick={() => onView(resume)}
+                  disabled={isLoading}
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />} View
                 </Button>
-                <Button className="flex-1 bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
-                  <a href={resume.fileUrl} download={resume.file_name || 'resume.pdf'}>
-                    <Files className="h-4 w-4" /> Download
-                  </a>
+                <Button 
+                  className="flex-1 bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2"
+                  onClick={() => onView(resume)}
+                  disabled={isLoading}
+                >
+                  <Files className="h-4 w-4" /> Secure
                 </Button>
               </>
             ) : (
-              <Button className="w-full bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2" asChild>
+              <Button 
+                className="w-full bg-primary border-none h-12 rounded-xl text-xs font-bold gap-2"
+                asChild
+              >
                 <a href={resume.url} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4" /> Visit Link
                 </a>

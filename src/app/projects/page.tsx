@@ -33,6 +33,7 @@ import { Progress } from '@/components/ui/progress'
 import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
+import { supabase } from '@/lib/supabase'
 
 export default function ProjectsPage() {
   const db = useFirestore()
@@ -40,6 +41,7 @@ export default function ProjectsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingProj, setEditingProj] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [viewingId, setViewingId] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('Project')
@@ -99,7 +101,6 @@ export default function ProjectsPage() {
       let documentName = editingProj?.documentName || ''
 
       if (selectedImage) {
-        // Migrated to Supabase Storage
         const uploadResult = await uploadToSupabaseStorage(
           selectedImage, 
           `projects/${user.uid}/images`,
@@ -110,7 +111,6 @@ export default function ProjectsPage() {
       }
 
       if (selectedDoc) {
-        // Migrated to Supabase Storage
         const uploadResult = await uploadToSupabaseStorage(
           selectedDoc, 
           `projects/${user.uid}/docs`,
@@ -158,6 +158,32 @@ export default function ProjectsPage() {
       setLoading(false)
     }
   }
+
+  const handlePreviewFile = async (proj: any) => {
+    if (!proj.documentPath || !supabase) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Documentation not found.' });
+      return;
+    }
+
+    setViewingId(proj.id);
+    try {
+      let cleanPath = proj.documentPath;
+      if (cleanPath.startsWith('documents/')) {
+        cleanPath = cleanPath.replace('documents/', '');
+      }
+
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(cleanPath, 3600);
+
+      if (error) throw error;
+      setPreviewDoc({ url: data.signedUrl, name: proj.documentName || proj.title });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Access Denied', description: 'Could not generate access link.' });
+    } finally {
+      setViewingId(null);
+    }
+  };
 
   const resetForm = () => { 
     setEditingProj(null); 
@@ -231,8 +257,8 @@ export default function ProjectsPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
         <TabsList className="bg-card/30 p-1 rounded-2xl border border-border/50"><TabsTrigger value="Project" className="px-8 py-2.5 rounded-xl font-bold"><FolderCode className="mr-2" /> Projects</TabsTrigger><TabsTrigger value="Product" className="px-8 py-2.5 rounded-xl font-bold"><Box className="mr-2" /> Products</TabsTrigger></TabsList>
-        <TabsContent value="Project"><ProjectGrid items={projects.filter(p => p.category === 'Project')} onDelete={handleDelete} onEdit={(p) => { setEditingProj(p); setIsDialogOpen(true); }} onPreview={(u, n) => setPreviewDoc({ url: u, name: n })} /></TabsContent>
-        <TabsContent value="Product"><ProjectGrid items={projects.filter(p => p.category === 'Product')} onDelete={handleDelete} onEdit={(p) => { setEditingProj(p); setIsDialogOpen(true); }} onPreview={(u, n) => setPreviewDoc({ url: u, name: n })} /></TabsContent>
+        <TabsContent value="Project"><ProjectGrid items={projects.filter(p => p.category === 'Project')} onDelete={handleDelete} onEdit={(p) => { setEditingProj(p); setIsDialogOpen(true); }} onPreview={handlePreviewFile} viewingId={viewingId} /></TabsContent>
+        <TabsContent value="Product"><ProjectGrid items={projects.filter(p => p.category === 'Product')} onDelete={handleDelete} onEdit={(p) => { setEditingProj(p); setIsDialogOpen(true); }} onPreview={handlePreviewFile} viewingId={viewingId} /></TabsContent>
       </Tabs>
 
       <Dialog open={!!previewDoc} onOpenChange={(o) => !o && setPreviewDoc(null)}><DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 bg-[#0f1115] text-white border-none rounded-2xl overflow-hidden flex flex-col"><div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1a1c21]"><div className="flex items-center gap-3"><FileText className="text-primary" /><DialogTitle className="truncate max-w-md">{previewDoc?.name}</DialogTitle></div><Button variant="ghost" onClick={() => setPreviewDoc(null)}><X /></Button></div><div className="flex-1">{previewDoc?.url && <iframe src={previewDoc.url} className="w-full h-full border-none" />}</div></DialogContent></Dialog>
@@ -240,26 +266,38 @@ export default function ProjectsPage() {
   )
 }
 
-function ProjectGrid({ items, onDelete, onEdit, onPreview }: { items: any[], onDelete: (proj: any) => void, onEdit: (item: any) => void, onPreview: (u: string, n: string) => void }) {
+function ProjectGrid({ items, onDelete, onEdit, onPreview, viewingId }: { items: any[], onDelete: (proj: any) => void, onEdit: (item: any) => void, onPreview: (item: any) => void, viewingId: string | null }) {
   if (items.length === 0) return <div className="flex h-64 items-center justify-center border-2 border-dashed border-border/50 rounded-2xl italic text-muted-foreground">No entries found.</div>
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-      {items.map((proj: any) => (
-        <Card key={proj.id} className="group overflow-hidden border-none bg-[#121214] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-[24px]">
-          <div className="relative aspect-[16/10] overflow-hidden bg-[#1c1c1f]">
-            {proj.imageUrl ? <img src={proj.imageUrl} alt={proj.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-10"><Rocket className="h-16 w-16" /></div>}
-            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="secondary" size="icon" onClick={() => onEdit(proj)} className="bg-black/60"><Pencil className="h-4 w-4" /></Button><Button variant="secondary" size="icon" onClick={() => onDelete(proj)} className="bg-black/60 hover:bg-destructive"><Trash2 className="h-4 w-4" /></Button></div>
-          </div>
-          <div className="p-8 space-y-4">
-            <div className="space-y-2"><h3 className="font-headline text-2xl font-bold">{proj.title}</h3>{proj.date && <div className="flex items-center gap-2 text-sm text-gray-500 font-medium"><Calendar className="h-4 w-4" />{new Date(proj.date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</div>}</div>
-            <p className="text-sm text-gray-400 line-clamp-3 leading-relaxed">{proj.description}</p>
-            <div className="pt-4 flex gap-3">
-              {proj.url && <Button variant="outline" className="bg-[#1c1c1f] border-none text-white text-[11px] font-bold h-10 px-4 rounded-xl gap-2 hover:bg-primary" asChild><a href={proj.url} target="_blank" rel="noopener noreferrer"><Globe className="h-3.5 w-3.5" /> Live Link</a></Button>}
-              {proj.documentUrl && <Button variant="outline" className="bg-[#1c1c1f] border-none text-white text-[11px] font-bold h-10 px-4 rounded-xl gap-2 hover:bg-accent" onClick={() => onPreview(proj.documentUrl, proj.documentName || 'Documentation')}><FileText className="h-3.5 w-3.5" /> Docs</Button>}
+      {items.map((proj: any) => {
+        const isLoading = viewingId === proj.id;
+        return (
+          <Card key={proj.id} className="group overflow-hidden border-none bg-[#121214] text-white shadow-xl hover:shadow-2xl transition-all duration-300 rounded-[24px]">
+            <div className="relative aspect-[16/10] overflow-hidden bg-[#1c1c1f]">
+              {proj.imageUrl ? <img src={proj.imageUrl} alt={proj.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-10"><Rocket className="h-16 w-16" /></div>}
+              <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="secondary" size="icon" onClick={() => onEdit(proj)} className="bg-black/60"><Pencil className="h-4 w-4" /></Button><Button variant="secondary" size="icon" onClick={() => onDelete(proj)} className="bg-black/60 hover:bg-destructive"><Trash2 className="h-4 w-4" /></Button></div>
             </div>
-          </div>
-        </Card>
-      ))}
+            <div className="p-8 space-y-4">
+              <div className="space-y-2"><h3 className="font-headline text-2xl font-bold">{proj.title}</h3>{proj.date && <div className="flex items-center gap-2 text-sm text-gray-500 font-medium"><Calendar className="h-4 w-4" />{new Date(proj.date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</div>}</div>
+              <p className="text-sm text-gray-400 line-clamp-3 leading-relaxed">{proj.description}</p>
+              <div className="pt-4 flex gap-3">
+                {proj.url && <Button variant="outline" className="bg-[#1c1c1f] border-none text-white text-[11px] font-bold h-10 px-4 rounded-xl gap-2 hover:bg-primary" asChild><a href={proj.url} target="_blank" rel="noopener noreferrer"><Globe className="h-3.5 w-3.5" /> Live Link</a></Button>}
+                {proj.documentPath && (
+                  <Button 
+                    variant="outline" 
+                    className="bg-[#1c1c1f] border-none text-white text-[11px] font-bold h-10 px-4 rounded-xl gap-2 hover:bg-accent" 
+                    onClick={() => onPreview(proj)}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} Docs
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Card>
+        );
+      })}
     </div>
   )
 }

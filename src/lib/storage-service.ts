@@ -3,7 +3,7 @@
 import { supabase } from './supabase';
 import { auth as firebaseAuth } from './firebase';
 
-// CONFIGURATION: Set this to match your exact Supabase Bucket ID (usually lowercase)
+// CONFIGURATION: Set this to match your exact Supabase Bucket ID
 const SUPABASE_BUCKET_ID = 'documents';
 
 export interface FileMetadata {
@@ -27,7 +27,6 @@ export async function uploadToSupabaseStorage(
     throw new Error('Supabase Client not initialized. Verify environment variables.');
   }
 
-  const fbUser = firebaseAuth.currentUser;
   const { data: { session } } = await supabase.auth.getSession();
 
   const timestamp = Date.now();
@@ -58,25 +57,19 @@ export async function uploadToSupabaseStorage(
 
   if (error) {
     console.error('❌ [Supabase] Upload Error:', JSON.stringify(error, null, 2));
-    if (error.message.includes('not found')) {
-      console.warn(`💡 TROUBLESHOOTING: Ensure you have created a bucket named exactly "${SUPABASE_BUCKET_ID}" in your Supabase Dashboard.`);
-    }
     throw error;
   }
 
-  // Generate URL
-  const { data: { publicUrl } } = supabase.storage
-    .from(SUPABASE_BUCKET_ID)
-    .getPublicUrl(storagePath);
-
-  console.log('✅ [Supabase] Upload Success. URL:', publicUrl);
+  console.log('✅ [Supabase] Upload Success. Path:', storagePath);
 
   if (onProgress) onProgress(100);
 
+  // Note: getPublicUrl is removed per security requirements for private buckets.
+  // downloadURL is returned as an empty string to satisfy types; use signed URLs for viewing.
   return {
     fileName: `${timestamp}-${cleanFileName}`,
     originalName: file.name,
-    downloadURL: publicUrl,
+    downloadURL: '',
     storagePath: storagePath,
     fileSize: file.size,
     fileType: file.type,

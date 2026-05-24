@@ -35,6 +35,7 @@ import { Progress } from '@/components/ui/progress'
 import { uploadToSupabaseStorage, validateFile } from '@/lib/storage-service'
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors'
+import { supabase } from '@/lib/supabase'
 
 export default function CertificationsPage() {
   const db = useFirestore()
@@ -42,6 +43,7 @@ export default function CertificationsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCert, setEditingCert] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [viewingId, setViewingId] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [activeTab, setActiveTab] = useState<string>("study")
   
@@ -102,7 +104,6 @@ export default function CertificationsPage() {
       let filePath = editingCert?.filePath || ''
 
       if (selectedFile) {
-        // Migrated to Supabase Storage
         const uploadResult = await uploadToSupabaseStorage(
           selectedFile, 
           `credentials/${user.uid}`,
@@ -150,6 +151,32 @@ export default function CertificationsPage() {
       setLoading(false)
     }
   }
+
+  const handlePreviewFile = async (cert: any) => {
+    if (!cert.filePath || !supabase) {
+      toast({ variant: 'destructive', title: 'Error', description: 'File path not available.' });
+      return;
+    }
+
+    setViewingId(cert.id);
+    try {
+      let cleanPath = cert.filePath;
+      if (cleanPath.startsWith('documents/')) {
+        cleanPath = cleanPath.replace('documents/', '');
+      }
+
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(cleanPath, 3600);
+
+      if (error) throw error;
+      setPreviewDoc({ url: data.signedUrl, name: cert.title });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Access Denied', description: 'Could not generate access link.' });
+    } finally {
+      setViewingId(null);
+    }
+  };
 
   const resetForm = () => {
     setEditingCert(null)
@@ -215,7 +242,7 @@ export default function CertificationsPage() {
               </div>
               <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-[#1c1c1f]/50 cursor-pointer" onClick={() => !loading && fileInputRef.current?.click()}>
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                {selectedFile ? (<div className="flex flex-col items-center gap-2"><CheckCircle2 className="h-10 w-10 text-primary" /><span className="text-xs font-bold text-primary truncate max-w-[200px]">{selectedFile.name}</span></div>) : editingCert?.documentUrl ? (<div className="flex flex-col items-center gap-2"><ShieldCheck className="h-10 w-10 text-primary/50" /><span className="text-xs font-bold text-gray-400">File stored</span></div>) : (<div className="flex flex-col items-center gap-2 text-center"><Upload className="h-10 w-10 text-gray-500 mb-2" /><span className="text-xs text-gray-500">Upload (Max 20MB)</span></div>)}
+                {selectedFile ? (<div className="flex flex-col items-center gap-2"><CheckCircle2 className="h-10 w-10 text-primary" /><span className="text-xs font-bold text-primary truncate max-w-[200px]">{selectedFile.name}</span></div>) : editingCert?.filePath ? (<div className="flex flex-col items-center gap-2"><ShieldCheck className="h-10 w-10 text-primary/50" /><span className="text-xs font-bold text-gray-400">File stored</span></div>) : (<div className="flex flex-col items-center gap-2 text-center"><Upload className="h-10 w-10 text-gray-500 mb-2" /><span className="text-xs text-gray-500">Upload (Max 20MB)</span></div>)}
               </div>
               
               {loading && (
@@ -236,9 +263,9 @@ export default function CertificationsPage() {
       {certLoading ? (<div className="flex h-64 items-center justify-center"><Loader2 className="animate-spin text-primary h-8 w-8" /></div>) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
           <TabsList className="bg-card/30 p-1 rounded-2xl border border-border/50"><TabsTrigger value="study" className="px-8 rounded-xl font-bold">Study</TabsTrigger><TabsTrigger value="course" className="px-8 rounded-xl font-bold">Course</TabsTrigger><TabsTrigger value="grades" className="px-8 rounded-xl font-bold">Grades</TabsTrigger></TabsList>
-          <TabsContent value="study"><CertGrid items={certifications.filter(c => c.category === 'Study Certificate')} onDelete={handleDelete} onEdit={(c: any) => { setEditingCert(c); setCategory(c.category); setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private')); setIsDialogOpen(true); }} onPreview={(u: string, n: string) => setPreviewDoc({ url: u, name: n })} /></TabsContent>
-          <TabsContent value="course"><CertGrid items={certifications.filter(c => c.category === 'Course Certificate')} onDelete={handleDelete} onEdit={(c: any) => { setEditingCert(c); setCategory(c.category); setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private')); setIsDialogOpen(true); }} onPreview={(u: string, n: string) => setPreviewDoc({ url: u, name: n })} /></TabsContent>
-          <TabsContent value="grades"><CertGrid items={certifications.filter(c => c.category === 'Grade Sheet')} onDelete={handleDelete} onEdit={(c: any) => { setEditingCert(c); setCategory(c.category); setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private')); setIsDialogOpen(true); }} onPreview={(u: string, n: string) => setPreviewDoc({ url: u, name: n })} /></TabsContent>
+          <TabsContent value="study"><CertGrid items={certifications.filter(c => c.category === 'Study Certificate')} onDelete={handleDelete} onEdit={(c: any) => { setEditingCert(c); setCategory(c.category); setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private')); setIsDialogOpen(true); }} onPreview={handlePreviewFile} viewingId={viewingId} /></TabsContent>
+          <TabsContent value="course"><CertGrid items={certifications.filter(c => c.category === 'Course Certificate')} onDelete={handleDelete} onEdit={(c: any) => { setEditingCert(c); setCategory(c.category); setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private')); setIsDialogOpen(true); }} onPreview={handlePreviewFile} viewingId={viewingId} /></TabsContent>
+          <TabsContent value="grades"><CertGrid items={certifications.filter(c => c.category === 'Grade Sheet')} onDelete={handleDelete} onEdit={(c: any) => { setEditingCert(c); setCategory(c.category); setVisibility(c.visibility || (c.isPublic ? 'Public' : 'Private')); setIsDialogOpen(true); }} onPreview={handlePreviewFile} viewingId={viewingId} /></TabsContent>
         </Tabs>
       )}
       <Dialog open={!!previewDoc} onOpenChange={(o) => !o && setPreviewDoc(null)}>
@@ -251,22 +278,38 @@ export default function CertificationsPage() {
   )
 }
 
-function CertGrid({ items, onDelete, onEdit, onPreview }: any) {
+function CertGrid({ items, onDelete, onEdit, onPreview, viewingId }: any) {
   if (items.length === 0) return (<div className="flex h-64 flex-col items-center justify-center border-2 border-dashed border-border/50 rounded-3xl text-muted-foreground gap-4"><AlertCircle className="h-8 w-8 opacity-20" /><p className="italic">No records found.</p></div>)
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {items.map((c: any) => (
-        <Card key={c.id} className="group border-none bg-card/50 backdrop-blur-md shadow-md hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start">
-              <div className="space-y-2"><div className="p-3 rounded-2xl bg-primary/10 text-primary w-fit">{c.category === 'Grade Sheet' ? <FileSpreadsheet className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}</div><Badge variant="outline" className={c.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}>{c.isPublic ? <Globe className="h-3 w-3 mr-1.5" /> : <Lock className="h-3 w-3 mr-1.5" />}{c.isPublic ? 'Public' : 'Private'}</Badge></div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" onClick={() => onEdit(c)}><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => onDelete(c)}><Trash2 className="h-4 w-4" /></Button></div>
-            </div>
-            <div className="mt-4 space-y-1"><h3 className="font-bold text-lg leading-tight line-clamp-2 h-12">{c.title}</h3><p className="text-sm font-semibold text-primary">{c.issuer}</p><div className="flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-bold tracking-widest pt-1"><Calendar className="h-3 w-3" />{c.date}</div></div>
-            <div className="mt-6 border-t border-border/50 pt-4 grid grid-cols-2 gap-2"><Button variant="outline" size="sm" className="h-9 text-[11px] font-bold rounded-xl" asChild={!!c.externalLink} disabled={!c.externalLink}>{c.externalLink ? (<a href={c.externalLink} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1.5 h-3 w-3" /> Verify</a>) : (<span>Verify</span>)}</Button><Button variant="outline" size="sm" className="h-9 text-[11px] font-bold rounded-xl" onClick={() => c.documentUrl && onPreview(c.documentUrl, c.title)} disabled={!c.documentUrl}><Eye className="mr-1.5 h-3 w-3" /> View</Button></div>
-          </CardContent>
-        </Card>
-      ))}
+      {items.map((c: any) => {
+        const isLoading = viewingId === c.id;
+        return (
+          <Card key={c.id} className="group border-none bg-card/50 backdrop-blur-md shadow-md hover:shadow-xl transition-all duration-300">
+            <CardContent className="p-6">
+              <div className="flex justify-between items-start">
+                <div className="space-y-2"><div className="p-3 rounded-2xl bg-primary/10 text-primary w-fit">{c.category === 'Grade Sheet' ? <FileSpreadsheet className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}</div><Badge variant="outline" className={c.isPublic ? 'border-green-500/20 text-green-500 bg-green-500/5' : 'border-gray-500/20 text-gray-500 bg-gray-500/5'}>{c.isPublic ? <Globe className="h-3 w-3 mr-1.5" /> : <Lock className="h-3 w-3 mr-1.5" />}{c.isPublic ? 'Public' : 'Private'}</Badge></div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" onClick={() => onEdit(c)}><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => onDelete(c)}><Trash2 className="h-4 w-4" /></Button></div>
+              </div>
+              <div className="mt-4 space-y-1"><h3 className="font-bold text-lg leading-tight line-clamp-2 h-12">{c.title}</h3><p className="text-sm font-semibold text-primary">{c.issuer}</p><div className="flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-bold tracking-widest pt-1"><Calendar className="h-3 w-3" />{c.date}</div></div>
+              <div className="mt-6 border-t border-border/50 pt-4 grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" className="h-9 text-[11px] font-bold rounded-xl" asChild={!!c.externalLink} disabled={!c.externalLink}>
+                  {c.externalLink ? (<a href={c.externalLink} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1.5 h-3 w-3" /> Verify</a>) : (<span>Verify</span>)}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-9 text-[11px] font-bold rounded-xl" 
+                  onClick={() => onPreview(c)} 
+                  disabled={!c.filePath || isLoading}
+                >
+                  {isLoading ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <Eye className="mr-1.5 h-3 w-3" />} View
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   )
 }
